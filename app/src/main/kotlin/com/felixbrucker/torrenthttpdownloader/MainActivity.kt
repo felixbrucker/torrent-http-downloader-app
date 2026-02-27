@@ -184,7 +184,7 @@ fun AddTorrentBottomSheet(
 ) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedSubDir by remember { mutableStateOf(sharedPreferences.getString("default_sub_dir", null)) }
     var createSubfolderByName by remember { mutableStateOf(sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
