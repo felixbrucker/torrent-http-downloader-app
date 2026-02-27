@@ -5,7 +5,6 @@ import android.app.DownloadManager
 import android.app.Service
 import android.content.Intent
 import android.database.Cursor
-import android.net.Uri
 import android.os.Environment
 import android.os.IBinder
 import com.felixbrucker.torrenthttpdownloader.models.*
@@ -187,9 +186,29 @@ class DownloadService : Service() {
             ACTION_PROCESS_TASK -> serviceScope.launch { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_REMOVE_TASK -> serviceScope.launch { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RETRY_FILE -> serviceScope.launch { retryFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK)) }
-            else -> handleNewDownload(intent)
+            ACTION_ADD_TASK -> handleAddTask(intent)
         }
         return START_STICKY
+    }
+
+    private fun handleAddTask(intent: Intent) {
+        val path = intent.getStringExtra(EXTRA_TORRENT_PATH) ?: return
+        val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
+        val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
+        val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
+
+        if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
+
+        val task = DownloadTask(
+            id = path,
+            name = path,
+            torrent = TorrentDescriptor(type, path),
+            destinationSubdirectory = destinationSubdirectory,
+            createSubfolderByName = createSubfolderByName,
+            state = TorrentState.ADDING_TO_REAL_DEBRID
+        )
+        DownloadTracker.addTask(task)
+        continueProcessing(task.id)
     }
 
     private fun retryFile(taskId: String?, link: String?) {
@@ -231,7 +250,7 @@ class DownloadService : Service() {
         // Remove scoped temp directory if available
         val tempDir = getScopedTemporaryDirectory(task.name)
         if (tempDir.exists()) {
-            tempDir.delete()
+            tempDir.deleteRecursively()
         }
 
         // If the task is on Real-Debrid, delete it there
@@ -410,8 +429,25 @@ class DownloadService : Service() {
 
                 TorrentState.MOVING_TO_DESTINATION -> {
                     val source = getScopedTemporaryDirectory(task.name)
-                    val destination = getScopedDestinationDirectory(task.name)
-                    source.renameTo(destination)
+                    val destination = getScopedDestinationDirectory(task)
+
+                    val parentDestinationDir = destination.parentFile
+                    if (parentDestinationDir != null && !parentDestinationDir.exists()) {
+                        parentDestinationDir.mkdirs()
+                    }
+
+                    if (destination.exists()) {
+                        // Directory merge, move files individually
+                        source.listFiles()?.forEach { file ->
+                            val destFile = File(destination, file.name)
+                            file.renameTo(destFile)
+                        }
+                        source.deleteRecursively()
+                    } else {
+                        // No conflict, just move the whole directory
+                        source.renameTo(destination)
+                    }
+
                     DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.COMPLETED) }
 
                     return task.id
@@ -479,20 +515,6 @@ class DownloadService : Service() {
         }
     }
 
-    private fun handleNewDownload(intent: Intent?) {
-        val data: Uri? = intent?.data
-        if (data != null) {
-            val path = data.toString()
-            if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
-
-            val type = if (data.scheme == "magnet") TorrentType.MAGNET else TorrentType.TORRENT
-            // Use the path as a temporary ID
-            val task = DownloadTask(id = path, name = path, torrent = TorrentDescriptor(type, path))
-            DownloadTracker.addTask(task)
-            continueProcessing(task.id)
-        }
-    }
-
     private fun enqueueDownload(url: String, fileName: String, taskName: String): Long {
         val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(url.toUri())
@@ -515,11 +537,19 @@ class DownloadService : Service() {
         )
     }
 
-    private fun getScopedDestinationDirectory(taskName: String): File {
-        return File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
-            taskName
-        )
+    private fun getScopedDestinationDirectory(task: DownloadTask): File {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val baseDir = if (!task.destinationSubdirectory.isNullOrEmpty()) {
+            File(downloadsDir, task.destinationSubdirectory)
+        } else {
+            downloadsDir
+        }
+
+        return if (task.createSubfolderByName) {
+            File(baseDir, task.name)
+        } else {
+            baseDir
+        }
     }
 
     private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: TorrentInfo) {
@@ -552,7 +582,12 @@ class DownloadService : Service() {
         const val ACTION_PROCESS_TASK = "ACTION_PROCESS_TASK"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_RETRY_FILE = "ACTION_RETRY_FILE"
+        const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
+        const val EXTRA_TORRENT_PATH = "EXTRA_TORRENT_PATH"
+        const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
+        const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
+        const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
     }
 }

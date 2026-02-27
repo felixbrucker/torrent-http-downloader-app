@@ -62,6 +62,8 @@ data class DownloadTask(
     val rdTotalBytes: Long = 0,
     val files: List<DownloadFile> = listOf(),
     val errorMessage: String? = null,
+    val destinationSubdirectory: String? = null,
+    val createSubfolderByName: Boolean = true
 ) {
     val overallProgress: Int
         get() {
