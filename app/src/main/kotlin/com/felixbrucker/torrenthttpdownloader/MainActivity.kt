@@ -69,13 +69,14 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     pendingConfig = pendingConfig,
                     onConfigDismiss = { pendingConfig = null },
-                    onConfigConfirm = { config, subDir, createFolder ->
+                    onConfigConfirm = { config, subDir, createFolder, torrentName ->
                         val intent = Intent(this, DownloadService::class.java).apply {
                             action = DownloadService.ACTION_ADD_TASK
                             putExtra(DownloadService.EXTRA_TORRENT_PATH, config.path)
                             putExtra(DownloadService.EXTRA_TORRENT_TYPE, config.type.name)
                             putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, subDir)
                             putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, createFolder)
+                            putExtra(DownloadService.EXTRA_TORRENT_NAME, torrentName)
                         }
                         startService(intent)
                         pendingConfig = null
@@ -118,7 +119,7 @@ data class TorrentPendingConfig(val path: String, val type: TorrentType)
 fun MainScreen(
     pendingConfig: TorrentPendingConfig?,
     onConfigDismiss: () -> Unit,
-    onConfigConfirm: (TorrentPendingConfig, String?, Boolean) -> Unit
+    onConfigConfirm: (TorrentPendingConfig, String?, Boolean, String?) -> Unit
 ) {
     val context = LocalContext.current
     val tasks by DownloadTracker.tasks.collectAsState()
@@ -164,9 +165,10 @@ fun MainScreen(
 
         pendingConfig?.let { config ->
             AddTorrentBottomSheet(
+                config = config,
                 onDismiss = onConfigDismiss,
-                onConfirm = { subDir, createFolder ->
-                    onConfigConfirm(config, subDir, createFolder)
+                onConfirm = { subDir, createFolder, torrentName ->
+                    onConfigConfirm(config, subDir, createFolder, torrentName)
                 }
             )
         }
@@ -176,8 +178,9 @@ fun MainScreen(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddTorrentBottomSheet(
+    config: TorrentPendingConfig,
     onDismiss: () -> Unit,
-    onConfirm: (String?, Boolean) -> Unit
+    onConfirm: (String?, Boolean, String?) -> Unit
 ) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -185,6 +188,7 @@ fun AddTorrentBottomSheet(
     var selectedSubDir by remember { mutableStateOf(sharedPreferences.getString("default_sub_dir", null)) }
     var createSubfolderByName by remember { mutableStateOf(sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
+    val torrentName = remember(config) { TorrentUtils.tryToGetNameFromUri(context.contentResolver, config.path, config.type) }
 
     val commonIgnoredRootDirectories = setOf(
         "Adobe Acrobat",
@@ -227,6 +231,14 @@ fun AddTorrentBottomSheet(
                 text = stringResource(id = R.string.add_torrent),
                 style = MaterialTheme.typography.headlineSmall
             )
+            if (torrentName != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = torrentName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = stringResource(id = R.string.select_destination),
@@ -277,7 +289,7 @@ fun AddTorrentBottomSheet(
                         putString("default_sub_dir", selectedSubDir)
                         putBoolean("default_create_subfolder", createSubfolderByName)
                     }
-                    onConfirm(selectedSubDir, createSubfolderByName)
+                    onConfirm(selectedSubDir, createSubfolderByName, torrentName)
                 }) {
                     Text(stringResource(id = R.string.add))
                 }

@@ -196,12 +196,13 @@ class DownloadService : Service() {
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
+        val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
         if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
 
         val task = DownloadTask(
             id = path,
-            name = path,
+            name = torrentName ?: path,
             torrent = TorrentDescriptor(type, path),
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
@@ -558,7 +559,7 @@ class DownloadService : Service() {
 
         DownloadTracker.updateTask(taskId) {
             it.copy(
-                name = torrentInfo.filename,
+                name = if (it.name == it.torrent.path) torrentInfo.filename else it.name,
                 rdState = torrentInfo.status,
                 rdProgress = torrentInfo.progress.toInt(),
                 rdSpeed = torrentInfo.speed ?: 0,
@@ -589,5 +590,6 @@ class DownloadService : Service() {
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
+        const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
     }
 }
