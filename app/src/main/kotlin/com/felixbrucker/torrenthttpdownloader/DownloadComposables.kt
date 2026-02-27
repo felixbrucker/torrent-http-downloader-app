@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -101,8 +102,9 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
                         if (task.state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal && task.rdState != null) {
@@ -225,7 +227,10 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
                 val downloadedBytes = file.downloadedBytes
                 val totalBytes = file.totalBytes
 
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     StatItem(icon = Icons.Default.Info, text = file.state.name.replace("_", " ").lowercase())
                     if (speed > 0) {
                         StatItem(icon = Icons.Default.Speed, text = formatSpeed(speed))
