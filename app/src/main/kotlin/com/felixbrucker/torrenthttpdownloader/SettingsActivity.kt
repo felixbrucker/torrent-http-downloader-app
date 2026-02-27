@@ -27,13 +27,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
 
 class SettingsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SettingsScreen { finish() }
+            TorrentHttpDownloaderTheme {
+                SettingsScreen { finish() }
+            }
         }
     }
 }
