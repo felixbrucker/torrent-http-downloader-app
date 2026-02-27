@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
 
@@ -144,9 +146,9 @@ fun MainScreen(
                     ) {
                         DropdownMenuItem(
                             text = { Text(text = stringResource(id = R.string.action_settings)) },
-                            onClick = { 
+                            onClick = {
                                 showMenu = false
-                                context.startActivity(Intent(context, SettingsActivity::class.java)) 
+                                context.startActivity(Intent(context, SettingsActivity::class.java))
                             }
                         )
                     }
@@ -177,18 +179,38 @@ fun AddTorrentBottomSheet(
     onDismiss: () -> Unit,
     onConfirm: (String?, Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     val sheetState = rememberModalBottomSheetState()
-    var selectedSubDir by remember { mutableStateOf<String?>(null) }
-    var createSubfolderByName by remember { mutableStateOf(true) }
+    var selectedSubDir by remember { mutableStateOf(sharedPreferences.getString("default_sub_dir", null)) }
+    var createSubfolderByName by remember { mutableStateOf(sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    val commonIgnoredRootDirectories = setOf(
+        "Adobe Acrobat",
+        "Musicolet",
+        "tmp",
+        "update",
+    )
 
     LaunchedEffect(Unit) {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        subDirectories = downloadsDir
-            .listFiles { file -> file.isDirectory && !file.name.startsWith(".") }
-            ?.map { it.name }
-            ?.sorted()
-            ?: emptyList()
+        val subDirs = downloadsDir.listFiles { file ->
+            file.isDirectory
+            && !file.name.startsWith(".")
+            && !commonIgnoredRootDirectories.contains(file.name)
+        }
+        val subDirsWithSubSubDirsStrings = subDirs
+        ?.flatMap { subDir ->
+            listOf<String>(subDir.name).plus(
+                subDir
+                    .listFiles { it.isDirectory && !it.name.startsWith(".") }
+                    ?.map { "${subDir.name}/${it.name}" }
+                    ?: emptyList()
+            )
+        } ?: emptyList()
+
+        subDirectories = subDirsWithSubSubDirsStrings.sorted()
     }
 
     ModalBottomSheet(
@@ -211,7 +233,7 @@ fun AddTorrentBottomSheet(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -219,7 +241,7 @@ fun AddTorrentBottomSheet(
                 subDirectories.forEach { dir ->
                     FilterChip(
                         selected = selectedSubDir == dir,
-                        onClick = { 
+                        onClick = {
                             selectedSubDir = if (selectedSubDir == dir) null else dir
                         },
                         label = { Text(dir) }
@@ -250,7 +272,13 @@ fun AddTorrentBottomSheet(
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(id = R.string.cancel))
                 }
-                Button(onClick = { onConfirm(selectedSubDir, createSubfolderByName) }) {
+                Button(onClick = {
+                    sharedPreferences.edit {
+                        putString("default_sub_dir", selectedSubDir)
+                        putBoolean("default_create_subfolder", createSubfolderByName)
+                    }
+                    onConfirm(selectedSubDir, createSubfolderByName)
+                }) {
                     Text(stringResource(id = R.string.add))
                 }
             }
