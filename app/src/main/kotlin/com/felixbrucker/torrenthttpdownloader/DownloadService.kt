@@ -27,22 +27,26 @@ import okio.BufferedSource
 import okio.buffer
 import okio.sink
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.log10
 import kotlin.math.min
+import kotlin.math.pow
 
 private data class DownloadWork(val taskId: String, val file: DownloadFile, val apiToken: String)
 
 class DownloadService : Service() {
 
     private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork: MutableList<DownloadWork> = mutableListOf()
     private val processingTasks: MutableSet<String> = mutableSetOf()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
+    private var notificationUpdateJob: Job? = null
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -58,6 +62,7 @@ class DownloadService : Service() {
             launchWorker()
         }
         resumeDownloadsAfterDelay()
+        startNotificationUpdates()
     }
 
     private fun createNotificationChannel() {
@@ -72,6 +77,23 @@ class DownloadService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
+    private fun formatSpeed(bytesPerSecond: Long): String {
+        return "${formatBytes(bytesPerSecond)}/s"
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes <= 0) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
+
+        return String.format(
+            Locale.US,
+            "%.1f %s",
+            bytes / 1024.0.pow(digitGroups.toDouble()),
+            units[digitGroups]
+        )
+    }
+
     private fun getNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -81,13 +103,50 @@ class DownloadService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        val stopIntent = Intent(this, DownloadService::class.java).apply {
+            action = ACTION_STOP_SERVICE
+        }
+        val stopPendingIntent: PendingIntent = PendingIntent.getService(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val tasks = DownloadTracker.getTasks()
+
+        var totalSpeed = 0L
+        var totalProgress = 0
+        var totalDownloadedBytes = 0L
+        var totalBytes = 0L
+        var runningDownloads = 0
+        var totalDownloads = 0
+        var completedDownloads = 0
+
+        for (task in tasks) {
+            totalSpeed += task.overallSpeed
+            totalProgress += task.overallProgress
+            totalDownloadedBytes += task.downloadedBytes
+            totalBytes += task.totalBytes
+            runningDownloads += task.files.filter { it.state == LocalDownloadState.DOWNLOADING }.size
+            completedDownloads += task.files.filter { it.state == LocalDownloadState.COMPLETED }.size
+            totalDownloads += task.files.size
+        }
+
+        val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
+        val contentText = if (tasks.isEmpty()) {
+            "Idle"
+        } else {
+            "$completedDownloads/$totalDownloads downloads • ${formatBytes(totalDownloadedBytes)} / ${formatBytes(totalBytes)} • $runningDownloads active: ${formatSpeed(totalSpeed)}"
+        }
+
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Torrent HTTP Downloader")
-            .setContentText("Downloading in background...")
+            .setContentText(contentText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setProgress(100, avgProgress, tasks.isEmpty())
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Exit", stopPendingIntent)
             .build()
     }
 
@@ -99,7 +158,18 @@ class DownloadService : Service() {
         )
     }
 
-    private fun launchWorker() = serviceScope.launch {
+    private fun startNotificationUpdates() {
+        notificationUpdateJob?.cancel()
+        notificationUpdateJob = serviceScope.launch {
+            while (isActive) {
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, getNotification())
+                delay(2000)
+            }
+        }
+    }
+
+    private fun launchWorker() = serviceScope.launch(Dispatchers.IO) {
         while (isActive) {
             val work = downloadQueue.poll()
             if (work == null) {
@@ -141,7 +211,7 @@ class DownloadService : Service() {
             }
             file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
 
-            val job = serviceScope.launch {
+            val job = serviceScope.launch(Dispatchers.IO) {
                 performDownload(work.taskId, unrestrictLinkResponse.download, file)
             }
             activeDownloads[file.link] = job
@@ -279,14 +349,29 @@ class DownloadService : Service() {
         startForegroundService()
 
         when (intent?.action) {
-            ACTION_PROCESS_TASK -> serviceScope.launch { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_REMOVE_TASK -> serviceScope.launch { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
+            ACTION_PROCESS_TASK -> serviceScope.launch(Dispatchers.IO) { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
+            ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_ADD_TASK -> handleAddTask(intent)
+            ACTION_STOP_SERVICE -> stopAllDownloadsAndExit()
         }
 
         return START_STICKY
+    }
+
+    private fun stopAllDownloadsAndExit() {
+        downloadQueue.clear()
+        activeDownloads.values.forEach { it.cancel() }
+        activeDownloads.clear()
+
+        stopSelf()
+    }
+
+    private fun stopSelfIfIdle() {
+        if (downloadQueue.isEmpty() && activeDownloads.isEmpty() && inProgressWork.isEmpty()) {
+            stopSelf()
+        }
     }
 
     private fun pauseFile(taskId: String?, fileLink: String?) {
@@ -295,6 +380,8 @@ class DownloadService : Service() {
         activeDownloads.remove(fileLink)
         downloadQueue.removeIf { it.taskId == taskId && it.file.link == fileLink }
         updateFileState(taskId, fileLink, LocalDownloadState.PAUSED)
+
+        stopSelfIfIdle()
     }
 
     private fun resumeFile(taskId: String?, fileLink: String?) {
@@ -367,6 +454,8 @@ class DownloadService : Service() {
         }
 
         DownloadTracker.removeTask(taskId)
+
+        stopSelfIfIdle()
     }
 
     private suspend fun processTaskSafely(taskId: String?) {
@@ -556,10 +645,7 @@ class DownloadService : Service() {
 
                 TorrentState.COMPLETED -> {
                     DownloadTracker.removeTask(taskId)
-
-                    if (downloadQueue.isEmpty() && inProgressWork.isEmpty() && activeDownloads.isEmpty()) {
-                        stopSelf()
-                    }
+                    stopSelfIfIdle()
                 }
                 else -> { /* No action needed for COMPLETED or ERROR */ }
             }
@@ -586,7 +672,7 @@ class DownloadService : Service() {
     }
 
     private fun extractFile(filePath: String): Job {
-        return serviceScope.launch {
+        return serviceScope.launch(Dispatchers.IO) {
             try {
                 val file = File(filePath)
                 val destination = file.parentFile
@@ -598,7 +684,7 @@ class DownloadService : Service() {
     }
 
     private fun resumeDownloadsAfterDelay() {
-        serviceScope.launch {
+        serviceScope.launch(Dispatchers.IO) {
             delay(1000)
             val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
             val apiToken = sharedPreferences.getString("api_token", "") ?: ""
@@ -617,6 +703,7 @@ class DownloadService : Service() {
 
                 continueProcessing(task.id)
             }
+            stopSelfIfIdle()
         }
     }
 
@@ -680,6 +767,7 @@ class DownloadService : Service() {
         const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
         const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
+        const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
         const val EXTRA_TORRENT_PATH = "EXTRA_TORRENT_PATH"
