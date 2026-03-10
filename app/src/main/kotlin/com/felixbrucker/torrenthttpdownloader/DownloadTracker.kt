@@ -3,6 +3,8 @@ package com.felixbrucker.torrenthttpdownloader
 import android.content.Context
 import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,12 +38,21 @@ object DownloadTracker {
         return _tasks.value
     }
 
-    fun isEmpty(): Boolean {
-        return _tasks.value.isEmpty()
-    }
+    fun hasTasksWhichNeedProcessing(): Boolean {
+        if (_tasks.value.isEmpty()) {
+            return false
+        }
 
-    fun isNotEmpty(): Boolean {
-        return _tasks.value.isNotEmpty()
+        return _tasks.value.all { task ->
+            if (task.state != TorrentState.DOWNLOADING_LOCALLY) {
+                return true
+            }
+
+            return task.files.any {
+                it.state == LocalDownloadState.PENDING
+                || it.state == LocalDownloadState.DOWNLOADING
+            }
+        }
     }
 
     fun addTask(task: DownloadTask) {

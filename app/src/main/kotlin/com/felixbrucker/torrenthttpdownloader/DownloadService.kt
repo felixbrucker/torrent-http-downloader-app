@@ -57,6 +57,7 @@ class DownloadService : Service() {
         resumeDownloads()
 
         createNotificationChannel()
+        startForegroundService()
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
@@ -359,12 +360,14 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForegroundService()
-
         when (intent?.action) {
             ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
+            ACTION_PAUSE_TASK -> pauseTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_RESUME_TASK -> resumeTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_PAUSE_ALL -> pauseAll()
+            ACTION_RESUME_ALL -> resumeAll()
             ACTION_ADD_TASK -> handleAddTask(intent)
             ACTION_STOP_SERVICE -> stopAllDownloadsAndExit()
         }
@@ -381,7 +384,7 @@ class DownloadService : Service() {
     }
 
     private fun stopSelfIfIdle() {
-        if (DownloadTracker.isEmpty()) {
+        if (!DownloadTracker.hasTasksWhichNeedProcessing()) {
             stopSelf()
         }
     }
@@ -403,6 +406,38 @@ class DownloadService : Service() {
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val apiToken = sharedPreferences.getString("api_token", "") ?: return
         enqueueDownload(DownloadWork(taskId, file, apiToken))
+    }
+
+    private fun pauseTask(taskId: String?) {
+        if (taskId == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        task.files.forEach { file ->
+            if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
+                pauseFile(taskId, file.link)
+            }
+        }
+    }
+
+    private fun resumeTask(taskId: String?) {
+        if (taskId == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        task.files.forEach { file ->
+            if (file.state == LocalDownloadState.PAUSED) {
+                resumeFile(taskId, file.link)
+            }
+        }
+    }
+
+    private fun pauseAll() {
+        DownloadTracker.getTasks().forEach { task ->
+            pauseTask(task.id)
+        }
+    }
+
+    private fun resumeAll() {
+        DownloadTracker.getTasks().forEach { task ->
+            resumeTask(task.id)
+        }
     }
 
     private fun handleAddTask(intent: Intent) {
@@ -572,7 +607,7 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.DOWNLOADING_LOCALLY -> {
-                    task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach {
+                    task.files.filter { it.state != LocalDownloadState.COMPLETED && it.state != LocalDownloadState.PAUSED }.forEach {
                         enqueueDownload(DownloadWork(task.id, it, apiToken))
                     }
 
@@ -743,6 +778,10 @@ class DownloadService : Service() {
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
         const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
+        const val ACTION_PAUSE_TASK = "ACTION_PAUSE_TASK"
+        const val ACTION_RESUME_TASK = "ACTION_RESUME_TASK"
+        const val ACTION_PAUSE_ALL = "ACTION_PAUSE_ALL"
+        const val ACTION_RESUME_ALL = "ACTION_RESUME_ALL"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"

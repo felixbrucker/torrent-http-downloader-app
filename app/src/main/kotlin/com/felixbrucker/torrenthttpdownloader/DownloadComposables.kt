@@ -57,8 +57,12 @@ import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
+    val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(true) }
     val isExpandable = task.state.ordinal >= TorrentState.DOWNLOADING_LOCALLY.ordinal
+
+    val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
+    val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
 
     Card(
         modifier = Modifier
@@ -132,6 +136,31 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
+
+                if (task.state == TorrentState.DOWNLOADING_LOCALLY) {
+                    if (isDownloading) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_PAUSE_TASK
+                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.Pause, contentDescription = "Pause")
+                        }
+                    } else if (isPaused) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_RESUME_TASK
+                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                        }
+                    }
+                }
+
                 IconButton(onClick = onRemove) {
                     Icon(Icons.Default.Delete, contentDescription = "Remove")
                 }

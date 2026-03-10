@@ -27,6 +27,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
 
@@ -122,8 +125,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Ensure service is running if we have tasks
-        if (DownloadTracker.isNotEmpty()) {
+
+        if (DownloadTracker.hasTasksWhichNeedProcessing()) {
             startService(Intent(this, DownloadService::class.java))
         }
     }
@@ -153,6 +156,9 @@ fun MainScreen(
     val tasks by DownloadTracker.tasks.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
 
+    val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
+    val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
+
     fun removeTask(taskId: String) {
         val intent = Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_REMOVE_TASK
@@ -166,6 +172,27 @@ fun MainScreen(
             TopAppBar(
                 title = { Text(stringResource(id = R.string.app_name)) },
                 actions = {
+                    if (anyDownloading) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_PAUSE_ALL
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.Pause, contentDescription = "Pause All")
+                        }
+                    }
+                    if (anyPaused) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_RESUME_ALL
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
+                        }
+                    }
+
                     IconButton(onClick = { showMenu = !showMenu }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More")
                     }
