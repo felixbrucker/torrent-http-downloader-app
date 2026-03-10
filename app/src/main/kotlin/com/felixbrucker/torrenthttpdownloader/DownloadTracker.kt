@@ -3,6 +3,7 @@ package com.felixbrucker.torrenthttpdownloader
 import android.content.Context
 import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,10 @@ object DownloadTracker {
 
     fun getTasks(): List<DownloadTask> {
         return _tasks.value
+    }
+
+    fun getTasks(withState: TorrentState): List<DownloadTask> {
+        return _tasks.value.filter { it.state == withState }
     }
 
     fun addTask(task: DownloadTask) {

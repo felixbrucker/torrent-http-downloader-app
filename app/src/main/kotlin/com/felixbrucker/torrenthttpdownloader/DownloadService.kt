@@ -2,11 +2,20 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.app.BackgroundServiceStartNotAllowedException
 import android.app.DownloadManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.database.Cursor
+import android.os.Build
 import android.os.Environment
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
@@ -19,7 +28,6 @@ import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
-import androidx.core.net.toUri
 
 private data class DownloadWork(val taskId: String, val file: DownloadFile, val apiToken: String)
 
@@ -33,11 +41,51 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        createNotificationChannel()
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
             launchWorker()
         }
+    }
+
+    private fun createNotificationChannel() {
+        val name = "Download Service"
+        val descriptionText = "Notifications for background downloads"
+        val importance = NotificationManager.IMPORTANCE_LOW
+        val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
+            description = descriptionText
+        }
+        val notificationManager: NotificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun getNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Torrent HTTP Downloader")
+            .setContentText("Downloading in background...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun startForegroundService() {
+        startForeground(
+            NOTIFICATION_ID,
+            getNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
     }
 
     private fun launchWorker() = serviceScope.launch {
@@ -146,13 +194,12 @@ class DownloadService : Service() {
                 else -> LocalDownloadState.UNKNOWN
             }
 
-            val speed: Long
-            if (newState == LocalDownloadState.COMPLETED) {
-                speed = 0
+            val speed = if (newState == LocalDownloadState.COMPLETED) {
+                0
             } else if (timeDelta > 3) {
-                speed = ((bytesDownloaded - file.lastBytes) / timeDelta).toLong()
+                ((bytesDownloaded - file.lastBytes) / timeDelta).toLong()
             } else {
-                speed = file.speed
+                file.speed
             }
 
             DownloadTracker.updateTask(taskId) { task ->
@@ -181,6 +228,7 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForegroundService()
         when (intent?.action) {
             ACTION_RESUME_DOWNLOADS -> resumeDownloadsAfterDelay()
             ACTION_PROCESS_TASK -> serviceScope.launch { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
@@ -579,6 +627,8 @@ class DownloadService : Service() {
     }
 
     companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_CHANNEL_ID = "download_service"
         const val ACTION_RESUME_DOWNLOADS = "ACTION_RESUME_DOWNLOADS"
         const val ACTION_PROCESS_TASK = "ACTION_PROCESS_TASK"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
