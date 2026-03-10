@@ -1,17 +1,13 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.app.BackgroundServiceStartNotAllowedException
-import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.database.Cursor
-import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -22,10 +18,18 @@ import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
 import com.felixbrucker.torrenthttpdownloader.network.TorrentInfo
 import com.github.junrar.Junrar
 import kotlinx.coroutines.*
-import okhttp3.MediaType
-import okhttp3.RequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
+import okio.BufferedSource
+import okio.buffer
+import okio.sink
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 
@@ -38,6 +42,12 @@ class DownloadService : Service() {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork: MutableList<DownloadWork> = mutableListOf()
     private val processingTasks: MutableSet<String> = mutableSetOf()
+    private val activeDownloads = ConcurrentHashMap<String, Job>()
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.SECONDS) // No timeout for downloads
+        .build()
 
     override fun onCreate() {
         super.onCreate()
@@ -47,6 +57,7 @@ class DownloadService : Service() {
         repeat(limit) {
             launchWorker()
         }
+        resumeDownloadsAfterDelay()
     }
 
     private fun createNotificationChannel() {
@@ -105,29 +116,36 @@ class DownloadService : Service() {
     }
 
     private suspend fun processDownload(work: DownloadWork) {
-        var downloadManagerId = work.file.downloadManagerId
-        try {
-            // Not yet added to the download manager, generate link and add
-            if (downloadManagerId == null) {
-                val task = DownloadTracker.findTask(work.taskId) ?: return
-                val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer ${work.apiToken}", work.file.link)
-                downloadManagerId = enqueueDownload(unrestrictLinkResponse.download, unrestrictLinkResponse.filename, task.name)
-                val filePath = File(
-                    getScopedTemporaryDirectory(task.name).absolutePath,
-                    unrestrictLinkResponse.filename
-                ).absolutePath
+        var file = work.file
+        // Should not happen, we enqueued an already completed file
+        if (file.state == LocalDownloadState.COMPLETED) {
+            return
+        }
+        val task = DownloadTracker.findTask(work.taskId) ?: return
 
-                DownloadTracker.updateTask(work.taskId) { task ->
-                    task.copy(files = task.files.map {
-                        if (it.link == work.file.link) {
-                            it.copy(downloadManagerId = downloadManagerId, filePath = filePath, state = LocalDownloadState.PENDING)
-                        } else {
-                            it
-                        }
-                    })
-                }
+        try {
+            val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer ${work.apiToken}", file.link)
+            val filePath = File(
+                getScopedTemporaryDirectory(task.name).absolutePath,
+                unrestrictLinkResponse.filename
+            ).absolutePath
+
+            DownloadTracker.updateTask(work.taskId) { t ->
+                t.copy(files = t.files.map {
+                    if (it.link == file.link) {
+                        it.copy(filePath = filePath)
+                    } else {
+                        it
+                    }
+                })
             }
-            monitorDownload(work.taskId, work.file.link, downloadManagerId)
+            file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+
+            val job = serviceScope.launch {
+                performDownload(work.taskId, unrestrictLinkResponse.download, file)
+            }
+            activeDownloads[file.link] = job
+            job.join()
         } catch (e: CancellationException) {
             throw e // Let the coroutine be cancelled
         } catch (e: Exception) {
@@ -144,99 +162,148 @@ class DownloadService : Service() {
                     }
                 })
             }
+        } finally {
+            activeDownloads.remove(file.link)
         }
     }
 
-    private suspend fun monitorDownload(taskId: String, fileLink: String, downloadManagerId: Long) {
-        val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-        var isDownloading = true
+    private suspend fun performDownload(taskId: String, unrestrictedLink: String, downloadFile: DownloadFile) {
+        val filePath = downloadFile.filePath ?: return
+        val destFile = File(filePath)
 
-        while (isDownloading) {
-            val file = DownloadTracker.findTask(taskId)?.files?.find { it.link == fileLink } ?: return
+        // Ensure we can create the file
+        if (destFile.parentFile?.exists() == false) {
+            destFile.parentFile?.mkdirs()
+        }
 
-            val query = DownloadManager.Query().setFilterById(downloadManagerId)
-            val cursor: Cursor = downloadManager.query(query)
+        val existingBytes = if (destFile.exists()) destFile.length() else 0L
 
-            if (!cursor.moveToFirst()) {
-                DownloadTracker.updateTask(taskId) { task ->
-                    task.copy(files = task.files.map {
-                        if (it.link == fileLink) {
-                            it.copy(state = LocalDownloadState.ERROR, stateDescription = "No longer in DownloadManager", downloadManagerId = null)
-                        } else it
-                    })
+        val request = Request.Builder()
+            .url(unrestrictedLink)
+            .apply {
+                if (existingBytes > 0) {
+                    header("Range", "bytes=$existingBytes-")
                 }
-                isDownloading = false
-                cursor.close()
-                continue
+            }
+            .build()
+
+        try {
+            val call = httpClient.newCall(request)
+
+            // Link coroutine cancellation to OkHttp call cancellation
+            val currentJob = currentCoroutineContext()[Job]
+            currentJob?.invokeOnCompletion {
+                call.cancel()
             }
 
-            val bytesDownloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-            val totalBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            withContext(Dispatchers.IO) {
+                call.execute().use { response ->
+                    if (!response.isSuccessful && response.code != 206) {
+                        updateFileState(taskId, downloadFile.link, LocalDownloadState.ERROR, "HTTP ${response.code}")
+                        return@withContext
+                    }
 
-            val currentTime = System.currentTimeMillis()
-            val timeDelta = (currentTime - file.lastTimestamp) / 1000.0
+                    val body = response.body
+                    val contentLength = body.contentLength()
+                    val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
-            val progress = if (totalBytes > 0) ((bytesDownloaded * 100L) / totalBytes).toInt() else 0
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    DownloadTracker.updateTask(taskId) { task ->
+                        task.copy(files = task.files.map {
+                            if (it.link == downloadFile.link) {
+                                it.copy(state = LocalDownloadState.DOWNLOADING, totalBytes = totalBytes, downloadedBytes = existingBytes)
+                            } else it
+                        })
+                    }
 
-            val newState = when (status) {
-                DownloadManager.STATUS_SUCCESSFUL -> {
-                    isDownloading = false
-                    LocalDownloadState.COMPLETED
+                    val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
+                    val source: BufferedSource = body.source()
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalDownloaded = existingBytes
+                    var lastUpdate = System.currentTimeMillis()
+                    var bytesSinceLastUpdate = 0L
+
+                    sink.use { bufferedSink ->
+                        while (source.read(buffer).also { bytesRead = it } != -1) {
+                            if (!isActive) {
+                                return@withContext
+                            }
+                            bufferedSink.write(buffer, 0, bytesRead)
+                            totalDownloaded += bytesRead
+                            bytesSinceLastUpdate += bytesRead
+
+                            val now = System.currentTimeMillis()
+                            if (now - lastUpdate > 1000) {
+                                val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
+                                val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
+
+                                DownloadTracker.updateTask(taskId) { task ->
+                                    task.copy(files = task.files.map {
+                                        if (it.link == downloadFile.link) {
+                                            it.copy(
+                                                progress = progress,
+                                                downloadedBytes = totalDownloaded,
+                                                speed = speed,
+                                                lastTimestamp = now,
+                                                lastBytes = totalDownloaded
+                                            )
+                                        } else it
+                                    })
+                                }
+                                lastUpdate = now
+                                bytesSinceLastUpdate = 0
+                            }
+                        }
+                    }
+                    updateFileState(taskId, downloadFile.link, LocalDownloadState.COMPLETED)
                 }
-                DownloadManager.STATUS_FAILED -> {
-                    isDownloading = false
-                    LocalDownloadState.ERROR
-                }
-                DownloadManager.STATUS_RUNNING -> LocalDownloadState.DOWNLOADING
-                DownloadManager.STATUS_PENDING -> LocalDownloadState.PENDING
-                DownloadManager.STATUS_PAUSED -> LocalDownloadState.PAUSED
-                else -> LocalDownloadState.UNKNOWN
             }
-
-            val speed = if (newState == LocalDownloadState.COMPLETED) {
-                0
-            } else if (timeDelta > 3) {
-                ((bytesDownloaded - file.lastBytes) / timeDelta).toLong()
-            } else {
-                file.speed
+        } catch (e: Exception) {
+            if (e !is CancellationException) {
+                updateFileState(taskId, downloadFile.link, LocalDownloadState.ERROR, e.message)
             }
+        }
+    }
 
-            DownloadTracker.updateTask(taskId) { task ->
-                task.copy(files = task.files.map {
-                    if (it.link == fileLink) {
-                        it.copy(
-                            state = newState,
-                            progress = progress,
-                            speed = speed,
-                            totalBytes = totalBytes,
-                            downloadedBytes = bytesDownloaded,
-                            lastBytes = if (timeDelta > 3) bytesDownloaded else file.lastBytes,
-                            lastTimestamp = if (timeDelta > 3) currentTime else file.lastTimestamp,
-                            stateDescription = if(newState == LocalDownloadState.ERROR) cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)).toString() else null
-                        )
-                    } else it
-                })
-            }
-
-            cursor.close()
-
-            if (isDownloading) {
-                delay(1000)
-            }
+    private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
+        DownloadTracker.updateTask(taskId) { task ->
+            task.copy(files = task.files.map {
+                if (it.link == fileLink) {
+                    it.copy(state = state, stateDescription = error, speed = 0)
+                } else it
+            })
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForegroundService()
+
         when (intent?.action) {
-            ACTION_RESUME_DOWNLOADS -> resumeDownloadsAfterDelay()
             ACTION_PROCESS_TASK -> serviceScope.launch { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_REMOVE_TASK -> serviceScope.launch { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_RETRY_FILE -> serviceScope.launch { retryFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK)) }
+            ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
+            ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_ADD_TASK -> handleAddTask(intent)
         }
+
         return START_STICKY
+    }
+
+    private fun pauseFile(taskId: String?, fileLink: String?) {
+        if (taskId == null || fileLink == null) return
+        activeDownloads[fileLink]?.cancel()
+        activeDownloads.remove(fileLink)
+        downloadQueue.removeIf { it.taskId == taskId && it.file.link == fileLink }
+        updateFileState(taskId, fileLink, LocalDownloadState.PAUSED)
+    }
+
+    private fun resumeFile(taskId: String?, fileLink: String?) {
+        if (taskId == null || fileLink == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        val file = task.files.find { it.link == fileLink } ?: return
+        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
+        val apiToken = sharedPreferences.getString("api_token", "") ?: return
+        enqueueDownload(DownloadWork(taskId, file, apiToken))
     }
 
     private fun handleAddTask(intent: Intent) {
@@ -260,17 +327,6 @@ class DownloadService : Service() {
         continueProcessing(task.id)
     }
 
-    private fun retryFile(taskId: String?, link: String?) {
-        if (taskId == null || link == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        val file = task.files.find { it.link == link } ?: return
-
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: return
-
-        downloadQueue.add(DownloadWork(taskId, file, apiToken))
-    }
-
     private suspend fun removeTask(taskId: String?) {
         if (taskId == null) return
         val task = DownloadTracker.findTask(taskId) ?: return
@@ -281,14 +337,13 @@ class DownloadService : Service() {
         // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == taskId }
 
-        // Remove any active or already completed local downloads
-        val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+        // Cancel active downloads
         for (file in task.files) {
-            file.downloadManagerId?.let { downloadManager.remove(it) }
+            activeDownloads[file.link]?.cancel()
+            activeDownloads.remove(file.link)
         }
 
-        // Explicitly make sure to delete all files just in case the download manager does not clean
-        // them up for some reason
+        // Explicitly make sure to delete all files
         for (filePath in task.files.mapNotNull { file -> file.filePath }) {
             val fileRef = File(filePath)
             if (fileRef.exists()) {
@@ -330,7 +385,7 @@ class DownloadService : Service() {
     }
 
     private suspend fun processTask(taskId: String): String? {
-        var task = DownloadTracker.findTask(taskId) ?: return null
+        val task = DownloadTracker.findTask(taskId) ?: return null
 
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val apiToken = sharedPreferences.getString("api_token", "") ?: ""
@@ -348,7 +403,11 @@ class DownloadService : Service() {
                     } else {
                         contentResolver.openInputStream(task.torrent.path.toUri())?.use {
                             val torrentData = it.readBytes()
-                            val requestBody = RequestBody.create(MediaType.parse("application/x-bittorrent"), torrentData)
+                            val requestBody = torrentData.toRequestBody(
+                                "application/x-bittorrent".toMediaTypeOrNull(),
+                                0,
+                                torrentData.size
+                            )
                             RetrofitClient.instance.addTorrentFile("Bearer $apiToken", requestBody)
                         }!!
                     }
@@ -400,7 +459,7 @@ class DownloadService : Service() {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 files = files,
-                                state = TorrentState.STARTING_LOCAL_DOWNLOADS,
+                                state = TorrentState.ENQUEUING_LOCAL_DOWNLOADS,
                                 rdSpeed = 0,
                             )
                         }
@@ -412,19 +471,12 @@ class DownloadService : Service() {
                     return task.id
                 }
 
-                TorrentState.STARTING_LOCAL_DOWNLOADS -> {
+                TorrentState.ENQUEUING_LOCAL_DOWNLOADS -> {
                     task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach {
-                        downloadQueue.add(DownloadWork(task.id, it, apiToken))
+                        enqueueDownload(DownloadWork(task.id, it, apiToken))
                     }
 
-                    // Refresh task state and wait till all downloads have been enqueued
-                    task = DownloadTracker.findTask(taskId) ?: return null
-                    while (task.files.any { it.downloadManagerId == null }) {
-                        delay(1000)
-                        task = DownloadTracker.findTask(taskId) ?: return null
-                    }
-
-                    // Once all downloads have been queued, change state to wait for all remaining ones
+                    // Once downloads have been queued, change state to wait for all remaining ones
                     DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_LOCAL_DOWNLOADS) }
 
                     return task.id
@@ -435,7 +487,7 @@ class DownloadService : Service() {
                     if (task.files.all { it.state == LocalDownloadState.COMPLETED }) {
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_REAL_DEBRID) }
                     } else {
-                        delay(1000)
+                        delay(2000)
                     }
 
                     return task.id
@@ -504,6 +556,10 @@ class DownloadService : Service() {
 
                 TorrentState.COMPLETED -> {
                     DownloadTracker.removeTask(taskId)
+
+                    if (downloadQueue.isEmpty() && inProgressWork.isEmpty() && activeDownloads.isEmpty()) {
+                        stopSelf()
+                    }
                 }
                 else -> { /* No action needed for COMPLETED or ERROR */ }
             }
@@ -549,12 +605,12 @@ class DownloadService : Service() {
 
             for (task in DownloadTracker.getTasks()) {
                 if (task.state == TorrentState.WAITING_FOR_LOCAL_DOWNLOADS) {
-                    // Refill the download (monitoring) queue with tasks that are not yet completed and not yet in the queue
-                    task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach {
-                        val notInQueueYet = downloadQueue.none { work ->  work.taskId == task.id && work.file.link == it.link }
-                        val notProcessingYet = inProgressWork.none { work -> work.taskId == task.id && work.file.link == it.link }
+                    // Refill the download queue with tasks that are not yet completed and not yet in the queue
+                    task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach { file ->
+                        val notInQueueYet = downloadQueue.none { work ->  work.taskId == task.id && work.file.link == file.link }
+                        val notProcessingYet = inProgressWork.none { work -> work.taskId == task.id && work.file.link == file.link }
                         if (notInQueueYet && notProcessingYet) {
-                            downloadQueue.add(DownloadWork(task.id, it, apiToken))
+                            enqueueDownload(DownloadWork(task.id, file, apiToken))
                         }
                     }
                 }
@@ -564,19 +620,9 @@ class DownloadService : Service() {
         }
     }
 
-    private fun enqueueDownload(url: String, fileName: String, taskName: String): Long {
-        val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-        val request = DownloadManager.Request(url.toUri())
-            .setTitle(fileName)
-            .setDescription("Downloading")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "tmp/$taskName/$fileName"
-            )
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
-        return downloadManager.enqueue(request)
+    private fun enqueueDownload(work: DownloadWork) {
+        updateFileState(work.taskId, work.file.link, LocalDownloadState.PENDING)
+        downloadQueue.add(work)
     }
 
     private fun getScopedTemporaryDirectory(taskName: String): File {
@@ -629,10 +675,10 @@ class DownloadService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_CHANNEL_ID = "download_service"
-        const val ACTION_RESUME_DOWNLOADS = "ACTION_RESUME_DOWNLOADS"
         const val ACTION_PROCESS_TASK = "ACTION_PROCESS_TASK"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
-        const val ACTION_RETRY_FILE = "ACTION_RETRY_FILE"
+        const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
+        const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"

@@ -122,10 +122,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        val intent = Intent(this, DownloadService::class.java).apply {
-            action = DownloadService.ACTION_RESUME_DOWNLOADS
-        }
-        startService(intent)
+        // Ensure service is running
+        startService(Intent(this, DownloadService::class.java))
     }
 
     private fun handleIntent(intent: Intent) {

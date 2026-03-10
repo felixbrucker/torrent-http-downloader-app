@@ -7,7 +7,7 @@ enum class TorrentState {
     WAITING_FOR_FILE_SELECTION,
     SELECTING_FILES,
     WAITING_FOR_REAL_DEBRID_DOWNLOAD,
-    STARTING_LOCAL_DOWNLOADS,
+    ENQUEUING_LOCAL_DOWNLOADS,
     WAITING_FOR_LOCAL_DOWNLOADS,
     DELETING_FROM_REAL_DEBRID,
     CHECKING_FOR_ARCHIVES,
@@ -23,7 +23,6 @@ enum class LocalDownloadState {
     PAUSED,
     COMPLETED,
     ERROR,
-    UNKNOWN,
 }
 
 enum class TorrentType {
@@ -38,7 +37,6 @@ data class TorrentDescriptor(
 
 data class DownloadFile(
     val link: String, // The original Real-Debrid link
-    val downloadManagerId: Long? = null,
     val state: LocalDownloadState = LocalDownloadState.PENDING,
     val stateDescription: String? = null,
     val progress: Int = 0,
@@ -67,7 +65,7 @@ data class DownloadTask(
 ) {
     val overallProgress: Int
         get() {
-            return if (state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
                 rdProgress
             } else {
                 val totalSize = totalBytes
@@ -76,7 +74,7 @@ data class DownloadTask(
         }
     val overallSpeed: Long
         get() {
-            return if (state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
                 rdSpeed
             } else {
                 files.sumOf { it.speed }
@@ -85,7 +83,7 @@ data class DownloadTask(
 
     val totalBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
                 rdTotalBytes
             } else {
                 max(files.sumOf { it.totalBytes }, rdTotalBytes)
@@ -94,7 +92,7 @@ data class DownloadTask(
 
     val downloadedBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
                 rdDownloadedBytes
             } else {
                 files.sumOf { it.downloadedBytes }

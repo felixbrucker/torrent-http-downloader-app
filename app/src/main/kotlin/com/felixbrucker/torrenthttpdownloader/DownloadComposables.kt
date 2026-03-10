@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.app.DownloadManager
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -28,6 +27,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Unarchive
@@ -38,7 +39,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +59,7 @@ import java.util.Locale
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     var isExpanded by remember { mutableStateOf(true) }
-    val isExpandable = task.state.ordinal >= TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal
+    val isExpandable = task.state.ordinal >= TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal
 
     Card(
         modifier = Modifier
@@ -107,7 +107,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
-                        if (task.state.ordinal < TorrentState.STARTING_LOCAL_DOWNLOADS.ordinal && task.rdState != null) {
+                        if (task.state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal && task.rdState != null) {
                             StatItem(icon = Icons.Default.Info, text = "RD: ${task.rdState}")
                         }
                         if (task.overallSpeed > 0) {
@@ -162,7 +162,7 @@ fun StateIcon(state: TorrentState) {
     val icon = when (state) {
         TorrentState.WAITING_FOR_FILE_SELECTION -> Icons.Default.HourglassEmpty
         TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD,
-        TorrentState.STARTING_LOCAL_DOWNLOADS,
+        TorrentState.ENQUEUING_LOCAL_DOWNLOADS,
         TorrentState.WAITING_FOR_LOCAL_DOWNLOADS -> Icons.Default.Download
         TorrentState.EXTRACTING_ARCHIVES -> Icons.Default.Unarchive
         TorrentState.MOVING_TO_DESTINATION -> Icons.AutoMirrored.Default.DriveFileMove
@@ -256,20 +256,28 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
                 }
             }
 
-            if (file.state == LocalDownloadState.ERROR) {
-                TextButton(onClick = {
+            if (file.state == LocalDownloadState.PAUSED || file.state == LocalDownloadState.ERROR) {
+                IconButton(onClick = {
                     val intent = Intent(context, DownloadService::class.java).apply {
-                        action = DownloadService.ACTION_RETRY_FILE
+                        action = DownloadService.ACTION_RESUME_FILE
                         putExtra(DownloadService.EXTRA_TASK_ID, task.id)
                         putExtra(DownloadService.EXTRA_FILE_LINK, file.link)
                     }
                     context.startService(intent)
                 }) {
-                    Text(text = "Retry")
+                    if (file.state == LocalDownloadState.PAUSED) Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                    if (file.state == LocalDownloadState.ERROR) Icon(Icons.Default.Replay, contentDescription = "Retry")
                 }
-            } else if (file.state == LocalDownloadState.PAUSED) {
-                TextButton(onClick = { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) }) {
-                    Text(text = "Manage")
+            } else if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
+                IconButton(onClick = {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_PAUSE_FILE
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                        putExtra(DownloadService.EXTRA_FILE_LINK, file.link)
+                    }
+                    context.startService(intent)
+                }) {
+                    Icon(Icons.Default.Pause, contentDescription = "Pause")
                 }
             }
         }
@@ -284,7 +292,6 @@ fun LocalDownloadStateIcon(state: LocalDownloadState) {
         LocalDownloadState.ERROR -> Icons.Default.Error
         LocalDownloadState.COMPLETED -> Icons.Default.CheckCircle
         LocalDownloadState.PENDING -> Icons.Default.HourglassEmpty
-        else -> Icons.Default.Error
     }
     Icon(icon, contentDescription = state.name)
 }
