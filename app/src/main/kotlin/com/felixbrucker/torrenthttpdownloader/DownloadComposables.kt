@@ -54,7 +54,6 @@ import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
-import java.util.Locale
 
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
@@ -111,17 +110,17 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                             StatItem(icon = Icons.Default.Info, text = "RD: ${task.rdState}")
                         }
                         if (task.overallSpeed > 0) {
-                            StatItem(icon = Icons.Default.Speed, text = formatSpeed(task.overallSpeed))
+                            StatItem(icon = Icons.Default.Speed, text = Formatter.formatSpeed(task.overallSpeed))
                         }
                         StatItem(
                             icon = Icons.Default.DataUsage,
-                            text = "${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}"
+                            text = "${Formatter.formatBytes(task.downloadedBytes)} / ${Formatter.formatBytes(task.totalBytes)}"
                         )
                         if (task.overallSpeed > 0) {
                             val remainingBytes = task.totalBytes - task.downloadedBytes
                             val remainingTime =
                                 if (task.overallSpeed > 0) remainingBytes / task.overallSpeed else 0
-                            StatItem(icon = Icons.Default.Timer, text = formatTime(remainingTime))
+                            StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
                         }
                     }
                     if (task.errorMessage != null) {
@@ -232,18 +231,18 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
                 ) {
                     StatItem(icon = Icons.Default.Info, text = file.state.name.replace("_", " ").lowercase())
                     if (speed > 0) {
-                        StatItem(icon = Icons.Default.Speed, text = formatSpeed(speed))
+                        StatItem(icon = Icons.Default.Speed, text = Formatter.formatSpeed(speed))
                     }
                     if (totalBytes > 0) {
                         StatItem(
                             icon = Icons.Default.DataUsage,
-                            text = "${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}"
+                            text = "${Formatter.formatBytes(downloadedBytes)} / ${Formatter.formatBytes(totalBytes)}"
                         )
                     }
                     if (speed > 0) {
                         val remainingBytes = totalBytes - downloadedBytes
                         val remainingTime = remainingBytes / speed
-                        StatItem(icon = Icons.Default.Timer, text = formatTime(remainingTime))
+                        StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
                     }
                 }
                 if (file.stateDescription != null) {
@@ -293,33 +292,4 @@ fun LocalDownloadStateIcon(state: LocalDownloadState) {
         LocalDownloadState.PENDING -> Icons.Default.HourglassEmpty
     }
     Icon(icon, contentDescription = state.name)
-}
-
-fun formatSpeed(speed: Long): String {
-    if (speed < 1024) return "$speed B/s"
-    val kb = speed / 1024
-    if (kb < 1024) return "$kb KB/s"
-    val mb = kb / 1024.0
-    return String.format(Locale.US, "%.2f MB/s", mb)
-}
-
-fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024
-    if (kb < 1024) return "$kb KB"
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format(Locale.US, "%.2f MB", mb)
-    val gb = mb / 1024.0
-    return String.format(Locale.US, "%.2f GB", gb)
-}
-
-fun formatTime(seconds: Long): String {
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    val secs = seconds % 60
-    return when {
-        hours > 0 -> String.format(Locale.US, "%dh %dm %ds", hours, minutes, secs)
-        minutes > 0 -> String.format(Locale.US, "%dm %ds", minutes, secs)
-        else -> String.format(Locale.US, "%ds", secs)
-    }
 }

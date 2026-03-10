@@ -27,14 +27,11 @@ import okio.BufferedSource
 import okio.buffer
 import okio.sink
 import java.io.File
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.log10
 import kotlin.math.min
-import kotlin.math.pow
 
 private data class DownloadWork(val taskId: String, val file: DownloadFile, val apiToken: String)
 
@@ -97,23 +94,6 @@ class DownloadService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun formatSpeed(bytesPerSecond: Long): String {
-        return "${formatBytes(bytesPerSecond)}/s"
-    }
-
-    private fun formatBytes(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
-        val units = arrayOf("B", "KB", "MB", "GB", "TB")
-        val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
-
-        return String.format(
-            Locale.US,
-            "%.1f %s",
-            bytes / 1024.0.pow(digitGroups.toDouble()),
-            units[digitGroups]
-        )
-    }
-
     private fun getNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -159,13 +139,19 @@ class DownloadService : Service() {
         if (tasks.isEmpty()) {
             builder.setContentText("Idle")
         } else {
-            builder.setStyle(
-                NotificationCompat
-                    .InboxStyle()
-                    .addLine("Downloads: active=$runningDownloads completed=$completedDownloads total=$totalDownloads")
-                    .addLine("Size: ${formatBytes(totalDownloadedBytes)} / ${formatBytes(totalBytes)}")
-                    .addLine("Speed: ${formatSpeed(totalSpeed)}")
-            )
+            val style = NotificationCompat
+                .InboxStyle()
+                .addLine("Downloads: active=$runningDownloads completed=$completedDownloads/$totalDownloads")
+                .addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)}")
+            if (totalSpeed > 0) {
+                val remainingBytes = totalBytes - totalDownloadedBytes
+                val remainingTime = remainingBytes / totalSpeed
+                style
+                    .addLine("Speed: ${Formatter.formatSpeed(totalSpeed)}")
+                    .addLine("ETA: ${Formatter.formatTime(remainingTime)}")
+            }
+
+            builder.setStyle(style)
         }
 
         return builder
