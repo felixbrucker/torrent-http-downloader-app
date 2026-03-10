@@ -7,8 +7,7 @@ enum class TorrentState {
     WAITING_FOR_FILE_SELECTION,
     SELECTING_FILES,
     WAITING_FOR_REAL_DEBRID_DOWNLOAD,
-    ENQUEUING_LOCAL_DOWNLOADS,
-    WAITING_FOR_LOCAL_DOWNLOADS,
+    DOWNLOADING_LOCALLY,
     DELETING_FROM_REAL_DEBRID,
     CHECKING_FOR_ARCHIVES,
     EXTRACTING_ARCHIVES,
@@ -65,7 +64,7 @@ data class DownloadTask(
 ) {
     val overallProgress: Int
         get() {
-            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
                 rdProgress
             } else {
                 val totalSize = totalBytes
@@ -74,7 +73,7 @@ data class DownloadTask(
         }
     val overallSpeed: Long
         get() {
-            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
                 rdSpeed
             } else {
                 files.sumOf { it.speed }
@@ -83,7 +82,7 @@ data class DownloadTask(
 
     val totalBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
                 rdTotalBytes
             } else {
                 max(files.sumOf { it.totalBytes }, rdTotalBytes)
@@ -92,7 +91,7 @@ data class DownloadTask(
 
     val downloadedBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.ENQUEUING_LOCAL_DOWNLOADS.ordinal) {
+            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
                 rdDownloadedBytes
             } else {
                 files.sumOf { it.downloadedBytes }

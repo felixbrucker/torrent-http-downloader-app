@@ -122,8 +122,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Ensure service is running
-        startService(Intent(this, DownloadService::class.java))
+        // Ensure service is running if we have tasks
+        if (DownloadTracker.isNotEmpty()) {
+            startService(Intent(this, DownloadService::class.java))
+        }
     }
 
     private fun handleIntent(intent: Intent) {

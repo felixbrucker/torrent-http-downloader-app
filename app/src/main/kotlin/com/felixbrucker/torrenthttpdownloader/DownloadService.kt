@@ -46,6 +46,7 @@ class DownloadService : Service() {
     private val inProgressWork: MutableList<DownloadWork> = mutableListOf()
     private val processingTasks: MutableSet<String> = mutableSetOf()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
+    private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
     private var notificationUpdateJob: Job? = null
 
     private val httpClient = OkHttpClient.Builder()
@@ -55,14 +56,33 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        resumeDownloads()
+
         createNotificationChannel()
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
             launchWorker()
         }
-        resumeDownloadsAfterDelay()
         startNotificationUpdates()
+        processTaskQueue()
+    }
+
+    private fun processTaskQueue() = serviceScope.launch(Dispatchers.IO) {
+        while (isActive) {
+            val taskId = taskIdsToProcess.poll()
+            if (taskId == null) {
+                delay(500) // Wait before polling again
+                continue
+            }
+            serviceScope.launch(Dispatchers.IO) {
+                val newId = processTaskSafely(taskId)
+                if (newId != null) {
+                    taskIdsToProcess.add(newId)
+                }
+            }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -132,16 +152,23 @@ class DownloadService : Service() {
         }
 
         val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
-        val contentText = if (tasks.isEmpty()) {
-            "Idle"
-        } else {
-            "$completedDownloads/$totalDownloads downloads • ${formatBytes(totalDownloadedBytes)} / ${formatBytes(totalBytes)} • $runningDownloads active: ${formatSpeed(totalSpeed)}"
-        }
-
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Torrent HTTP Downloader")
-            .setContentText(contentText)
+
+        if (tasks.isEmpty()) {
+            builder.setContentText("Idle")
+        } else {
+            builder.setStyle(
+                NotificationCompat
+                    .InboxStyle()
+                    .addLine("Downloads: active=$runningDownloads completed=$completedDownloads total=$totalDownloads")
+                    .addLine("Size: ${formatBytes(totalDownloadedBytes)} / ${formatBytes(totalBytes)}")
+                    .addLine("Speed: ${formatSpeed(totalSpeed)}")
+            )
+        }
+
+        return builder
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -349,7 +376,6 @@ class DownloadService : Service() {
         startForegroundService()
 
         when (intent?.action) {
-            ACTION_PROCESS_TASK -> serviceScope.launch(Dispatchers.IO) { processTaskSafely(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
@@ -369,7 +395,7 @@ class DownloadService : Service() {
     }
 
     private fun stopSelfIfIdle() {
-        if (downloadQueue.isEmpty() && activeDownloads.isEmpty() && inProgressWork.isEmpty()) {
+        if (DownloadTracker.isEmpty()) {
             stopSelf()
         }
     }
@@ -411,7 +437,7 @@ class DownloadService : Service() {
             state = TorrentState.ADDING_TO_REAL_DEBRID
         )
         DownloadTracker.addTask(task)
-        continueProcessing(task.id)
+        taskIdsToProcess.add(task.id)
     }
 
     private suspend fun removeTask(taskId: String?) {
@@ -458,9 +484,9 @@ class DownloadService : Service() {
         stopSelfIfIdle()
     }
 
-    private suspend fun processTaskSafely(taskId: String?) {
-        if (taskId == null) return
-        if (processingTasks.contains(taskId)) return
+    private suspend fun processTaskSafely(taskId: String?): String? {
+        if (taskId == null) return null
+        if (processingTasks.contains(taskId)) return null
         processingTasks.add(taskId)
         var newId: String?
         try {
@@ -468,9 +494,8 @@ class DownloadService : Service() {
         } finally {
             processingTasks.remove(taskId)
         }
-        if (newId != null) {
-            continueProcessing(newId)
-        }
+
+        return newId
     }
 
     private suspend fun processTask(taskId: String): String? {
@@ -548,7 +573,7 @@ class DownloadService : Service() {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 files = files,
-                                state = TorrentState.ENQUEUING_LOCAL_DOWNLOADS,
+                                state = TorrentState.DOWNLOADING_LOCALLY,
                                 rdSpeed = 0,
                             )
                         }
@@ -560,24 +585,19 @@ class DownloadService : Service() {
                     return task.id
                 }
 
-                TorrentState.ENQUEUING_LOCAL_DOWNLOADS -> {
+                TorrentState.DOWNLOADING_LOCALLY -> {
                     task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach {
                         enqueueDownload(DownloadWork(task.id, it, apiToken))
                     }
 
-                    // Once downloads have been queued, change state to wait for all remaining ones
-                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_LOCAL_DOWNLOADS) }
-
-                    return task.id
-                }
-
-                TorrentState.WAITING_FOR_LOCAL_DOWNLOADS -> {
-                    // All done, continue to next state
-                    if (task.files.all { it.state == LocalDownloadState.COMPLETED }) {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_REAL_DEBRID) }
-                    } else {
+                    var files = task.files
+                    while (files.any { it.state != LocalDownloadState.COMPLETED }) {
                         delay(2000)
+                        files = DownloadTracker.findTask(task.id)?.files ?: return null
                     }
+
+                    // All done, continue to next state
+                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_REAL_DEBRID) }
 
                     return task.id
                 }
@@ -663,14 +683,6 @@ class DownloadService : Service() {
         return null
     }
 
-    private fun continueProcessing(taskId: String) {
-        val intent = Intent(this, DownloadService::class.java).apply {
-            action = ACTION_PROCESS_TASK
-            putExtra(EXTRA_TASK_ID, taskId)
-        }
-        startService(intent)
-    }
-
     private fun extractFile(filePath: String): Job {
         return serviceScope.launch(Dispatchers.IO) {
             try {
@@ -683,28 +695,8 @@ class DownloadService : Service() {
         }
     }
 
-    private fun resumeDownloadsAfterDelay() {
-        serviceScope.launch(Dispatchers.IO) {
-            delay(1000)
-            val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-            val apiToken = sharedPreferences.getString("api_token", "") ?: ""
-
-            for (task in DownloadTracker.getTasks()) {
-                if (task.state == TorrentState.WAITING_FOR_LOCAL_DOWNLOADS) {
-                    // Refill the download queue with tasks that are not yet completed and not yet in the queue
-                    task.files.filter { it.state != LocalDownloadState.COMPLETED }.forEach { file ->
-                        val notInQueueYet = downloadQueue.none { work ->  work.taskId == task.id && work.file.link == file.link }
-                        val notProcessingYet = inProgressWork.none { work -> work.taskId == task.id && work.file.link == file.link }
-                        if (notInQueueYet && notProcessingYet) {
-                            enqueueDownload(DownloadWork(task.id, file, apiToken))
-                        }
-                    }
-                }
-
-                continueProcessing(task.id)
-            }
-            stopSelfIfIdle()
-        }
+    private fun resumeDownloads() {
+        DownloadTracker.getTasks().forEach { task -> taskIdsToProcess.add(task.id) }
     }
 
     private fun enqueueDownload(work: DownloadWork) {
@@ -762,7 +754,6 @@ class DownloadService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_CHANNEL_ID = "download_service"
-        const val ACTION_PROCESS_TASK = "ACTION_PROCESS_TASK"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
         const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
