@@ -110,7 +110,7 @@ class DownloadService : Service() {
             action = ACTION_STOP_SERVICE
         }
         val stopPendingIntent: PendingIntent = PendingIntent.getService(
-            this, 0, stopIntent,
+            this, 1, stopIntent,
             PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -136,34 +136,69 @@ class DownloadService : Service() {
 
         val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
         val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Torrent HTTP Downloader")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Idle")
 
-        if (tasks.isEmpty()) {
-            builder.setContentText("Idle")
-        } else {
-            val style = NotificationCompat
-                .InboxStyle()
-                .addLine("Downloads: active=$runningDownloads completed=$completedDownloads/$totalDownloads")
-                .addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)}")
+        if (tasks.isNotEmpty()) {
+            val hasRemoteTasks = tasks.any { it.location == TaskLocation.REMOTE }
+            var title = "Downloading: ${Formatter.formatSpeed(totalSpeed)}"
+            builder.setSmallIcon(android.R.drawable.stat_sys_download)
+
             if (totalSpeed > 0) {
                 val remainingBytes = totalBytes - totalDownloadedBytes
                 val remainingTime = remainingBytes / totalSpeed
-                style
-                    .addLine("Speed: ${Formatter.formatSpeed(totalSpeed)}")
-                    .addLine("ETA: ${Formatter.formatTime(remainingTime)}")
+                title += " • ${Formatter.formatTime(remainingTime)} left"
+            } else if (runningDownloads == 0) {
+                if (hasRemoteTasks) {
+                    title = "Working"
+                } else {
+                    title = "Idle"
+                    builder.setSmallIcon(android.R.drawable.stat_sys_download_done)
+                }
             }
 
-            builder.setStyle(style)
+            val style = NotificationCompat
+                .InboxStyle()
+                .addLine("Tasks: ${tasks.size} remaining")
+                .addLine("Downloads: $runningDownloads active, $completedDownloads/$totalDownloads completed")
+                .addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)} downloaded")
+
+            builder
+                .setStyle(style)
+                .setContentTitle(title)
         }
 
-        return builder
+        builder
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setProgress(100, avgProgress, tasks.isEmpty())
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Exit", stopPendingIntent)
-            .build()
+
+        val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
+        val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
+        if (anyDownloading) {
+            val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
+                action = ACTION_PAUSE_ALL
+            }
+            val pauseAllPendingIntent: PendingIntent = PendingIntent.getService(
+                this, 3, pauseAllIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(android.R.drawable.ic_media_pause, "Pause all", pauseAllPendingIntent)
+        }
+        if (anyPaused) {
+            val resumeAllIntent = Intent(this, DownloadService::class.java).apply {
+                action = ACTION_RESUME_ALL
+            }
+            val resumeAllPendingIntent: PendingIntent = PendingIntent.getService(
+                this, 4, resumeAllIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(android.R.drawable.ic_media_play, "Resume all", resumeAllPendingIntent)
+        }
+
+        return builder.build()
     }
 
     private fun startForegroundService() {
@@ -384,8 +419,6 @@ class DownloadService : Service() {
         activeDownloads.remove(fileLink)
         downloadQueue.removeIf { it.taskId == taskId && it.file.link == fileLink }
         updateFileState(taskId, fileLink, LocalDownloadState.PAUSED)
-
-        stopSelfIfIdle()
     }
 
     private fun resumeFile(taskId: String?, fileLink: String?) {
