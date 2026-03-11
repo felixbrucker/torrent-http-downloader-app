@@ -13,6 +13,8 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
+import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
+import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
 import com.felixbrucker.torrenthttpdownloader.network.TorrentInfo
@@ -208,25 +210,16 @@ class DownloadService : Service() {
         val task = DownloadTracker.findTask(work.taskId) ?: return
 
         try {
-            val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer ${work.apiToken}", file.link)
-            val filePath = File(
-                getScopedTemporaryDirectory(task.name).absolutePath,
-                unrestrictLinkResponse.filename
-            ).absolutePath
-
-            DownloadTracker.updateTask(work.taskId) { t ->
-                t.copy(files = t.files.map {
-                    if (it.link == file.link) {
-                        it.copy(filePath = filePath)
-                    } else {
-                        it
-                    }
-                })
+            // Support regenerating the link if the existing one expires (
+            // TODO: how to detect expired links?
+            if (file.unrestrictedLink == null) {
+                updateFileInfo(task, file, work.apiToken)
+                file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
             }
-            file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+            val downloadUrl = file.unrestrictedLink ?: return
 
             val job = serviceScope.launch(Dispatchers.IO) {
-                performDownload(work.taskId, unrestrictLinkResponse.download, file)
+                performDownload(work.taskId, downloadUrl, file)
             }
             activeDownloads[file.link] = job
             job.join()
@@ -350,12 +343,8 @@ class DownloadService : Service() {
     }
 
     private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        DownloadTracker.updateTask(taskId) { task ->
-            task.copy(files = task.files.map {
-                if (it.link == fileLink) {
-                    it.copy(state = state, stateDescription = error, speed = 0)
-                } else it
-            })
+        DownloadTracker.updateTaskFile(taskId, fileLink) { file ->
+            file.copy(state = state, stateDescription = error, speed = 0)
         }
     }
 
@@ -594,13 +583,30 @@ class DownloadService : Service() {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 files = files,
-                                state = TorrentState.DOWNLOADING_LOCALLY,
+                                state = TorrentState.POPULATING_FILE_INFOS,
                                 rdSpeed = 0,
                             )
                         }
                     } else {
                         // Still downloading on RD, check again later
                         delay(5000)
+                    }
+
+                    return task.id
+                }
+
+                TorrentState.POPULATING_FILE_INFOS -> {
+                    for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
+                        updateFileInfo(task, file, apiToken)
+                    }
+
+                    val updatedTask = DownloadTracker.findTask(task.id) ?: return null
+
+                    DownloadTracker.updateTask(task.id) { currentTask ->
+                        currentTask.copy(
+                            files = updatedTask.files.sortedBy { it.fileName },
+                            state = TorrentState.DOWNLOADING_LOCALLY,
+                        )
                     }
 
                     return task.id
@@ -694,6 +700,20 @@ class DownloadService : Service() {
             throw e // Let the coroutine be cancelled
         } catch (e: BackgroundServiceStartNotAllowedException) {
             throw e // Ignore
+        } catch (e: RateLimitExceededException) {
+            e.printStackTrace()
+
+            // Retry after 15 sec
+            delay(15_000)
+
+            return task.id
+        } catch (e: BandwidthLimitExceededException) {
+            e.printStackTrace()
+
+            // Retry after 1 min
+            delay(60_000)
+
+            return task.id
         } catch (_: ResourceNotFoundException) {
             removeTask(taskId)
         } catch (e: Exception) {
@@ -713,6 +733,22 @@ class DownloadService : Service() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile, apiToken: String) {
+        val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer $apiToken", file.link)
+        val filePath = File(
+            getScopedTemporaryDirectory(task.name).absolutePath,
+            unrestrictLinkResponse.filename
+        ).absolutePath
+
+        DownloadTracker.updateTaskFile(task.id, file.link) {
+            it.copy(
+                totalBytes = unrestrictLinkResponse.filesize,
+                filePath = filePath,
+                unrestrictedLink = unrestrictLinkResponse.download,
+            )
         }
     }
 

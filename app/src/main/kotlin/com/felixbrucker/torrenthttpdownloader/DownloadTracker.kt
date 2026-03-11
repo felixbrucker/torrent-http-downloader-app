@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.content.Context
 import androidx.core.content.edit
+import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
@@ -81,5 +82,15 @@ object DownloadTracker {
             tasks.map { if (it.id == id) update(it) else it }
         }
         saveTasks()
+    }
+
+    fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) {
+        updateTask(taskId) { task ->
+            task.copy(files = task.files.map {
+                if (it.link == fileLink) {
+                    update(it)
+                } else it
+            })
+        }
     }
 }

@@ -7,6 +7,7 @@ enum class TorrentState {
     WAITING_FOR_FILE_SELECTION,
     SELECTING_FILES,
     WAITING_FOR_REAL_DEBRID_DOWNLOAD,
+    POPULATING_FILE_INFOS,
     DOWNLOADING_LOCALLY,
     DELETING_FROM_REAL_DEBRID,
     CHECKING_FOR_ARCHIVES,
@@ -29,6 +30,12 @@ enum class TorrentType {
     TORRENT
 }
 
+enum class TaskLocation {
+    REMOTE,
+    LOCAL
+}
+
+
 data class TorrentDescriptor(
     val type: TorrentType,
     val path: String
@@ -36,6 +43,7 @@ data class TorrentDescriptor(
 
 data class DownloadFile(
     val link: String, // The original Real-Debrid link
+    val unrestrictedLink: String? = null, // The download link, might need to be regenerated
     val state: LocalDownloadState = LocalDownloadState.PENDING,
     val stateDescription: String? = null,
     val progress: Int = 0,
@@ -45,7 +53,9 @@ data class DownloadFile(
     val downloadedBytes: Long = 0,
     @Transient val lastBytes: Long = 0,
     @Transient val lastTimestamp: Long = System.currentTimeMillis()
-)
+) {
+    val fileName get() = filePath?.substringAfterLast("/")
+}
 
 data class DownloadTask(
     val id: String, // Can be the initial magnet URI, then becomes the Real-Debrid Torrent ID
@@ -64,7 +74,7 @@ data class DownloadTask(
 ) {
     val overallProgress: Int
         get() {
-            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
+            return if (location == TaskLocation.REMOTE) {
                 rdProgress
             } else {
                 val totalSize = totalBytes
@@ -73,7 +83,7 @@ data class DownloadTask(
         }
     val overallSpeed: Long
         get() {
-            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
+            return if (location == TaskLocation.REMOTE) {
                 rdSpeed
             } else {
                 files.sumOf { it.speed }
@@ -82,7 +92,7 @@ data class DownloadTask(
 
     val totalBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
+            return if (location == TaskLocation.REMOTE) {
                 rdTotalBytes
             } else {
                 max(files.sumOf { it.totalBytes }, rdTotalBytes)
@@ -91,10 +101,18 @@ data class DownloadTask(
 
     val downloadedBytes: Long
         get() {
-            return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
+            return if (location == TaskLocation.REMOTE) {
                 rdDownloadedBytes
             } else {
                 files.sumOf { it.downloadedBytes }
             }
         }
+
+    val location: TaskLocation get() {
+        return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
+            TaskLocation.REMOTE
+        } else {
+            TaskLocation.LOCAL
+        }
+    }
 }

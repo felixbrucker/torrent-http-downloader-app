@@ -53,13 +53,14 @@ import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
-    var isExpanded by remember { mutableStateOf(true) }
-    val isExpandable = task.state.ordinal >= TorrentState.DOWNLOADING_LOCALLY.ordinal
+    var isExpanded by remember { mutableStateOf(false) }
+    val isExpandable = task.location == TaskLocation.LOCAL
 
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
@@ -110,7 +111,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
-                        if (task.state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal && task.rdState != null) {
+                        if (task.location == TaskLocation.REMOTE && task.rdState != null) {
                             StatItem(icon = Icons.Default.Info, text = "RD: ${task.rdState}")
                         }
                         if (task.overallSpeed > 0) {
@@ -188,7 +189,6 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
 @Composable
 fun StateIcon(state: TorrentState) {
     val icon = when (state) {
-        TorrentState.WAITING_FOR_FILE_SELECTION -> Icons.Default.HourglassEmpty
         TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD,
         TorrentState.DOWNLOADING_LOCALLY -> Icons.Default.Download
         TorrentState.EXTRACTING_ARCHIVES -> Icons.Default.Unarchive
