@@ -213,11 +213,15 @@ class DownloadService : Service() {
         notificationUpdateJob?.cancel()
         notificationUpdateJob = serviceScope.launch {
             while (isActive) {
-                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, getNotification())
+                updateNotification()
                 delay(2000)
             }
         }
+    }
+
+    private fun updateNotification() {
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, getNotification())
     }
 
     private fun launchWorker() = serviceScope.launch(Dispatchers.IO) {
@@ -454,12 +458,14 @@ class DownloadService : Service() {
         DownloadTracker.getTasks().forEach { task ->
             pauseTask(task.id)
         }
+        updateNotification()
     }
 
     private fun resumeAll() {
         DownloadTracker.getTasks().forEach { task ->
             resumeTask(task.id)
         }
+        updateNotification()
     }
 
     private fun handleAddTask(intent: Intent) {
