@@ -13,6 +13,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
+import com.felixbrucker.torrenthttpdownloader.network.ApiException
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
@@ -58,7 +59,8 @@ class DownloadService : Service() {
 
         resumeDownloads()
 
-        createNotificationChannel()
+        createServiceNotificationChannel()
+        createGeneralNotificationChannel()
         startForegroundService()
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
@@ -85,13 +87,24 @@ class DownloadService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
+    private fun createServiceNotificationChannel() {
         val name = "Download Service"
         val descriptionText = "Notifications for background downloads"
         val importance = NotificationManager.IMPORTANCE_LOW
-        val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
+        val channel = NotificationChannel(SERVICE_NOTIFICATION_CHANNEL_ID, name, importance).apply {
             description = descriptionText
         }
+        val notificationManager: NotificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun createGeneralNotificationChannel() {
+        val channel = NotificationChannel(
+            GENERAL_NOTIFICATION_CHANNEL_ID,
+            "General notifications",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
         val notificationManager: NotificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
@@ -135,7 +148,7 @@ class DownloadService : Service() {
         }
 
         val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
-        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, SERVICE_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Idle")
 
@@ -203,7 +216,7 @@ class DownloadService : Service() {
 
     private fun startForegroundService() {
         startForeground(
-            NOTIFICATION_ID,
+            SERVICE_NOTIFICATION_ID,
             getNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
@@ -221,7 +234,7 @@ class DownloadService : Service() {
 
     private fun updateNotification() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, getNotification())
+        notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification())
     }
 
     private fun launchWorker() = serviceScope.launch(Dispatchers.IO) {
@@ -394,6 +407,7 @@ class DownloadService : Service() {
             ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_PAUSE_TASK -> pauseTask(intent.getStringExtra(EXTRA_TASK_ID))
             ACTION_RESUME_TASK -> resumeTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_ALL -> pauseAll()
             ACTION_RESUME_ALL -> resumeAll()
             ACTION_ADD_TASK -> handleAddTask(intent)
@@ -452,6 +466,15 @@ class DownloadService : Service() {
                 resumeFile(taskId, file.link)
             }
         }
+    }
+
+    private suspend fun restartTask(taskId: String?) {
+        if (taskId == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
+        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
+        resetTorrent(apiToken, task)
+        taskIdsToProcess.add(task.id)
     }
 
     private fun pauseAll() {
@@ -584,6 +607,12 @@ class DownloadService : Service() {
                     val torrentInfo = RetrofitClient.instance.getTorrentInfo("Bearer $apiToken", task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
+                    if (torrentInfo.status == "error") {
+                        resetTorrent(apiToken, task)
+
+                        return task.id
+                    }
+
                     if (torrentInfo.status == "waiting_files_selection") {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
@@ -603,19 +632,32 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.SELECTING_FILES -> {
-                    val response = RetrofitClient.instance.selectFiles("Bearer $apiToken", task.id, "all")
-                    if (response.isSuccessful) {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD) }
+                    try {
+                        val response = RetrofitClient.instance.selectFiles("Bearer $apiToken", task.id, "all")
+                        if (response.isSuccessful) {
+                            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD) }
 
-                        return task.id
-                    } else {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.ERROR, errorMessage = "Failed to select files") }
+                            return task.id
+                        }
+                    } catch (e: ApiException) {
+                        DownloadTracker.updateTask(task.id) {
+                            it.copy(
+                                state = TorrentState.ERROR,
+                                errorMessage = "Failed to select files: ${e.message}"
+                            )
+                        }
                     }
                 }
 
                 TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD -> {
                     val torrentInfo = RetrofitClient.instance.getTorrentInfo("Bearer $apiToken", task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
+
+                    if (torrentInfo.status == "error") {
+                        resetTorrent(apiToken, task)
+
+                        return task.id
+                    }
 
                     if (torrentInfo.status == "downloaded") {
                         val files = torrentInfo.links.map { DownloadFile(it) }
@@ -669,8 +711,14 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.DELETING_FROM_REAL_DEBRID -> {
-                    val response = RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
-                    if (response.isSuccessful || response.code() == 404) {
+                    var isTorrentDeleted: Boolean
+                    try {
+                        val response = RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
+                        isTorrentDeleted = response.isSuccessful
+                    } catch (_: ResourceNotFoundException) {
+                        isTorrentDeleted = true
+                    }
+                    if (isTorrentDeleted) {
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
                         delay(5000)
@@ -763,6 +811,39 @@ class DownloadService : Service() {
         return null
     }
 
+    private suspend fun resetTorrent(
+        apiToken: String,
+        task: DownloadTask
+    ) {
+        // Remove pending local downloads
+        downloadQueue.removeIf { it.taskId == task.id }
+
+        // Cancel active downloads
+        for (file in task.files) {
+            activeDownloads[file.link]?.cancel()
+            activeDownloads.remove(file.link)
+        }
+        try {
+            RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
+        } catch (_: ResourceNotFoundException) {}
+        DownloadTracker.updateTask(task.id) {
+            it.copy(
+                state = TorrentState.ADDING_TO_REAL_DEBRID,
+                rdState = null,
+                rdProgress = 0,
+                rdSpeed = 0,
+                rdDownloadedBytes = 0,
+                rdTotalBytes = 0,
+                files = listOf(),
+                errorMessage = null,
+            )
+        }
+        postNotification(
+            "Torrent has been restarted",
+            "Torrent ${task.name} encountered an error on RD and has been restarted"
+        )
+    }
+
     private fun extractFile(filePath: String): Job {
         return serviceScope.launch(Dispatchers.IO) {
             try {
@@ -838,6 +919,18 @@ class DownloadService : Service() {
         }
     }
 
+    private fun postNotification(title: String, message: String) {
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
+        val notificationBuilder =
+            NotificationCompat.Builder(this, GENERAL_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .setContentTitle(title)
+                .setContentText(message)
+
+        notificationManager.notify(0, notificationBuilder.build())
+    }
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
@@ -848,8 +941,9 @@ class DownloadService : Service() {
     }
 
     companion object {
-        private const val NOTIFICATION_ID = 1
-        private const val NOTIFICATION_CHANNEL_ID = "download_service"
+        private const val SERVICE_NOTIFICATION_ID = 1
+        private const val SERVICE_NOTIFICATION_CHANNEL_ID = "download_service"
+        private const val GENERAL_NOTIFICATION_CHANNEL_ID = "general"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
         const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
@@ -859,6 +953,7 @@ class DownloadService : Service() {
         const val ACTION_RESUME_ALL = "ACTION_RESUME_ALL"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
+        const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
         const val EXTRA_TORRENT_PATH = "EXTRA_TORRENT_PATH"

@@ -4,6 +4,14 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("C:\\Users\\Felix\\.android\\main.jks")
+            storePassword = "test1234"
+            keyAlias = "main"
+            keyPassword = "test1234"
+        }
+    }
     namespace = "com.felixbrucker.torrenthttpdownloader"
     compileSdk {
         version = release(36) {

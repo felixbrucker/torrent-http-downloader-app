@@ -3,6 +3,7 @@ package com.felixbrucker.torrenthttpdownloader.network
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.json.JSONObject
+import java.io.IOException
 
 class ErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -36,7 +37,8 @@ class ErrorInterceptor : Interceptor {
     }
 }
 
+// We need to subclass from IOException or okhttp does not pass them up the stream
 class ResourceNotFoundException(message: String) : ApiException(7, message)
-class RateLimitExceededException: Exception()
-class BandwidthLimitExceededException: Exception()
-open class ApiException(val code: Int, message: String): Exception(message)
+class RateLimitExceededException: IOException()
+class BandwidthLimitExceededException: IOException()
+open class ApiException(val code: Int, message: String): IOException(message)

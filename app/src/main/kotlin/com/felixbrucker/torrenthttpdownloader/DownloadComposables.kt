@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
@@ -159,6 +160,18 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
                         }
+                    }
+                }
+
+                if (task.state == TorrentState.ERROR) {
+                    IconButton(onClick = {
+                        val intent = Intent(context, DownloadService::class.java).apply {
+                            action = ACTION_RESTART_TASK
+                            putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                        }
+                        context.startService(intent)
+                    }) {
+                        Icon(Icons.Default.Replay, contentDescription = "Restart")
                     }
                 }
 
