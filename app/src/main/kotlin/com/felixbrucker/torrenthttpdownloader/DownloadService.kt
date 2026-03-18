@@ -271,32 +271,27 @@ class DownloadService : Service() {
             val downloadUrl = file.unrestrictedLink ?: return
 
             val job = serviceScope.launch(Dispatchers.IO) {
-                performDownload(work.taskId, downloadUrl, file)
+                performDownload(work, downloadUrl, file)
             }
             activeDownloads[file.link] = job
             job.join()
         } catch (e: CancellationException) {
             throw e // Let the coroutine be cancelled
         } catch (e: Exception) {
-            DownloadTracker.updateTask(work.taskId) { task ->
-                task.copy(files = task.files.map {
-                    if (it.link == work.file.link) {
-                        it.copy(
-                            state = LocalDownloadState.ERROR,
-                            stateDescription = "Error: ${e.message}",
-                            speed = 0,
-                        )
-                    } else {
-                        it
-                    }
-                })
+            DownloadTracker.updateTaskFile(work.taskId, work.file.link) {
+                it.copy(
+                    state = LocalDownloadState.ERROR,
+                    stateDescription = "Error: ${e.message}",
+                    speed = 0,
+                )
             }
         } finally {
             activeDownloads.remove(file.link)
         }
     }
 
-    private suspend fun performDownload(taskId: String, unrestrictedLink: String, downloadFile: DownloadFile) {
+    private suspend fun performDownload(work: DownloadWork, unrestrictedLink: String, downloadFile: DownloadFile) {
+        val taskId = work.taskId
         val filePath = downloadFile.filePath ?: return
         val destFile = File(filePath)
 
@@ -328,7 +323,7 @@ class DownloadService : Service() {
             withContext(Dispatchers.IO) {
                 call.execute().use { response ->
                     if (!response.isSuccessful && response.code != 206) {
-                        updateFileState(taskId, downloadFile.link, LocalDownloadState.ERROR, "HTTP ${response.code}")
+                        handleFailedLocalDownload(work, downloadFile, "HTTP ${response.code}")
                         return@withContext
                     }
 
@@ -336,12 +331,12 @@ class DownloadService : Service() {
                     val contentLength = body.contentLength()
                     val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
-                    DownloadTracker.updateTask(taskId) { task ->
-                        task.copy(files = task.files.map {
-                            if (it.link == downloadFile.link) {
-                                it.copy(state = LocalDownloadState.DOWNLOADING, totalBytes = totalBytes, downloadedBytes = existingBytes)
-                            } else it
-                        })
+                    DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
+                        file.copy(
+                            state = LocalDownloadState.DOWNLOADING,
+                            totalBytes = totalBytes,
+                            downloadedBytes = existingBytes
+                        )
                     }
 
                     val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
@@ -366,18 +361,14 @@ class DownloadService : Service() {
                                 val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
                                 val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
 
-                                DownloadTracker.updateTask(taskId) { task ->
-                                    task.copy(files = task.files.map {
-                                        if (it.link == downloadFile.link) {
-                                            it.copy(
-                                                progress = progress,
-                                                downloadedBytes = totalDownloaded,
-                                                speed = speed,
-                                                lastTimestamp = now,
-                                                lastBytes = totalDownloaded
-                                            )
-                                        } else it
-                                    })
+                                DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
+                                    file.copy(
+                                        progress = progress,
+                                        downloadedBytes = totalDownloaded,
+                                        speed = speed,
+                                        lastTimestamp = now,
+                                        lastBytes = totalDownloaded
+                                    )
                                 }
                                 lastUpdate = now
                                 bytesSinceLastUpdate = 0
@@ -389,7 +380,7 @@ class DownloadService : Service() {
             }
         } catch (e: Exception) {
             if (e !is CancellationException) {
-                updateFileState(taskId, downloadFile.link, LocalDownloadState.ERROR, e.message)
+                handleFailedLocalDownload(work, downloadFile, e.message ?: "unknown error")
             }
         }
     }
@@ -608,7 +599,7 @@ class DownloadService : Service() {
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.status == "error") {
-                        resetTorrent(apiToken, task)
+                        handleFailedRemoteTask(apiToken, task)
 
                         return task.id
                     }
@@ -654,7 +645,7 @@ class DownloadService : Service() {
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.status == "error") {
-                        resetTorrent(apiToken, task)
+                        handleFailedRemoteTask(apiToken, task)
 
                         return task.id
                     }
@@ -811,10 +802,15 @@ class DownloadService : Service() {
         return null
     }
 
-    private suspend fun resetTorrent(
-        apiToken: String,
-        task: DownloadTask
-    ) {
+    private suspend fun handleFailedRemoteTask(apiToken: String, task: DownloadTask) {
+        resetTorrent(apiToken, task)
+        postNotification(
+            "Torrent has been restarted",
+            "Torrent ${task.name} encountered an error on RD and has been restarted"
+        )
+    }
+
+    private suspend fun resetTorrent(apiToken: String, task: DownloadTask) {
         // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == task.id }
 
@@ -838,10 +834,18 @@ class DownloadService : Service() {
                 errorMessage = null,
             )
         }
+    }
+
+    private fun handleFailedLocalDownload(work: DownloadWork, file: DownloadFile, errorMessage: String) {
+        updateFileState(work.taskId, file.link, LocalDownloadState.ERROR, errorMessage)
         postNotification(
-            "Torrent has been restarted",
-            "Torrent ${task.name} encountered an error on RD and has been restarted"
+            "Torrent download encountered an error",
+            "Torrent file ${file.fileName} encountered an error while downloading: $errorMessage"
         )
+        serviceScope.launch(Dispatchers.IO) {
+            delay(5000)
+            enqueueDownload(work.copy(file = file))
+        }
     }
 
     private fun extractFile(filePath: String): Job {
