@@ -51,7 +51,7 @@ class DownloadService : Service() {
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.SECONDS) // No timeout for downloads
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
     override fun onCreate() {
