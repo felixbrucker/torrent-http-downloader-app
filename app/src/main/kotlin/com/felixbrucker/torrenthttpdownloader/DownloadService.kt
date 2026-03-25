@@ -864,7 +864,7 @@ class DownloadService : Service() {
         val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer $apiToken", file.link)
         val filePath = File(
             getScopedTemporaryDirectory(task.name).absolutePath,
-            unrestrictLinkResponse.filename
+            unrestrictLinkResponse.filename.cleanedForUseAsPath()
         ).absolutePath
 
         DownloadTracker.updateTaskFile(task.id, file.link) {
@@ -888,7 +888,7 @@ class DownloadService : Service() {
     private fun getScopedTemporaryDirectory(taskName: String): File {
         return File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
-            "tmp/${taskName}"
+            "tmp/${taskName.cleanedForUseAsPath()}"
         )
     }
 
@@ -901,7 +901,7 @@ class DownloadService : Service() {
         }
 
         return if (task.createSubfolderByName) {
-            File(baseDir, task.name)
+            File(baseDir, task.name.cleanedForUseAsPath())
         } else {
             baseDir
         }
