@@ -464,8 +464,17 @@ class DownloadService : Service() {
         val task = DownloadTracker.findTask(taskId) ?: return
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val apiToken = sharedPreferences.getString("api_token", "") ?: ""
-        resetTorrent(apiToken, task)
-        taskIdsToProcess.add(task.id)
+        try {
+            resetTorrent(apiToken, task)
+            taskIdsToProcess.add(task.id)
+        } catch (e: Exception) {
+            DownloadTracker.updateTask(task.id) {
+                it.copy(
+                    state = TorrentState.ERROR,
+                    errorMessage = "Failed to restart task: ${e.message}",
+                )
+            }
+        }
     }
 
     private fun pauseAll() {
