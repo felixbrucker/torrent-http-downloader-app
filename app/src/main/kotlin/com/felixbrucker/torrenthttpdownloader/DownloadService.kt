@@ -543,9 +543,9 @@ class DownloadService : Service() {
         }
 
         // If the task is on Real-Debrid, delete it there
-        if (task.state.ordinal < TorrentState.DELETING_FROM_REAL_DEBRID.ordinal && apiToken.isNotEmpty()) {
+        if (task.state.ordinal < TorrentState.DELETING_FROM_REAL_DEBRID.ordinal && task.remoteId != null && apiToken.isNotEmpty()) {
             try {
-                RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
+                RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.remoteId)
             } catch (_: Exception) {
                 // Ignore if already deleted
             }
@@ -598,7 +598,14 @@ class DownloadService : Service() {
                         }!!
                     }
                     val newId = addMagnetResponse.id
-                    DownloadTracker.replaceTask(task.id, task.copy(id = newId, state = TorrentState.WAITING_FOR_FILE_SELECTION))
+                    DownloadTracker.replaceTask(
+                        task.id,
+                        task.copy(
+                            id = newId,
+                            remoteId = newId,
+                            state = TorrentState.WAITING_FOR_FILE_SELECTION
+                        )
+                    )
 
                     return newId
                 }
@@ -828,11 +835,15 @@ class DownloadService : Service() {
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)
         }
-        try {
-            RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
-        } catch (_: ResourceNotFoundException) {}
+        // Tasks not added to real-debrid yet don't need to get deleted from there
+        if (task.remoteId != null) {
+            try {
+                RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.remoteId)
+            } catch (_: ResourceNotFoundException) {}
+        }
         DownloadTracker.updateTask(task.id) {
             it.copy(
+                remoteId = null,
                 state = TorrentState.ADDING_TO_REAL_DEBRID,
                 rdState = null,
                 rdProgress = 0,

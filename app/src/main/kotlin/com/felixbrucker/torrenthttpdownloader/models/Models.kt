@@ -59,6 +59,7 @@ data class DownloadFile(
 
 data class DownloadTask(
     val id: String, // Can be the initial magnet URI, then becomes the Real-Debrid Torrent ID
+    val remoteId: String? = null, // Real-Debrid Torrent ID
     val name: String,
     val torrent: TorrentDescriptor,
     val state: TorrentState = TorrentState.ADDING_TO_REAL_DEBRID,
