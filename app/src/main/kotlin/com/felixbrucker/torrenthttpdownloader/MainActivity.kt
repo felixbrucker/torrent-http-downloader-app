@@ -58,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
@@ -252,7 +253,7 @@ fun AddTorrentBottomSheet(
         "update",
     )
 
-    LaunchedEffect(Unit) {
+    LifecycleResumeEffect(Unit) {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val subDirs = downloadsDir.listFiles { file ->
             file.isDirectory
@@ -270,6 +271,10 @@ fun AddTorrentBottomSheet(
         } ?: emptyList()
 
         subDirectories = subDirsWithSubSubDirsStrings.sorted()
+
+        onPauseOrDispose {
+            // Nothing to do
+        }
     }
 
     ModalBottomSheet(
