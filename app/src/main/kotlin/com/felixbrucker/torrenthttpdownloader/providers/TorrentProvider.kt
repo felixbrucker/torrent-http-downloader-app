@@ -21,6 +21,7 @@ data class UnrestrictedLink(
 
 interface TorrentProvider {
     val name: String
+    val requiresLocalDownloads: Boolean
 
     suspend fun addTorrent(type: TorrentType, content: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo

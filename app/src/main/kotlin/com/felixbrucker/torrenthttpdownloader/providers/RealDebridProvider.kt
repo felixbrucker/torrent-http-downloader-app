@@ -14,6 +14,7 @@ class RealDebridProvider(
     private val contentResolver: ContentResolver
 ) : TorrentProvider {
     override val name: String = NAME
+    override val requiresLocalDownloads: Boolean = true
 
     companion object {
         const val NAME: String = "Real-Debrid"

@@ -654,6 +654,16 @@ class DownloadService : Service() {
                     for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
                         updateFileInfo(task, file)
                     }
+                    if (!provider.requiresLocalDownloads) {
+                        DownloadTracker.updateTaskFiles(task.id) {
+                            it.copy(
+                                unrestrictedLink = null,
+                                state = LocalDownloadState.COMPLETED,
+                                progress = 100,
+                                downloadedBytes = it.totalBytes,
+                            )
+                        }
+                    }
 
                     val updatedTask = DownloadTracker.findTask(task.id) ?: return null
 

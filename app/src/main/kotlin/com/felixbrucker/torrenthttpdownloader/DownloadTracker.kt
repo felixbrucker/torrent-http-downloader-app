@@ -85,11 +85,17 @@ object DownloadTracker {
     }
 
     fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) {
+        updateTaskFiles(taskId) {
+            if (it.link == fileLink) {
+                update(it)
+            } else it
+        }
+    }
+
+    fun updateTaskFiles(taskId: String, update: (DownloadFile) -> DownloadFile) {
         updateTask(taskId) { task ->
             task.copy(files = task.files.map {
-                if (it.link == fileLink) {
-                    update(it)
-                } else it
+                update(it)
             })
         }
     }
