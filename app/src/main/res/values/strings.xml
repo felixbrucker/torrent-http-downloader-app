@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Torrent-HTTP-Downloader</string>
+    <string name="app_name">Torrent-Downloader</string>
     <string name="settings">Settings</string>
     <string name="provider">Provider</string>
     <string name="real_debrid_api_token">Real-Debrid API Token</string>
