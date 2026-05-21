@@ -11,20 +11,18 @@ import android.content.pm.ServiceInfo
 import android.os.Environment
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.ApiException
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
-import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
-import com.felixbrucker.torrenthttpdownloader.network.TorrentInfo
+import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
+import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.github.junrar.Junrar
 import kotlinx.coroutines.*
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
 import okio.BufferedSource
 import okio.buffer
@@ -34,9 +32,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.min
 
-private data class DownloadWork(val taskId: String, val file: DownloadFile, val apiToken: String)
+private data class DownloadWork(val taskId: String, val file: DownloadFile)
 
 class DownloadService : Service() {
 
@@ -48,6 +45,7 @@ class DownloadService : Service() {
     private val activeDownloads = ConcurrentHashMap<String, Job>()
     private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
     private var notificationUpdateJob: Job? = null
+    private lateinit var provider: TorrentProvider
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -63,6 +61,8 @@ class DownloadService : Service() {
         createGeneralNotificationChannel()
         startForegroundService()
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
+        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
+        provider = RealDebridProvider(apiToken, contentResolver)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
             launchWorker()
@@ -153,7 +153,7 @@ class DownloadService : Service() {
             .setContentTitle("Idle")
 
         if (tasks.isNotEmpty()) {
-            val hasRemoteTasks = tasks.any { it.location == TaskLocation.REMOTE }
+            val hasProviderTasks = tasks.any { it.location == TaskLocation.PROVIDER }
             var title = "Downloading: ${Formatter.formatSpeed(totalSpeed)}"
             builder.setSmallIcon(android.R.drawable.stat_sys_download)
 
@@ -162,7 +162,7 @@ class DownloadService : Service() {
                 val remainingTime = remainingBytes / totalSpeed
                 title += " • ${Formatter.formatTime(remainingTime)} left"
             } else if (runningDownloads == 0) {
-                if (hasRemoteTasks) {
+                if (hasProviderTasks) {
                     title = "Working"
                 } else {
                     title = "Idle"
@@ -265,7 +265,7 @@ class DownloadService : Service() {
             // Support regenerating the link if the existing one expires (
             // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
-                updateFileInfo(task, file, work.apiToken)
+                updateFileInfo(task, file)
                 file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
@@ -434,9 +434,7 @@ class DownloadService : Service() {
         if (taskId == null || fileLink == null) return
         val task = DownloadTracker.findTask(taskId) ?: return
         val file = task.files.find { it.link == fileLink } ?: return
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: return
-        enqueueDownload(DownloadWork(taskId, file, apiToken))
+        enqueueDownload(DownloadWork(taskId, file))
     }
 
     private fun pauseTask(taskId: String?) {
@@ -462,10 +460,8 @@ class DownloadService : Service() {
     private suspend fun restartTask(taskId: String?) {
         if (taskId == null) return
         val task = DownloadTracker.findTask(taskId) ?: return
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
         try {
-            resetTorrent(apiToken, task)
+            resetTorrent(task)
             taskIdsToProcess.add(task.id)
         } catch (e: Exception) {
             DownloadTracker.updateTask(task.id) {
@@ -506,7 +502,7 @@ class DownloadService : Service() {
             torrent = TorrentDescriptor(type, path),
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
-            state = TorrentState.ADDING_TO_REAL_DEBRID
+            state = TorrentState.ADDING_TO_PROVIDER
         )
         DownloadTracker.addTask(task)
         taskIdsToProcess.add(task.id)
@@ -515,9 +511,6 @@ class DownloadService : Service() {
     private suspend fun removeTask(taskId: String?) {
         if (taskId == null) return
         val task = DownloadTracker.findTask(taskId) ?: return
-
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
 
         // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == taskId }
@@ -542,13 +535,9 @@ class DownloadService : Service() {
             tempDir.deleteRecursively()
         }
 
-        // If the task is on Real-Debrid, delete it there
-        if (task.state.ordinal < TorrentState.DELETING_FROM_REAL_DEBRID.ordinal && task.remoteId != null && apiToken.isNotEmpty()) {
-            try {
-                RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.remoteId)
-            } catch (_: Exception) {
-                // Ignore if already deleted
-            }
+        // If the task is on Provider, delete it there
+        if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
+            provider.deleteTorrent(task.providerId)
         }
 
         DownloadTracker.removeTask(taskId)
@@ -573,36 +562,15 @@ class DownloadService : Service() {
     private suspend fun processTask(taskId: String): String? {
         val task = DownloadTracker.findTask(taskId) ?: return null
 
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
-        if (apiToken.isEmpty()) {
-            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.ERROR, errorMessage = "API Token not set") }
-
-            return null
-        }
-
         try {
             when (task.state) {
-                TorrentState.ADDING_TO_REAL_DEBRID -> {
-                    val addMagnetResponse = if (task.torrent.type == TorrentType.MAGNET) {
-                        RetrofitClient.instance.addMagnet("Bearer $apiToken", task.torrent.path)
-                    } else {
-                        contentResolver.openInputStream(task.torrent.path.toUri())?.use {
-                            val torrentData = it.readBytes()
-                            val requestBody = torrentData.toRequestBody(
-                                "application/x-bittorrent".toMediaTypeOrNull(),
-                                0,
-                                torrentData.size
-                            )
-                            RetrofitClient.instance.addTorrentFile("Bearer $apiToken", requestBody)
-                        }!!
-                    }
-                    val newId = addMagnetResponse.id
+                TorrentState.ADDING_TO_PROVIDER -> {
+                    val newId = provider.addTorrent(task.torrent.type, task.torrent.path)
                     DownloadTracker.replaceTask(
                         task.id,
                         task.copy(
                             id = newId,
-                            remoteId = newId,
+                            providerId = newId,
                             state = TorrentState.WAITING_FOR_FILE_SELECTION
                         )
                     )
@@ -611,11 +579,11 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.WAITING_FOR_FILE_SELECTION -> {
-                    val torrentInfo = RetrofitClient.instance.getTorrentInfo("Bearer $apiToken", task.id)
+                    val torrentInfo = provider.getTorrentInfo(task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.status == "error") {
-                        handleFailedRemoteTask(apiToken, task)
+                        handleFailedProviderTask(task)
 
                         return task.id
                     }
@@ -624,10 +592,10 @@ class DownloadService : Service() {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 state = TorrentState.SELECTING_FILES,
-                                rdProgress = 0,
-                                rdSpeed = 0,
-                                rdDownloadedBytes = 0,
-                                rdTotalBytes = 0,
+                                providerProgress = 0,
+                                providerSpeed = 0,
+                                providerDownloadedBytes = 0,
+                                providerTotalBytes = 0,
                             )
                         }
                     } else {
@@ -640,9 +608,9 @@ class DownloadService : Service() {
 
                 TorrentState.SELECTING_FILES -> {
                     try {
-                        val response = RetrofitClient.instance.selectFiles("Bearer $apiToken", task.id, "all")
-                        if (response.isSuccessful) {
-                            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD) }
+                        val isSuccessful = provider.selectFiles(task.id, "all")
+                        if (isSuccessful) {
+                            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
 
                             return task.id
                         }
@@ -656,12 +624,12 @@ class DownloadService : Service() {
                     }
                 }
 
-                TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD -> {
-                    val torrentInfo = RetrofitClient.instance.getTorrentInfo("Bearer $apiToken", task.id)
+                TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD -> {
+                    val torrentInfo = provider.getTorrentInfo(task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.status == "error") {
-                        handleFailedRemoteTask(apiToken, task)
+                        handleFailedProviderTask(task)
 
                         return task.id
                     }
@@ -672,11 +640,11 @@ class DownloadService : Service() {
                             it.copy(
                                 files = files,
                                 state = TorrentState.POPULATING_FILE_INFOS,
-                                rdSpeed = 0,
+                                providerSpeed = 0,
                             )
                         }
                     } else {
-                        // Still downloading on RD, check again later
+                        // Still downloading on provider, check again later
                         delay(5000)
                     }
 
@@ -685,7 +653,7 @@ class DownloadService : Service() {
 
                 TorrentState.POPULATING_FILE_INFOS -> {
                     for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
-                        updateFileInfo(task, file, apiToken)
+                        updateFileInfo(task, file)
                     }
 
                     val updatedTask = DownloadTracker.findTask(task.id) ?: return null
@@ -702,7 +670,7 @@ class DownloadService : Service() {
 
                 TorrentState.DOWNLOADING_LOCALLY -> {
                     task.files.filter { it.state != LocalDownloadState.COMPLETED && it.state != LocalDownloadState.PAUSED }.forEach {
-                        enqueueDownload(DownloadWork(task.id, it, apiToken))
+                        enqueueDownload(DownloadWork(task.id, it))
                     }
 
                     var files = task.files
@@ -712,19 +680,13 @@ class DownloadService : Service() {
                     }
 
                     // All done, continue to next state
-                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_REAL_DEBRID) }
+                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_PROVIDER) }
 
                     return task.id
                 }
 
-                TorrentState.DELETING_FROM_REAL_DEBRID -> {
-                    var isTorrentDeleted: Boolean
-                    try {
-                        val response = RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.id)
-                        isTorrentDeleted = response.isSuccessful
-                    } catch (_: ResourceNotFoundException) {
-                        isTorrentDeleted = true
-                    }
+                TorrentState.DELETING_FROM_PROVIDER -> {
+                    val isTorrentDeleted = provider.deleteTorrent(task.id)
                     if (isTorrentDeleted) {
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
@@ -818,15 +780,15 @@ class DownloadService : Service() {
         return null
     }
 
-    private suspend fun handleFailedRemoteTask(apiToken: String, task: DownloadTask) {
-        resetTorrent(apiToken, task)
+    private suspend fun handleFailedProviderTask(task: DownloadTask) {
+        resetTorrent(task)
         postNotification(
             "Torrent has been restarted",
-            "Torrent ${task.name} encountered an error on RD and has been restarted"
+            "Torrent ${task.name} encountered an error on provider and has been restarted"
         )
     }
 
-    private suspend fun resetTorrent(apiToken: String, task: DownloadTask) {
+    private suspend fun resetTorrent(task: DownloadTask) {
         // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == task.id }
 
@@ -835,21 +797,19 @@ class DownloadService : Service() {
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)
         }
-        // Tasks not added to real-debrid yet don't need to get deleted from there
-        if (task.remoteId != null) {
-            try {
-                RetrofitClient.instance.deleteTorrent("Bearer $apiToken", task.remoteId)
-            } catch (_: ResourceNotFoundException) {}
+        // Tasks not added to provider yet don't need to get deleted from there
+        if (task.providerId != null) {
+            provider.deleteTorrent(task.providerId)
         }
         DownloadTracker.updateTask(task.id) {
             it.copy(
-                remoteId = null,
-                state = TorrentState.ADDING_TO_REAL_DEBRID,
-                rdState = null,
-                rdProgress = 0,
-                rdSpeed = 0,
-                rdDownloadedBytes = 0,
-                rdTotalBytes = 0,
+                providerId = null,
+                state = TorrentState.ADDING_TO_PROVIDER,
+                providerState = null,
+                providerProgress = 0,
+                providerSpeed = 0,
+                providerDownloadedBytes = 0,
+                providerTotalBytes = 0,
                 files = listOf(),
                 errorMessage = null,
             )
@@ -880,8 +840,8 @@ class DownloadService : Service() {
         }
     }
 
-    private suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile, apiToken: String) {
-        val unrestrictLinkResponse = RetrofitClient.instance.unrestrictLink("Bearer $apiToken", file.link)
+    private suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile) {
+        val unrestrictLinkResponse = provider.unrestrictLink(file.link)
         val filePath = File(
             getScopedTemporaryDirectory(task.name).absolutePath,
             unrestrictLinkResponse.filename.cleanedForUseAsPath()
@@ -889,9 +849,9 @@ class DownloadService : Service() {
 
         DownloadTracker.updateTaskFile(task.id, file.link) {
             it.copy(
-                totalBytes = unrestrictLinkResponse.filesize,
+                totalBytes = unrestrictLinkResponse.size,
                 filePath = filePath,
-                unrestrictedLink = unrestrictLinkResponse.download,
+                unrestrictedLink = unrestrictLinkResponse.downloadUrl,
             )
         }
     }
@@ -927,18 +887,15 @@ class DownloadService : Service() {
         }
     }
 
-    private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: TorrentInfo) {
-        val totalBytes = torrentInfo.bytes
-        val downloadedBytes = min((totalBytes * (torrentInfo.progress / 100.0)).toLong(), totalBytes)
-
+    private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         DownloadTracker.updateTask(taskId) {
             it.copy(
-                name = if (it.name == it.torrent.path) torrentInfo.filename else it.name,
-                rdState = torrentInfo.status,
-                rdProgress = torrentInfo.progress.toInt(),
-                rdSpeed = torrentInfo.speed ?: 0,
-                rdDownloadedBytes = downloadedBytes,
-                rdTotalBytes = totalBytes,
+                name = if (it.name == it.torrent.path) torrentInfo.name else it.name,
+                providerState = torrentInfo.status,
+                providerProgress = torrentInfo.progress.toInt(),
+                providerSpeed = torrentInfo.speed,
+                providerDownloadedBytes = torrentInfo.downloadedBytes,
+                providerTotalBytes = torrentInfo.totalSizeInBytes,
             )
         }
     }

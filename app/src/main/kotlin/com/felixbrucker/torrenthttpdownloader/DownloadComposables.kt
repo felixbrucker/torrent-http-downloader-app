@@ -112,8 +112,8 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
-                        if (task.location == TaskLocation.REMOTE && task.rdState != null) {
-                            StatItem(icon = Icons.Default.Info, text = "RD: ${task.rdState}")
+                        if (task.location == TaskLocation.PROVIDER && task.providerState != null) {
+                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerState}")
                         }
                         if (task.overallSpeed > 0) {
                             StatItem(icon = Icons.Default.Speed, text = Formatter.formatSpeed(task.overallSpeed))
@@ -202,7 +202,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
 @Composable
 fun StateIcon(state: TorrentState) {
     val icon = when (state) {
-        TorrentState.WAITING_FOR_REAL_DEBRID_DOWNLOAD,
+        TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
         TorrentState.DOWNLOADING_LOCALLY -> Icons.Default.Download
         TorrentState.EXTRACTING_ARCHIVES -> Icons.Default.Unarchive
         TorrentState.MOVING_TO_DESTINATION -> Icons.AutoMirrored.Default.DriveFileMove

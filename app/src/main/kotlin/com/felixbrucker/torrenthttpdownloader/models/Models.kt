@@ -3,13 +3,13 @@ package com.felixbrucker.torrenthttpdownloader.models
 import kotlin.math.max
 
 enum class TorrentState {
-    ADDING_TO_REAL_DEBRID,
+    ADDING_TO_PROVIDER,
     WAITING_FOR_FILE_SELECTION,
     SELECTING_FILES,
-    WAITING_FOR_REAL_DEBRID_DOWNLOAD,
+    WAITING_FOR_PROVIDER_DOWNLOAD,
     POPULATING_FILE_INFOS,
     DOWNLOADING_LOCALLY,
-    DELETING_FROM_REAL_DEBRID,
+    DELETING_FROM_PROVIDER,
     CHECKING_FOR_ARCHIVES,
     EXTRACTING_ARCHIVES,
     MOVING_TO_DESTINATION,
@@ -31,7 +31,7 @@ enum class TorrentType {
 }
 
 enum class TaskLocation {
-    REMOTE,
+    PROVIDER,
     LOCAL
 }
 
@@ -58,16 +58,16 @@ data class DownloadFile(
 }
 
 data class DownloadTask(
-    val id: String, // Can be the initial magnet URI, then becomes the Real-Debrid Torrent ID
-    val remoteId: String? = null, // Real-Debrid Torrent ID
+    val id: String, // Can be the initial magnet URI, then becomes the provider Torrent ID
+    val providerId: String? = null, // Provider Torrent ID
     val name: String,
     val torrent: TorrentDescriptor,
-    val state: TorrentState = TorrentState.ADDING_TO_REAL_DEBRID,
-    val rdState: String? = null,
-    val rdProgress: Int = 0, // Progress from Real-Debrid
-    val rdSpeed: Long = 0, // Speed from Real-Debrid in B/s
-    val rdDownloadedBytes: Long = 0,
-    val rdTotalBytes: Long = 0,
+    val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
+    val providerState: String? = null,
+    val providerProgress: Int = 0, // Progress from Provider
+    val providerSpeed: Long = 0, // Speed from Provider in B/s
+    val providerDownloadedBytes: Long = 0,
+    val providerTotalBytes: Long = 0,
     val files: List<DownloadFile> = listOf(),
     val errorMessage: String? = null,
     val destinationSubdirectory: String? = null,
@@ -75,8 +75,8 @@ data class DownloadTask(
 ) {
     val overallProgress: Int
         get() {
-            return if (location == TaskLocation.REMOTE) {
-                rdProgress
+            return if (location == TaskLocation.PROVIDER) {
+                providerProgress
             } else {
                 val totalSize = totalBytes
                 if (totalSize == 0L) 0 else ((downloadedBytes * 100) / totalSize).toInt()
@@ -84,8 +84,8 @@ data class DownloadTask(
         }
     val overallSpeed: Long
         get() {
-            return if (location == TaskLocation.REMOTE) {
-                rdSpeed
+            return if (location == TaskLocation.PROVIDER) {
+                providerSpeed
             } else {
                 files.sumOf { it.speed }
             }
@@ -93,17 +93,17 @@ data class DownloadTask(
 
     val totalBytes: Long
         get() {
-            return if (location == TaskLocation.REMOTE) {
-                rdTotalBytes
+            return if (location == TaskLocation.PROVIDER) {
+                providerTotalBytes
             } else {
-                max(files.sumOf { it.totalBytes }, rdTotalBytes)
+                max(files.sumOf { it.totalBytes }, providerTotalBytes)
             }
         }
 
     val downloadedBytes: Long
         get() {
-            return if (location == TaskLocation.REMOTE) {
-                rdDownloadedBytes
+            return if (location == TaskLocation.PROVIDER) {
+                providerDownloadedBytes
             } else {
                 files.sumOf { it.downloadedBytes }
             }
@@ -111,7 +111,7 @@ data class DownloadTask(
 
     val location: TaskLocation get() {
         return if (state.ordinal < TorrentState.DOWNLOADING_LOCALLY.ordinal) {
-            TaskLocation.REMOTE
+            TaskLocation.PROVIDER
         } else {
             TaskLocation.LOCAL
         }
