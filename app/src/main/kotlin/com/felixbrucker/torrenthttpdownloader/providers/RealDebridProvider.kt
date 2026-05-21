@@ -13,7 +13,11 @@ class RealDebridProvider(
     private val apiToken: String,
     private val contentResolver: ContentResolver
 ) : TorrentProvider {
-    override val name: String = "Real-Debrid"
+    override val name: String = NAME
+
+    companion object {
+        const val NAME: String = "Real-Debrid"
+    }
 
     private val auth = "Bearer $apiToken"
 

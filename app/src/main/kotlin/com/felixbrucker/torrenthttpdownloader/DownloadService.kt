@@ -16,7 +16,7 @@ import com.felixbrucker.torrenthttpdownloader.network.ApiException
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
-import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.github.junrar.Junrar
@@ -60,9 +60,8 @@ class DownloadService : Service() {
         createServiceNotificationChannel()
         createGeneralNotificationChannel()
         startForegroundService()
+        provider = ProviderFactory.makeProvider(this)
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val apiToken = sharedPreferences.getString("api_token", "") ?: ""
-        provider = RealDebridProvider(apiToken, contentResolver)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
             launchWorker()
