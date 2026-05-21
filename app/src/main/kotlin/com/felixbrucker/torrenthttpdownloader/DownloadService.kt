@@ -62,6 +62,7 @@ class DownloadService : Service() {
         createGeneralNotificationChannel()
         startForegroundService()
         provider = ProviderFactory.makeProvider(this)
+        currentProvider = provider
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
@@ -133,18 +134,18 @@ class DownloadService : Service() {
         var totalProgress = 0
         var totalDownloadedBytes = 0L
         var totalBytes = 0L
-        var runningDownloads = 0
-        var totalDownloads = 0
-        var completedDownloads = 0
+        var runningLocalDownloads = 0
+        var totalLocalDownloads = 0
+        var completedLocalDownloads = 0
 
         for (task in tasks) {
             totalSpeed += task.overallDownloadSpeed
             totalProgress += task.overallProgress
             totalDownloadedBytes += task.downloadedBytes
             totalBytes += task.totalBytes
-            runningDownloads += task.files.filter { it.state == LocalDownloadState.DOWNLOADING }.size
-            completedDownloads += task.files.filter { it.state == LocalDownloadState.COMPLETED }.size
-            totalDownloads += task.files.size
+            runningLocalDownloads += task.files.filter { it.state == LocalDownloadState.DOWNLOADING }.size
+            completedLocalDownloads += task.files.filter { it.state == LocalDownloadState.COMPLETED }.size
+            totalLocalDownloads += task.files.size
         }
 
         val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
@@ -153,7 +154,11 @@ class DownloadService : Service() {
             .setContentTitle("Idle")
 
         if (tasks.isNotEmpty()) {
-            val hasProviderTasks = tasks.any { it.location == TaskLocation.PROVIDER }
+            val hasRunningProviderTasks = tasks.any {
+                it.location == TaskLocation.PROVIDER
+                        && it.providerTorrentInfo?.state != ProviderTorrentState.PAUSED
+                        && it.providerTorrentInfo?.state != ProviderTorrentState.COMPLETED
+            }
             var title = "Downloading: ${Formatter.formatSpeed(totalSpeed)}"
             builder.setSmallIcon(android.R.drawable.stat_sys_download)
 
@@ -161,8 +166,8 @@ class DownloadService : Service() {
                 val remainingBytes = totalBytes - totalDownloadedBytes
                 val remainingTime = remainingBytes / totalSpeed
                 title += " • ${Formatter.formatTime(remainingTime)} left"
-            } else if (runningDownloads == 0) {
-                if (hasProviderTasks) {
+            } else if (runningLocalDownloads == 0) {
+                if (hasRunningProviderTasks) {
                     title = "Working"
                 } else {
                     title = "Idle"
@@ -173,8 +178,10 @@ class DownloadService : Service() {
             val style = NotificationCompat
                 .InboxStyle()
                 .addLine("Tasks: ${tasks.size} remaining")
-                .addLine("Downloads: $runningDownloads active, $completedDownloads/$totalDownloads completed")
-                .addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)} downloaded")
+            if (totalLocalDownloads > 0) {
+                style.addLine("Downloads: $runningLocalDownloads active, $completedLocalDownloads/$totalLocalDownloads completed")
+            }
+            style.addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)} downloaded")
 
             builder
                 .setStyle(style)
@@ -397,7 +404,9 @@ class DownloadService : Service() {
             ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_PAUSE_TASK -> pauseTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_PAUSE_TASK_ON_PROVIDER -> serviceScope.launch { pauseTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESUME_TASK -> resumeTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_ALL -> pauseAll()
             ACTION_RESUME_ALL -> resumeAll()
@@ -447,6 +456,13 @@ class DownloadService : Service() {
         }
     }
 
+    private suspend fun pauseTaskOnProvider(taskId: String?) {
+        if (taskId == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        val providerId = task.providerId ?: return
+        provider.pause(providerId)
+    }
+
     private fun resumeTask(taskId: String?) {
         if (taskId == null) return
         val task = DownloadTracker.findTask(taskId) ?: return
@@ -455,6 +471,13 @@ class DownloadService : Service() {
                 resumeFile(taskId, file.link)
             }
         }
+    }
+
+    private suspend fun resumeTaskOnProvider(taskId: String?) {
+        if (taskId == null) return
+        val task = DownloadTracker.findTask(taskId) ?: return
+        val providerId = task.providerId ?: return
+        provider.resume(providerId)
     }
 
     private suspend fun restartTask(taskId: String?) {
@@ -936,7 +959,9 @@ class DownloadService : Service() {
         const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
         const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
         const val ACTION_PAUSE_TASK = "ACTION_PAUSE_TASK"
+        const val ACTION_PAUSE_TASK_ON_PROVIDER = "ACTION_PAUSE_TASK_ON_PROVIDER"
         const val ACTION_RESUME_TASK = "ACTION_RESUME_TASK"
+        const val ACTION_RESUME_TASK_ON_PROVIDER = "ACTION_RESUME_TASK_ON_PROVIDER"
         const val ACTION_PAUSE_ALL = "ACTION_PAUSE_ALL"
         const val ACTION_RESUME_ALL = "ACTION_RESUME_ALL"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
@@ -949,5 +974,7 @@ class DownloadService : Service() {
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
+
+        var currentProvider: TorrentProvider? = null
     }
 }

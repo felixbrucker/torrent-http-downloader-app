@@ -16,6 +16,7 @@ class RealDebridProvider(
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
     override val requiresFileSelection: Boolean = true
+    override val supportsPauseResume: Boolean = false
 
     companion object {
         const val NAME: String = "Real-Debrid"
@@ -96,6 +97,14 @@ class RealDebridProvider(
             downloadUrl = response.download,
             size = response.filesize
         )
+    }
+
+    override suspend fun pause(id: String) {
+        throw Exception("Unsupported operation: pause")
+    }
+
+    override suspend fun resume(id: String) {
+        throw Exception("Unsupported operation: resume")
     }
 
     override fun stop() {

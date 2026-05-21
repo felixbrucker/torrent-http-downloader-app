@@ -56,6 +56,7 @@ import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
@@ -63,6 +64,7 @@ import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
+    val provider = DownloadService.currentProvider
     var isExpanded by remember { mutableStateOf(false) }
     val isExpandable = task.location == TaskLocation.LOCAL
 
@@ -141,7 +143,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                             StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
                         }
                         if (task.providerTorrentInfo?.peers != null && task.providerTorrentInfo.totalPeers != null) {
-                            StatItem(icon = graph_3, text = "Peers: ${task.providerTorrentInfo.peers}/${task.providerTorrentInfo.totalPeers}")
+                            StatItem(icon = graph_3, text = "${task.providerTorrentInfo.peers}/${task.providerTorrentInfo.totalPeers}")
                         }
                     }
                     if (task.errorMessage != null) {
@@ -153,6 +155,31 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
+
+                if (task.location == TaskLocation.PROVIDER && provider?.supportsPauseResume == true) {
+                    if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_PAUSE_TASK_ON_PROVIDER
+                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.Pause, contentDescription = "Pause")
+                        }
+                    } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
+                        IconButton(onClick = {
+                            val intent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_RESUME_TASK_ON_PROVIDER
+                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                            }
+                            context.startService(intent)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                        }
+                    }
+
+                }
 
                 if (task.state == TorrentState.DOWNLOADING_LOCALLY) {
                     if (isDownloading) {

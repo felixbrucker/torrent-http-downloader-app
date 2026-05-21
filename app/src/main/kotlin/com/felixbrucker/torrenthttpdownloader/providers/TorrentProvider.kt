@@ -24,6 +24,7 @@ enum class ProviderTorrentState {
     CONVERTING_MAGNET,
     WAITING_FOR_FILE_SELECTION,
     DOWNLOADING,
+    PAUSED,
     COMPLETED,
     ERROR,
     UNKNOWN,
@@ -39,11 +40,14 @@ interface TorrentProvider {
     val name: String
     val requiresLocalDownloads: Boolean
     val requiresFileSelection: Boolean
+    val supportsPauseResume: Boolean
 
     suspend fun addTorrent(type: TorrentType, content: String, name: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo
     suspend fun selectFiles(id: String, files: String): Boolean
     suspend fun deleteTorrent(id: String, deleteFiles: Boolean = false): Boolean
     suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink
+    suspend fun pause(id: String)
+    suspend fun resume(id: String)
     fun stop()
 }

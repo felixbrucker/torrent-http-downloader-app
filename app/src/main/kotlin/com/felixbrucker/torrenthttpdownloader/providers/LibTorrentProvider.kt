@@ -12,6 +12,7 @@ import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
+import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
@@ -28,6 +29,7 @@ class LibTorrentProvider(
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = false
     override val requiresFileSelection: Boolean = false
+    override val supportsPauseResume: Boolean = true
 
     companion object {
         const val NAME: String = "libtorrent"
@@ -81,6 +83,8 @@ class LibTorrentProvider(
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
+        torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
+        torrentHandle.unsetFlags(TorrentFlags.PAUSED)
 
         return torrentId
     }
@@ -96,7 +100,11 @@ class LibTorrentProvider(
         } else {
             getFilePathList(torrentFileInfo.files())
         }
-        val torrentState = torrentStatus.state().name.lowercase()
+        var torrentState = torrentStatus.state().name.lowercase()
+        val isPaused = torrentStatus.flags().and_(TorrentFlags.PAUSED).non_zero()
+        if (isPaused) {
+            torrentState = "paused"
+        }
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
 
         return ProviderTorrentInfo(
@@ -146,6 +154,18 @@ class LibTorrentProvider(
         )
     }
 
+    override suspend fun pause(id: String) {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
+        torrentHandle.pause()
+    }
+
+    override suspend fun resume(id: String) {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
+        torrentHandle.resume()
+    }
+
     private fun getFilePathList(storage: FileStorage): List<String> {
         // relative paths in the torrent
         val filePaths: MutableList<String> = mutableListOf()
@@ -170,6 +190,7 @@ class LibTorrentProvider(
         return when (status) {
             "checking_files" -> ProviderTorrentState.PROCESSING
             "downloading_metadata" -> ProviderTorrentState.CONVERTING_MAGNET
+            "paused" -> ProviderTorrentState.PAUSED
             "downloading" -> ProviderTorrentState.DOWNLOADING
             "seeding", "finished" -> ProviderTorrentState.COMPLETED
             "error" -> ProviderTorrentState.ERROR
