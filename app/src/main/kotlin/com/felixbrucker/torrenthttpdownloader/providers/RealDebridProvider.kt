@@ -1,12 +1,15 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
 import android.content.ContentResolver
+import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.core.net.toUri
+import com.felixbrucker.torrenthttpdownloader.container.Container
+import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import kotlin.math.min
 
 class RealDebridProvider(
@@ -18,8 +21,16 @@ class RealDebridProvider(
     override val requiresFileSelection: Boolean = true
     override val supportsPauseResume: Boolean = false
 
-    companion object {
-        const val NAME: String = "Real-Debrid"
+    companion object: ServiceBuilder {
+        override val NAME: String = "Real-Debrid"
+
+        override fun build(): RealDebridProvider {
+            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
+            val apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
+            val contentResolver = Container.getService<ContentResolver>("ContentResolver")
+
+            return RealDebridProvider(apiToken, contentResolver)
+        }
     }
 
     private val auth = "Bearer $apiToken"

@@ -4,6 +4,8 @@ import android.content.ContentResolver
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.felixbrucker.torrenthttpdownloader.container.Container
+import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import org.libtorrent4j.FileStorage
@@ -31,8 +33,15 @@ class LibTorrentProvider(
     override val requiresFileSelection: Boolean = false
     override val supportsPauseResume: Boolean = true
 
-    companion object {
-        const val NAME: String = "libtorrent"
+    companion object: ServiceBuilder {
+        override val NAME: String = "libtorrent"
+
+        override fun build(): LibTorrentProvider {
+            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
+            val contentResolver = Container.getService<ContentResolver>("ContentResolver")
+
+            return LibTorrentProvider(sharedPreferences, contentResolver)
+        }
     }
 
     private val sessionManager = SessionManager()

@@ -10,14 +10,17 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.ApiException
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
+import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.github.junrar.Junrar
@@ -55,8 +58,14 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        provider = ProviderFactory.makeProvider(this)
-        currentProvider = provider
+        Container
+            .registerService("SharedPreferences", getSharedPreferences("settings", MODE_PRIVATE))
+            .registerService("ContentResolver", contentResolver)
+            .registerServiceBuilder(RealDebridProvider)
+            .registerServiceBuilder(LibTorrentProvider)
+            .registerService("TorrentProvider", ProviderFactory.getProvider())
+
+        provider = Container.getService("TorrentProvider")
 
         resumeDownloads()
 
@@ -1013,6 +1022,7 @@ class DownloadService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         provider.stop()
+        Container.clear()
         serviceJob.cancel()
     }
 
@@ -1041,7 +1051,5 @@ class DownloadService : Service() {
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
-
-        var currentProvider: TorrentProvider? = null
     }
 }

@@ -35,7 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
 
@@ -57,7 +57,10 @@ fun SettingsScreen(onSave: () -> Unit) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
-    val providers = ProviderFactory.providerNameList()
+    val providers = listOf(
+        LibTorrentProvider.NAME,
+        RealDebridProvider.NAME,
+    )
     var selectedProvider by remember {
         mutableStateOf(sharedPreferences.getString("provider", providers[0]) ?: providers[0])
     }

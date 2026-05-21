@@ -51,12 +51,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
+import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
@@ -64,7 +66,7 @@ import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
-    val provider = DownloadService.currentProvider
+    val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
     var isExpanded by remember { mutableStateOf(false) }
     val isExpandable = task.location == TaskLocation.LOCAL
 
