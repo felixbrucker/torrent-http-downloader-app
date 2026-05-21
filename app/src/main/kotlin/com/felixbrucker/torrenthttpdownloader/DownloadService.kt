@@ -18,7 +18,9 @@ import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.github.junrar.Junrar
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
@@ -529,14 +531,14 @@ class DownloadService : Service() {
         }
 
         // Remove scoped temp directory if available
-        val tempDir = getScopedTemporaryDirectory(task.name)
+        val tempDir = PathFactory.getScopedTemporaryDirectory(task.name)
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
         }
 
         // If the task is on Provider, delete it there
         if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
-            provider.deleteTorrent(task.providerId)
+            provider.deleteTorrent(task.providerId, deleteFiles = true)
         }
 
         DownloadTracker.removeTask(taskId)
@@ -564,7 +566,7 @@ class DownloadService : Service() {
         try {
             when (task.state) {
                 TorrentState.ADDING_TO_PROVIDER -> {
-                    val newId = provider.addTorrent(task.torrent.type, task.torrent.path)
+                    val newId = provider.addTorrent(task.torrent.type, task.torrent.path, task.name)
                     DownloadTracker.replaceTask(
                         task.id,
                         task.copy(
@@ -581,13 +583,19 @@ class DownloadService : Service() {
                     val torrentInfo = provider.getTorrentInfo(task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
-                    if (torrentInfo.status == "error") {
+                    if (torrentInfo.state == ProviderTorrentState.ERROR) {
                         handleFailedProviderTask(task)
 
                         return task.id
                     }
 
-                    if (torrentInfo.status == "waiting_files_selection") {
+                    if (!provider.requiresFileSelection) {
+                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
+
+                        return task.id
+                    }
+
+                    if (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION) {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 state = TorrentState.SELECTING_FILES,
@@ -627,13 +635,13 @@ class DownloadService : Service() {
                     val torrentInfo = provider.getTorrentInfo(task.id)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
-                    if (torrentInfo.status == "error") {
+                    if (torrentInfo.state == ProviderTorrentState.ERROR) {
                         handleFailedProviderTask(task)
 
                         return task.id
                     }
 
-                    if (torrentInfo.status == "downloaded") {
+                    if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
                         val files = torrentInfo.links.map { DownloadFile(it) }
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
@@ -730,8 +738,11 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.MOVING_TO_DESTINATION -> {
-                    val source = getScopedTemporaryDirectory(task.name)
-                    val destination = getScopedDestinationDirectory(task)
+                    val source = PathFactory.getScopedTemporaryDirectory(task.name)
+
+                    ensureTorrentIsFlattened(source)
+
+                    val destination = PathFactory.getScopedDestinationDirectory(task)
 
                     val parentDestinationDir = destination.parentFile
                     if (parentDestinationDir != null && !parentDestinationDir.exists()) {
@@ -740,11 +751,7 @@ class DownloadService : Service() {
 
                     if (destination.exists()) {
                         // Directory merge, move files individually
-                        source.listFiles()?.forEach { file ->
-                            val destFile = File(destination, file.name)
-                            file.renameTo(destFile)
-                        }
-                        source.deleteRecursively()
+                        mergeDirectory(source, destination)
                     } else {
                         // No conflict, just move the whole directory
                         source.renameTo(destination)
@@ -795,6 +802,34 @@ class DownloadService : Service() {
             "Torrent has been restarted",
             "Torrent ${task.name} encountered an error on provider and has been restarted"
         )
+    }
+
+    private fun ensureTorrentIsFlattened(directory: File) {
+        var filesInRoot = directory.listFiles() ?: arrayOf()
+        while (filesInRoot.size == 1 && filesInRoot[0].isDirectory) {
+            mergeDirectory(filesInRoot[0], directory)
+            filesInRoot = directory.listFiles() ?: arrayOf()
+        }
+    }
+
+    private fun mergeDirectory(sourceDirectory: File, destinationDirectory: File) {
+        sourceDirectory.listFiles()?.forEach { file ->
+            if (!file.exists()) {
+                return@forEach
+            }
+            val destFile = File(destinationDirectory, file.name)
+            if (destFile.exists()) {
+                if (file.isDirectory && destFile.isDirectory) {
+                    return@forEach mergeDirectory(file, destFile)
+                } else {
+                    destFile.delete()
+                }
+            }
+            file.renameTo(destFile)
+        }
+        if (sourceDirectory.listFiles()?.size == 0) {
+            sourceDirectory.delete()
+        }
     }
 
     private suspend fun resetTorrent(task: DownloadTask) {
@@ -850,9 +885,9 @@ class DownloadService : Service() {
     }
 
     private suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile) {
-        val unrestrictLinkResponse = provider.unrestrictLink(file.link)
+        val unrestrictLinkResponse = provider.unrestrictLink(task.id, file.link)
         val filePath = File(
-            getScopedTemporaryDirectory(task.name).absolutePath,
+            PathFactory.getScopedTemporaryDirectory(task.name).absolutePath,
             unrestrictLinkResponse.filename.cleanedForUseAsPath()
         ).absolutePath
 
@@ -872,28 +907,6 @@ class DownloadService : Service() {
     private fun enqueueDownload(work: DownloadWork) {
         updateFileState(work.taskId, work.file.link, LocalDownloadState.PENDING)
         downloadQueue.add(work)
-    }
-
-    private fun getScopedTemporaryDirectory(taskName: String): File {
-        return File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
-            "tmp/${taskName.cleanedForUseAsPath()}"
-        )
-    }
-
-    private fun getScopedDestinationDirectory(task: DownloadTask): File {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val baseDir = if (!task.destinationSubdirectory.isNullOrEmpty()) {
-            File(downloadsDir, task.destinationSubdirectory)
-        } else {
-            downloadsDir
-        }
-
-        return if (task.createSubfolderByName) {
-            File(baseDir, task.name.cleanedForUseAsPath())
-        } else {
-            baseDir
-        }
     }
 
     private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
@@ -927,6 +940,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        provider.stop()
         serviceJob.cancel()
     }
 

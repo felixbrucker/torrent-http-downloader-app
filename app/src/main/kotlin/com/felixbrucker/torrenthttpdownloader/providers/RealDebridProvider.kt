@@ -15,6 +15,7 @@ class RealDebridProvider(
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
+    override val requiresFileSelection: Boolean = true
 
     companion object {
         const val NAME: String = "Real-Debrid"
@@ -22,7 +23,7 @@ class RealDebridProvider(
 
     private val auth = "Bearer $apiToken"
 
-    override suspend fun addTorrent(type: TorrentType, content: String): String {
+    override suspend fun addTorrent(type: TorrentType, content: String, name: String): String {
         checkApiToken()
 
         val response = if (type == TorrentType.MAGNET) {
@@ -51,12 +52,13 @@ class RealDebridProvider(
         return ProviderTorrentInfo(
             id = info.id,
             name = info.filename,
+            state = mapStatusToState(info.status),
             status = info.status,
             progress = info.progress,
             totalSizeInBytes = totalBytes,
             downloadedBytes = downloadedBytes,
             speed = info.speed ?: 0,
-            links = info.links
+            links = info.links,
         )
     }
 
@@ -68,7 +70,7 @@ class RealDebridProvider(
         return response.isSuccessful
     }
 
-    override suspend fun deleteTorrent(id: String): Boolean {
+    override suspend fun deleteTorrent(id: String, deleteFiles: Boolean): Boolean {
         checkApiToken()
 
         try {
@@ -80,7 +82,7 @@ class RealDebridProvider(
         }
     }
 
-    override suspend fun unrestrictLink(link: String): UnrestrictedLink {
+    override suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink {
         checkApiToken()
 
         val response = RetrofitClient.instance.unrestrictLink(auth, link)
@@ -91,9 +93,24 @@ class RealDebridProvider(
         )
     }
 
+    override fun stop() {
+        // Nothing to do
+    }
+
     private fun checkApiToken() {
         if(apiToken.isEmpty()) {
             throw Exception("API token is empty")
+        }
+    }
+
+    private fun mapStatusToState(status: String): ProviderTorrentState {
+        return when (status) {
+            "magnet_conversion" -> ProviderTorrentState.CONVERTING_MAGNET
+            "waiting_files_selection" -> ProviderTorrentState.WAITING_FOR_FILE_SELECTION
+            "queued", "downloading", "compressing", "uploading" -> ProviderTorrentState.DOWNLOADING
+            "downloaded" -> ProviderTorrentState.COMPLETED
+            "error", "magnet_error", "virus", "dead" -> ProviderTorrentState.ERROR
+            else -> ProviderTorrentState.UNKNOWN
         }
     }
 }

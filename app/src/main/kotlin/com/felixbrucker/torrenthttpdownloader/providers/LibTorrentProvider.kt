@@ -1,0 +1,336 @@
+package com.felixbrucker.torrenthttpdownloader.providers
+
+import android.content.ContentResolver
+import android.content.SharedPreferences
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import com.felixbrucker.torrenthttpdownloader.models.TorrentType
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import org.libtorrent4j.FileStorage
+import org.libtorrent4j.SessionHandle
+import org.libtorrent4j.SessionManager
+import org.libtorrent4j.SessionParams
+import org.libtorrent4j.SettingsPack
+import org.libtorrent4j.Sha1Hash
+import org.libtorrent4j.TorrentInfo
+import org.libtorrent4j.swig.error_code
+import org.libtorrent4j.swig.libtorrent
+import org.libtorrent4j.swig.settings_pack
+import org.libtorrent4j.swig.torrent_flags_t
+import java.util.Random
+import kotlin.io.encoding.Base64
+
+
+class LibTorrentProvider(
+    private val sharedPreferences: SharedPreferences,
+    private val contentResolver: ContentResolver
+) : TorrentProvider {
+    override val name: String = NAME
+    override val requiresLocalDownloads: Boolean = false
+    override val requiresFileSelection: Boolean = false
+
+    companion object {
+        const val NAME: String = "libtorrent"
+    }
+
+    private val sessionManager = SessionManager()
+    private val defaultSessionSettings = SessionSettings()
+
+    init {
+        if (defaultSessionSettings.useRandomPort) {
+            val range = SessionSettings.randomRangePort
+            defaultSessionSettings.portRangeFirst = range.first
+            defaultSessionSettings.portRangeSecond = range.second
+        }
+
+        val params = loadSessionParams()
+        params.settings = settingsToSettingsPack(defaultSessionSettings)
+        sessionManager.start(params)
+    }
+
+    override fun stop() {
+        saveSessionParams()
+        sessionManager.stop()
+    }
+
+    override suspend fun addTorrent(type: TorrentType, content: String, name: String): String {
+        val scopedTemporaryDirectory = PathFactory.getScopedTemporaryDirectory(name)
+
+        val torrentId: String
+        if (type == TorrentType.MAGNET) {
+            val errorCode = error_code()
+            val addTorrentParams = libtorrent.parse_magnet_uri(content, errorCode)
+            val infoHash = addTorrentParams.getInfo_hashes()._best
+            sessionManager.download(
+                content,
+                scopedTemporaryDirectory,
+                torrent_flags_t()
+            )
+            torrentId = infoHash.to_hex()
+        } else {
+            contentResolver.openInputStream(content.toUri())?.use {
+                val torrentData = it.readBytes()
+                val info = TorrentInfo(torrentData)
+                torrentId = info.infoHash().toHex()
+                sessionManager.download(
+                    TorrentInfo(torrentData),
+                    scopedTemporaryDirectory,
+                )
+            } ?: throw Exception("Could not open torrent file")
+        }
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
+        torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
+        torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
+
+        return torrentId
+    }
+
+    override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+
+        val totalBytes = torrentHandle.status().totalWanted()
+        val downloadedBytes = torrentHandle.status().totalWantedDone()
+        val torrentFileInfo = torrentHandle.torrentFile()
+        val filePathList = if (torrentFileInfo == null) {
+            listOf()
+        } else {
+            getFilePathList(torrentFileInfo.files())
+        }
+        val torrentState = torrentHandle.status().state().name.lowercase()
+
+        return ProviderTorrentInfo(
+            id = id,
+            name = torrentHandle.name,
+            state = mapTorrentStateToProviderTorrentState(torrentState),
+            status = torrentState,
+            progress = torrentHandle.status().progress() * 100,
+            totalSizeInBytes = totalBytes,
+            downloadedBytes = downloadedBytes,
+            speed = torrentHandle.status().downloadRate().toLong(),
+            links = filePathList,
+        )
+    }
+
+    override suspend fun selectFiles(id: String, files: String): Boolean {
+        // NOOP
+        return true
+    }
+
+    override suspend fun deleteTorrent(id: String, deleteFiles: Boolean): Boolean {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: return true
+
+        sessionManager.remove(
+            torrentHandle,
+            if (deleteFiles) SessionHandle.DELETE_FILES else SessionHandle.DELETE_PARTFILE
+        )
+
+        return true
+    }
+
+    override suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink {
+        val filePath = link
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentFileInfo = torrentHandle.torrentFile() ?: throw Exception("Torrent file not found")
+        val filesStorage = torrentFileInfo.files()
+
+        return UnrestrictedLink(
+            filename = filePath.substringAfterLast("/"),
+            downloadUrl = "",
+            size = getFileSize(filesStorage, filePath)
+        )
+    }
+
+    private fun getFilePathList(storage: FileStorage): List<String> {
+        // relative paths in the torrent
+        val filePaths: MutableList<String> = mutableListOf()
+        for (i in 0..<storage.numFiles()) {
+            filePaths.add(storage.filePath(i))
+        }
+
+        return filePaths
+    }
+
+    private fun getFileSize(storage: FileStorage, filePath: String): Long {
+        for (i in 0..<storage.numFiles()) {
+            if (storage.filePath(i) == filePath) {
+                return storage.fileSize(i)
+            }
+        }
+
+        return 0
+    }
+
+    private fun mapTorrentStateToProviderTorrentState(status: String): ProviderTorrentState {
+        return when (status) {
+            "checking_files" -> ProviderTorrentState.PROCESSING
+            "downloading_metadata" -> ProviderTorrentState.CONVERTING_MAGNET
+            "downloading" -> ProviderTorrentState.DOWNLOADING
+            "seeding", "finished" -> ProviderTorrentState.COMPLETED
+            "error" -> ProviderTorrentState.ERROR
+            else -> ProviderTorrentState.UNKNOWN
+        }
+    }
+
+    private fun loadSessionParams(): SessionParams {
+        val sessionDataBase64String = sharedPreferences.getString("libtorrent_session_params", null)
+        if (sessionDataBase64String == null) {
+            return SessionParams()
+        }
+
+        return SessionParams(Base64.decode(sessionDataBase64String))
+    }
+
+    private fun saveSessionParams() {
+        val params = sessionManager.saveState() ?: return
+        sharedPreferences.edit {
+            putString("libtorrent_session_params", Base64.encode(params))
+        }
+    }
+
+    private fun settingsToSettingsPack(settings: SessionSettings): SettingsPack {
+        val sp = SettingsPack()
+        sp.activeDownloads(settings.activeDownloads)
+        sp.activeSeeds(settings.activeSeeds)
+        sp.activeLimit(settings.activeLimit)
+        sp.maxPeerlistSize(settings.maxPeerListSize)
+        sp.tickInterval(settings.tickInterval)
+        sp.inactivityTimeout(settings.inactivityTimeout)
+        sp.connectionsLimit(settings.connectionsLimit)
+        sp.listenInterfaces(getIface(settings.inetAddress, settings.portRangeFirst))
+        sp.setInteger(
+            settings_pack.int_types.max_retry_port_bind.swigValue(),
+            settings.portRangeSecond - settings.portRangeFirst
+        )
+        sp.isEnableDht = settings.dhtEnabled
+        sp.setBoolean(settings_pack.bool_types.enable_lsd.swigValue(), settings.lsdEnabled)
+        sp.setBoolean(settings_pack.bool_types.enable_incoming_utp.swigValue(), settings.utpEnabled)
+        sp.setBoolean(settings_pack.bool_types.enable_outgoing_utp.swigValue(), settings.utpEnabled)
+        sp.setBoolean(settings_pack.bool_types.enable_upnp.swigValue(), settings.upnpEnabled)
+        sp.setBoolean(settings_pack.bool_types.enable_natpmp.swigValue(), settings.natPmpEnabled)
+        val encryptModeOutcoming: Int = convertEncryptMode(settings.encryptModeOutcoming)
+        val encryptModeIncoming: Int = convertEncryptMode(settings.encryptModeIncoming)
+        val encLevel: Int =
+            getAllowedEncryptLevel(settings.encryptModeOutcoming, settings.encryptModeIncoming)
+        sp.setInteger(settings_pack.int_types.in_enc_policy.swigValue(), encryptModeIncoming)
+        sp.setInteger(settings_pack.int_types.out_enc_policy.swigValue(), encryptModeOutcoming)
+        sp.setInteger(settings_pack.int_types.allowed_enc_level.swigValue(), encLevel)
+        sp.uploadRateLimit(settings.uploadRateLimit)
+        sp.downloadRateLimit(settings.downloadRateLimit)
+        sp.anonymousMode(settings.anonymousMode)
+        sp.seedingOutgoingConnections(settings.seedingOutgoingConnections)
+        sp.setBoolean(
+            settings_pack.bool_types.validate_https_trackers.swigValue(),
+            settings.validateHttpsTrackers
+        )
+
+        return sp
+    }
+
+    private fun getIface(inetAddress: String, portRangeFirst: Int): String {
+        var iface: String?
+        if (inetAddress == SessionSettings.DEFAULT_INETADDRESS) {
+            iface = $$"0.0.0.0:%1$d,[::]:%1$d"
+        } else {
+            /* IPv6 test */
+            if (inetAddress.contains(":")) iface = "[$inetAddress]"
+            else iface = inetAddress
+
+            iface = $$"$$iface:%1$d"
+        }
+
+        return String.format(iface, portRangeFirst)
+    }
+
+    private fun convertEncryptMode(mode: SessionSettings.EncryptMode): Int {
+        return when (mode) {
+            SessionSettings.EncryptMode.ENABLED -> settings_pack.enc_policy.pe_enabled.swigValue()
+            SessionSettings.EncryptMode.FORCED -> settings_pack.enc_policy.pe_forced.swigValue()
+        }
+    }
+
+    private fun getAllowedEncryptLevel(
+        modeOutcoming: SessionSettings.EncryptMode,
+        modeIncoming: SessionSettings.EncryptMode
+    ): Int {
+        if (modeOutcoming === SessionSettings.EncryptMode.FORCED
+            || modeIncoming === SessionSettings.EncryptMode.FORCED
+        ) {
+            return settings_pack.enc_level.pe_rc4.swigValue()
+        } else {
+            return settings_pack.enc_level.pe_both.swigValue()
+        }
+    }
+}
+
+class SessionSettings {
+    var activeDownloads: Int = DEFAULT_ACTIVE_DOWNLOADS
+    var activeSeeds: Int = DEFAULT_ACTIVE_SEEDS
+    var maxPeerListSize: Int = DEFAULT_MAX_PEER_LIST_SIZE
+    var tickInterval: Int = DEFAULT_TICK_INTERVAL
+    var inactivityTimeout: Int = DEFAULT_INACTIVITY_TIMEOUT
+    var connectionsLimit: Int = DEFAULT_CONNECTIONS_LIMIT
+    var connectionsLimitPerTorrent: Int = DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT
+    var uploadsLimitPerTorrent: Int = DEFAULT_UPLOADS_LIMIT_PER_TORRENT
+    var activeLimit: Int = DEFAULT_ACTIVE_LIMIT
+    var portRangeFirst: Int = DEFAULT_PORT_RANGE_FIRST
+    var portRangeSecond: Int = DEFAULT_PORT_RANGE_SECOND
+    var downloadRateLimit: Int = DEFAULT_DOWNLOAD_RATE_LIMIT
+    var uploadRateLimit: Int = DEFAULT_UPLOAD_RATE_LIMIT
+    var dhtEnabled: Boolean = DEFAULT_DHT_ENABLED
+    var lsdEnabled: Boolean = DEFAULT_LSD_ENABLED
+    var utpEnabled: Boolean = DEFAULT_UTP_ENABLED
+    var upnpEnabled: Boolean = DEFAULT_UPNP_ENABLED
+    var natPmpEnabled: Boolean = DEFAULT_NATPMP_ENABLED
+    var encryptModeOutcoming: EncryptMode = DEFAULT_ENCRYPT_MODE
+    var encryptModeIncoming: EncryptMode = DEFAULT_ENCRYPT_MODE
+    var inetAddress: String = DEFAULT_INETADDRESS
+    var anonymousMode: Boolean = DEFAULT_ANONYMOUS_MODE
+    var seedingOutgoingConnections: Boolean = DEFAULT_SEEDING_OUTGOING_CONNECTIONS
+    var useRandomPort: Boolean = DEFAULT_USE_RANDOM_PORT
+    var validateHttpsTrackers: Boolean = DEFAULT_VALIDATE_HTTPS_TRACKERS
+
+    enum class EncryptMode {
+        ENABLED,
+
+        FORCED,
+    }
+
+    companion object {
+        const val DEFAULT_ACTIVE_DOWNLOADS: Int = 4
+        const val DEFAULT_ACTIVE_SEEDS: Int = 4
+        const val DEFAULT_MAX_PEER_LIST_SIZE: Int = 200
+        const val DEFAULT_TICK_INTERVAL: Int = 1000
+        const val DEFAULT_INACTIVITY_TIMEOUT: Int = 60
+        const val DEFAULT_CONNECTIONS_LIMIT: Int = 200
+        const val DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT: Int = 40
+        const val DEFAULT_UPLOADS_LIMIT_PER_TORRENT: Int = 4
+        const val DEFAULT_ACTIVE_LIMIT: Int = 6
+        const val DEFAULT_DOWNLOAD_RATE_LIMIT: Int = 0
+        const val DEFAULT_UPLOAD_RATE_LIMIT: Int = 0
+        const val DEFAULT_DHT_ENABLED: Boolean = true
+        const val DEFAULT_LSD_ENABLED: Boolean = true
+        const val DEFAULT_UTP_ENABLED: Boolean = true
+        const val DEFAULT_UPNP_ENABLED: Boolean = true
+        const val DEFAULT_NATPMP_ENABLED: Boolean = true
+        val DEFAULT_ENCRYPT_MODE: EncryptMode = EncryptMode.ENABLED
+        const val DEFAULT_INETADDRESS: String = "0.0.0.0"
+        const val DEFAULT_PORT_RANGE_FIRST: Int = 37000
+        const val DEFAULT_PORT_RANGE_SECOND: Int = 57010
+        const val DEFAULT_ANONYMOUS_MODE: Boolean = false
+        const val DEFAULT_SEEDING_OUTGOING_CONNECTIONS: Boolean = false
+        const val DEFAULT_USE_RANDOM_PORT: Boolean = true
+        const val DEFAULT_VALIDATE_HTTPS_TRACKERS: Boolean = true
+
+        val randomRangePort: Pair<Int, Int>
+            /*
+            * Get the first port in range [37000, 57000] and the second `first` + 10
+            */
+            get() {
+                val port = DEFAULT_PORT_RANGE_FIRST + Random().nextInt(
+                    DEFAULT_PORT_RANGE_SECOND - 10 - DEFAULT_PORT_RANGE_FIRST
+                )
+
+                return Pair(port, port + 10)
+            }
+    }
+}
