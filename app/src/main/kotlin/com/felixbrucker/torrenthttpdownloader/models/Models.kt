@@ -42,7 +42,7 @@ data class TorrentDescriptor(
 )
 
 data class DownloadFile(
-    val link: String, // The original Real-Debrid link
+    val link: String, // The original provider link
     val unrestrictedLink: String? = null, // The download link, might need to be regenerated
     val state: LocalDownloadState = LocalDownloadState.PENDING,
     val stateDescription: String? = null,
