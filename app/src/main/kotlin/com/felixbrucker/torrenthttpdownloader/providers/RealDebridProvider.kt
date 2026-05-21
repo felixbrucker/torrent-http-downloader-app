@@ -1,20 +1,16 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
-import android.content.ContentResolver
 import android.content.SharedPreferences
-import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import kotlin.math.min
 
 class RealDebridProvider(
     private val apiToken: String,
-    private val contentResolver: ContentResolver
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
@@ -27,30 +23,31 @@ class RealDebridProvider(
         override fun build(): RealDebridProvider {
             val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
             val apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
-            val contentResolver = Container.getService<ContentResolver>("ContentResolver")
 
-            return RealDebridProvider(apiToken, contentResolver)
+            return RealDebridProvider(apiToken)
         }
     }
 
     private val auth = "Bearer $apiToken"
 
-    override suspend fun addTorrent(type: TorrentType, content: String, name: String): String {
+    override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
         checkApiToken()
 
-        val response = if (type == TorrentType.MAGNET) {
-            RetrofitClient.instance.addMagnet(auth, content)
-        } else {
-            contentResolver.openInputStream(content.toUri())?.use {
-                val torrentData = it.readBytes()
-                val requestBody = torrentData.toRequestBody(
-                    "application/x-bittorrent".toMediaTypeOrNull(),
-                    0,
-                    torrentData.size
-                )
-                RetrofitClient.instance.addTorrentFile(auth, requestBody)
-            } ?: throw Exception("Could not open torrent file")
-        }
+        val requestBody = torrentFileBytes.toRequestBody(
+            "application/x-bittorrent".toMediaTypeOrNull(),
+            0,
+            torrentFileBytes.size
+        )
+        val response = RetrofitClient.instance.addTorrentFile(auth, requestBody)
+
+        return response.id
+    }
+
+    override suspend fun addMagnet(magnetUri: String, name: String): String {
+        checkApiToken()
+
+        val response = RetrofitClient.instance.addMagnet(auth, magnetUri)
+
         return response.id
     }
 

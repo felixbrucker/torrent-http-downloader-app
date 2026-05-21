@@ -1,7 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
-import com.felixbrucker.torrenthttpdownloader.models.TorrentType
-
 data class ProviderTorrentInfo(
     val id: String,
     val name: String,
@@ -42,7 +40,8 @@ interface TorrentProvider {
     val requiresFileSelection: Boolean
     val supportsPauseResume: Boolean
 
-    suspend fun addTorrent(type: TorrentType, content: String, name: String): String
+    suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String
+    suspend fun addMagnet(magnetUri: String, name: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo
     suspend fun selectFiles(id: String, files: String): Boolean
     suspend fun deleteTorrent(id: String, deleteFiles: Boolean = false): Boolean

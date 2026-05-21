@@ -1,12 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
-import android.content.ContentResolver
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
-import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.SessionHandle
@@ -26,7 +23,6 @@ import kotlin.io.encoding.Base64
 
 class LibTorrentProvider(
     private val sharedPreferences: SharedPreferences,
-    private val contentResolver: ContentResolver
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = false
@@ -38,9 +34,8 @@ class LibTorrentProvider(
 
         override fun build(): LibTorrentProvider {
             val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-            val contentResolver = Container.getService<ContentResolver>("ContentResolver")
 
-            return LibTorrentProvider(sharedPreferences, contentResolver)
+            return LibTorrentProvider(sharedPreferences)
         }
     }
 
@@ -64,38 +59,41 @@ class LibTorrentProvider(
         sessionManager.stop()
     }
 
-    override suspend fun addTorrent(type: TorrentType, content: String, name: String): String {
-        val scopedTemporaryDirectory = PathFactory.getScopedTemporaryDirectory(name)
+    override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
+        val info = TorrentInfo(torrentFileBytes)
+        val torrentId = info.infoHash().toHex()
 
-        val torrentId: String
-        if (type == TorrentType.MAGNET) {
-            val errorCode = error_code()
-            val addTorrentParams = libtorrent.parse_magnet_uri(content, errorCode)
-            val infoHash = addTorrentParams.getInfo_hashes()._best
-            sessionManager.download(
-                content,
-                scopedTemporaryDirectory,
-                torrent_flags_t()
-            )
-            torrentId = infoHash.to_hex()
-        } else {
-            contentResolver.openInputStream(content.toUri())?.use {
-                val torrentData = it.readBytes()
-                val info = TorrentInfo(torrentData)
-                torrentId = info.infoHash().toHex()
-                sessionManager.download(
-                    TorrentInfo(torrentData),
-                    scopedTemporaryDirectory,
-                )
-            } ?: throw Exception("Could not open torrent file")
-        }
+        sessionManager.download(
+            info,
+            PathFactory.getScopedTemporaryDirectory(name),
+        )
+        setPerTorrentSettings(torrentId)
+
+        return torrentId
+    }
+
+    override suspend fun addMagnet(magnetUri: String, name: String): String {
+        val errorCode = error_code()
+        val addTorrentParams = libtorrent.parse_magnet_uri(magnetUri, errorCode)
+        val infoHash = addTorrentParams.getInfo_hashes()._best
+        val torrentId = infoHash.to_hex()
+
+        sessionManager.download(
+            magnetUri,
+            PathFactory.getScopedTemporaryDirectory(name),
+            torrent_flags_t(),
+        )
+        setPerTorrentSettings(torrentId)
+
+        return torrentId
+    }
+
+    private fun setPerTorrentSettings(torrentId: String) {
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
         torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
         torrentHandle.unsetFlags(TorrentFlags.PAUSED)
-
-        return torrentId
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {

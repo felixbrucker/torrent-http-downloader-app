@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.ApiException
@@ -60,7 +61,6 @@ class DownloadService : Service() {
         super.onCreate()
         Container
             .registerService("SharedPreferences", getSharedPreferences("settings", MODE_PRIVATE))
-            .registerService("ContentResolver", contentResolver)
             .registerServiceBuilder(RealDebridProvider)
             .registerServiceBuilder(LibTorrentProvider)
             .registerService("TorrentProvider", ProviderFactory.getProvider())
@@ -662,7 +662,13 @@ class DownloadService : Service() {
         try {
             when (task.state) {
                 TorrentState.ADDING_TO_PROVIDER -> {
-                    val newId = provider.addTorrent(task.torrent.type, task.torrent.path, task.name)
+                    val newId = if (task.torrent.type == TorrentType.MAGNET) {
+                        provider.addMagnet(task.torrent.path, task.name)
+                    } else {
+                        contentResolver.openInputStream(task.torrent.path.toUri())?.use {
+                            provider.addTorrent(it.readBytes(), task.name)
+                        } ?: throw Exception("Could not open torrent file")
+                    }
                     DownloadTracker.replaceTask(
                         task.id,
                         task.copy(
