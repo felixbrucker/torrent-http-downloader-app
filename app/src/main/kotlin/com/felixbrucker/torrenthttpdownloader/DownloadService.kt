@@ -55,14 +55,15 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        provider = ProviderFactory.makeProvider(this)
+        currentProvider = provider
 
         resumeDownloads()
 
         createServiceNotificationChannel()
         createGeneralNotificationChannel()
         startForegroundService()
-        provider = ProviderFactory.makeProvider(this)
-        currentProvider = provider
+
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         val limit = sharedPreferences.getInt("parallel_downloads", 2)
         repeat(limit) {
@@ -216,6 +217,38 @@ class DownloadService : Service() {
                 PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(android.R.drawable.ic_media_play, "Resume all", resumeAllPendingIntent)
+        }
+        if (provider.supportsPauseResume) {
+            val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
+            val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
+            if (anyDownloadingOnProvider) {
+                val pauseAllOnProviderIntent = Intent(this, DownloadService::class.java).apply {
+                    action = ACTION_PAUSE_ALL_ON_PROVIDER
+                }
+                val pauseAllOnProviderPendingIntent: PendingIntent = PendingIntent.getService(
+                    this, 5, pauseAllOnProviderIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    android.R.drawable.ic_media_pause,
+                    "Pause all (on provider)",
+                    pauseAllOnProviderPendingIntent
+                )
+            }
+            if (anyPausedOnProvider) {
+                val resumeAllOnProviderIntent = Intent(this, DownloadService::class.java).apply {
+                    action = ACTION_RESUME_ALL_ON_PROVIDER
+                }
+                val resumeAllOnProviderPendingIntent: PendingIntent = PendingIntent.getService(
+                    this, 6, resumeAllOnProviderIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    android.R.drawable.ic_media_play,
+                    "Resume all (on provider)",
+                    resumeAllOnProviderPendingIntent
+                )
+            }
         }
 
         return builder.build()
@@ -409,7 +442,9 @@ class DownloadService : Service() {
             ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_ALL -> pauseAll()
+            ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
             ACTION_RESUME_ALL -> resumeAll()
+            ACTION_RESUME_ALL_ON_PROVIDER -> serviceScope.launch { resumeAllOnProvider() }
             ACTION_ADD_TASK -> handleAddTask(intent)
             ACTION_STOP_SERVICE -> stopAllDownloadsAndExit()
         }
@@ -461,6 +496,13 @@ class DownloadService : Service() {
         val task = DownloadTracker.findTask(taskId) ?: return
         val providerId = task.providerId ?: return
         provider.pause(providerId)
+        DownloadTracker.updateTask(task.id) {
+            it.copy(
+                providerTorrentInfo = it.providerTorrentInfo?.copy(
+                    state = ProviderTorrentState.PAUSED
+                )
+            )
+        }
     }
 
     private fun resumeTask(taskId: String?) {
@@ -478,6 +520,13 @@ class DownloadService : Service() {
         val task = DownloadTracker.findTask(taskId) ?: return
         val providerId = task.providerId ?: return
         provider.resume(providerId)
+        DownloadTracker.updateTask(task.id) {
+            it.copy(
+                providerTorrentInfo = it.providerTorrentInfo?.copy(
+                    state = ProviderTorrentState.DOWNLOADING
+                )
+            )
+        }
     }
 
     private suspend fun restartTask(taskId: String?) {
@@ -503,10 +552,26 @@ class DownloadService : Service() {
         updateNotification()
     }
 
+    private suspend fun pauseAllOnProvider() {
+        DownloadTracker
+            .getTasks()
+            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
+            .forEach { task -> pauseTaskOnProvider(task.id) }
+        updateNotification()
+    }
+
     private fun resumeAll() {
         DownloadTracker.getTasks().forEach { task ->
             resumeTask(task.id)
         }
+        updateNotification()
+    }
+
+    private suspend fun resumeAllOnProvider() {
+        DownloadTracker
+            .getTasks()
+            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
+            .forEach { task -> resumeTaskOnProvider(task.id) }
         updateNotification()
     }
 
@@ -963,7 +1028,9 @@ class DownloadService : Service() {
         const val ACTION_RESUME_TASK = "ACTION_RESUME_TASK"
         const val ACTION_RESUME_TASK_ON_PROVIDER = "ACTION_RESUME_TASK_ON_PROVIDER"
         const val ACTION_PAUSE_ALL = "ACTION_PAUSE_ALL"
+        const val ACTION_PAUSE_ALL_ON_PROVIDER = "ACTION_PAUSE_ALL_ON_PROVIDER"
         const val ACTION_RESUME_ALL = "ACTION_RESUME_ALL"
+        const val ACTION_RESUME_ALL_ON_PROVIDER = "ACTION_RESUME_ALL_ON_PROVIDER"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
