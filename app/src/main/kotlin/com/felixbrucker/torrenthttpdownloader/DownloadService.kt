@@ -8,7 +8,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Environment
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.felixbrucker.torrenthttpdownloader.models.*
@@ -139,7 +138,7 @@ class DownloadService : Service() {
         var completedDownloads = 0
 
         for (task in tasks) {
-            totalSpeed += task.overallSpeed
+            totalSpeed += task.overallDownloadSpeed
             totalProgress += task.overallProgress
             totalDownloadedBytes += task.downloadedBytes
             totalBytes += task.totalBytes
@@ -597,13 +596,7 @@ class DownloadService : Service() {
 
                     if (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION) {
                         DownloadTracker.updateTask(task.id) {
-                            it.copy(
-                                state = TorrentState.SELECTING_FILES,
-                                providerProgress = 0,
-                                providerSpeed = 0,
-                                providerDownloadedBytes = 0,
-                                providerTotalBytes = 0,
-                            )
+                            it.copy(state = TorrentState.SELECTING_FILES)
                         }
                     } else {
                         // Still processing, check again later
@@ -647,7 +640,6 @@ class DownloadService : Service() {
                             it.copy(
                                 files = files,
                                 state = TorrentState.POPULATING_FILE_INFOS,
-                                providerSpeed = 0,
                             )
                         }
                     } else {
@@ -849,11 +841,7 @@ class DownloadService : Service() {
             it.copy(
                 providerId = null,
                 state = TorrentState.ADDING_TO_PROVIDER,
-                providerState = null,
-                providerProgress = 0,
-                providerSpeed = 0,
-                providerDownloadedBytes = 0,
-                providerTotalBytes = 0,
+                providerTorrentInfo = null,
                 files = listOf(),
                 errorMessage = null,
             )
@@ -913,11 +901,7 @@ class DownloadService : Service() {
         DownloadTracker.updateTask(taskId) {
             it.copy(
                 name = if (it.name == it.torrent.path) torrentInfo.name else it.name,
-                providerState = torrentInfo.status,
-                providerProgress = torrentInfo.progress.toInt(),
-                providerSpeed = torrentInfo.speed,
-                providerDownloadedBytes = torrentInfo.downloadedBytes,
-                providerTotalBytes = torrentInfo.totalSizeInBytes,
+                providerTorrentInfo = torrentInfo,
             )
         }
     }

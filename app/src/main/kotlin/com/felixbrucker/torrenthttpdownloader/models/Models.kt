@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import kotlin.math.max
 
 enum class TorrentState {
@@ -63,16 +64,28 @@ data class DownloadTask(
     val name: String,
     val torrent: TorrentDescriptor,
     val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
-    val providerState: String? = null,
-    val providerProgress: Int = 0, // Progress from Provider
-    val providerSpeed: Long = 0, // Speed from Provider in B/s
-    val providerDownloadedBytes: Long = 0,
-    val providerTotalBytes: Long = 0,
+    val providerTorrentInfo: ProviderTorrentInfo? = null,
     val files: List<DownloadFile> = listOf(),
     val errorMessage: String? = null,
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
 ) {
+    val providerProgress: Int get() {
+        return providerTorrentInfo?.progress?.toInt() ?: 0
+    }
+    val providerDownloadSpeed: Long get() {
+        return providerTorrentInfo?.downloadSpeed ?: 0
+    }
+    val providerUploadSpeed: Long get() {
+        return providerTorrentInfo?.uploadSpeed ?: 0
+    }
+    val providerDownloadedBytes: Long get() {
+        return providerTorrentInfo?.downloadedBytes ?: 0
+    }
+    val providerTotalBytes: Long get() {
+        return providerTorrentInfo?.totalSizeInBytes ?: 0
+    }
+
     val overallProgress: Int
         get() {
             return if (location == TaskLocation.PROVIDER) {
@@ -82,10 +95,10 @@ data class DownloadTask(
                 if (totalSize == 0L) 0 else ((downloadedBytes * 100) / totalSize).toInt()
             }
         }
-    val overallSpeed: Long
+    val overallDownloadSpeed: Long
         get() {
             return if (location == TaskLocation.PROVIDER) {
-                providerSpeed
+                providerDownloadSpeed
             } else {
                 files.sumOf { it.speed }
             }

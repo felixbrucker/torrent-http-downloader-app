@@ -10,7 +10,12 @@ data class ProviderTorrentInfo(
     val progress: Float, // 0-100
     val totalSizeInBytes: Long,
     val downloadedBytes: Long,
-    val speed: Long,
+    val downloadSpeed: Long,
+    val uploadSpeed: Long,
+    val seeders: Int?,
+    val leechers: Int?,
+    val peers: Int?,
+    val totalPeers: Int?,
     val links: List<String> = listOf()
 )
 

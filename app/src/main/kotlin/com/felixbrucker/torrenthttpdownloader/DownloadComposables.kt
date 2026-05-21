@@ -56,6 +56,9 @@ import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
+import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
+import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
+import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
 
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
@@ -112,21 +115,33 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
-                        if (task.location == TaskLocation.PROVIDER && task.providerState != null) {
-                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerState}")
+                        if (task.location == TaskLocation.PROVIDER && task.providerTorrentInfo?.status != null) {
+                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerTorrentInfo.status}")
                         }
-                        if (task.overallSpeed > 0) {
-                            StatItem(icon = Icons.Default.Speed, text = Formatter.formatSpeed(task.overallSpeed))
+                        if (task.overallDownloadSpeed > 0) {
+                            StatItem(
+                                icon = downloading,
+                                text = Formatter.formatSpeed(task.overallDownloadSpeed)
+                            )
+                        }
+                        if (task.providerUploadSpeed > 0) {
+                            StatItem(
+                                icon = arrow_upload_progress,
+                                text = Formatter.formatSpeed(task.providerUploadSpeed)
+                            )
                         }
                         StatItem(
                             icon = Icons.Default.DataUsage,
                             text = "${Formatter.formatBytes(task.downloadedBytes)} / ${Formatter.formatBytes(task.totalBytes)}"
                         )
-                        if (task.overallSpeed > 0) {
+                        if (task.overallDownloadSpeed > 0) {
                             val remainingBytes = task.totalBytes - task.downloadedBytes
                             val remainingTime =
-                                if (task.overallSpeed > 0) remainingBytes / task.overallSpeed else 0
+                                if (task.overallDownloadSpeed > 0) remainingBytes / task.overallDownloadSpeed else 0
                             StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
+                        }
+                        if (task.providerTorrentInfo?.peers != null && task.providerTorrentInfo.totalPeers != null) {
+                            StatItem(icon = graph_3, text = "Peers: ${task.providerTorrentInfo.peers}/${task.providerTorrentInfo.totalPeers}")
                         }
                     }
                     if (task.errorMessage != null) {

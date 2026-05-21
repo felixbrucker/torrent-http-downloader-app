@@ -57,7 +57,12 @@ class RealDebridProvider(
             progress = info.progress,
             totalSizeInBytes = totalBytes,
             downloadedBytes = downloadedBytes,
-            speed = info.speed ?: 0,
+            downloadSpeed = info.speed ?: 0,
+            uploadSpeed = 0,
+            seeders = info.seeders,
+            leechers = null,
+            peers = null,
+            totalPeers = null,
             links = info.links,
         )
     }

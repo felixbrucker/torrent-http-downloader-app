@@ -87,26 +87,32 @@ class LibTorrentProvider(
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
-
-        val totalBytes = torrentHandle.status().totalWanted()
-        val downloadedBytes = torrentHandle.status().totalWantedDone()
+        val torrentStatus = torrentHandle.status()
+        val totalBytes = torrentStatus.totalWanted()
+        val downloadedBytes = torrentStatus.totalWantedDone()
         val torrentFileInfo = torrentHandle.torrentFile()
         val filePathList = if (torrentFileInfo == null) {
             listOf()
         } else {
             getFilePathList(torrentFileInfo.files())
         }
-        val torrentState = torrentHandle.status().state().name.lowercase()
+        val torrentState = torrentStatus.state().name.lowercase()
+        val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
 
         return ProviderTorrentInfo(
             id = id,
             name = torrentHandle.name,
             state = mapTorrentStateToProviderTorrentState(torrentState),
             status = torrentState,
-            progress = torrentHandle.status().progress() * 100,
+            progress = torrentStatus.progress() * 100,
             totalSizeInBytes = totalBytes,
             downloadedBytes = downloadedBytes,
-            speed = torrentHandle.status().downloadRate().toLong(),
+            downloadSpeed = torrentStatus.downloadRate().toLong(),
+            uploadSpeed = torrentStatus.uploadRate().toLong(),
+            seeders = torrentStatus.numSeeds(),
+            leechers = torrentStatus.numPeers() - torrentStatus.numSeeds(),
+            peers = torrentStatus.numPeers(),
+            totalPeers = if (totalPeers > 0) totalPeers else torrentStatus.listPeers(),
             links = filePathList,
         )
     }
