@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +41,15 @@ fun RssFeedsScreen(
 ) {
     val feeds by DownloadTracker.rssFeeds.collectAsState()
     var selectedFeedId by remember { mutableStateOf<String?>(null) }
+
+    BackHandler {
+        if (selectedFeedId != null) {
+            selectedFeedId = null
+        } else {
+            onBack()
+        }
+    }
+
     val selectedFeed = remember(feeds, selectedFeedId) { feeds.find { it.id == selectedFeedId } }
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
