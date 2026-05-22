@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.ui
 
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.Card
@@ -50,7 +49,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
+import com.felixbrucker.torrenthttpdownloader.Formatter
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
@@ -68,7 +69,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
     val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
     var isExpanded by remember { mutableStateOf(false) }
-    val isExpandable = task.location == TaskLocation.LOCAL
+    val isExpandable = task.files.isNotEmpty()
 
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
@@ -82,7 +83,10 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     isExpanded = !isExpanded
                 }
             }
-            .animateContentSize()
+            .animateContentSize(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -270,9 +274,6 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
     val context = LocalContext.current
 
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
@@ -317,7 +318,7 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
                 ) {
                     StatItem(icon = Icons.Default.Info, text = file.state.name.replace("_", " ").lowercase())
                     if (speed > 0) {
-                        StatItem(icon = Icons.Default.Speed, text = Formatter.formatSpeed(speed))
+                        StatItem(icon = downloading, text = Formatter.formatSpeed(speed))
                     }
                     if (totalBytes > 0) {
                         StatItem(
