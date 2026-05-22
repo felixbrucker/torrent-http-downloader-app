@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
-        val rssSyncRequest = PeriodicWorkRequestBuilder<RssSyncWorker>(1, TimeUnit.HOURS)
+        val rssSyncRequest = PeriodicWorkRequestBuilder<RssSyncWorker>(3, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
