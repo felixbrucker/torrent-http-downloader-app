@@ -13,14 +13,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.work.Constraints
@@ -49,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
+    private var isResolvingTorrent by mutableStateOf(false)
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,16 +123,21 @@ class MainActivity : ComponentActivity() {
                                 syncFeed = { runRssSyncOnce(it.id) },
                                 addTorrentFromFeed = { feed, item ->
                                     serviceScope.launch {
-                                        val resolvedTorrent = TorrentUriResolver(context.contentResolver).resolve(item.link.toUri())
-                                        pendingConfig = AddTorrentConfig(
-                                            path = resolvedTorrent.uri.toString(),
-                                            type = resolvedTorrent.type,
-                                            name = resolvedTorrent.name,
-                                            createSubfolderByName = feed.createSubfolderByName,
-                                            destinationSubdirectory = feed.destinationSubdirectory,
-                                            feedId = feed.id,
-                                            feedItemId = item.id,
-                                        )
+                                        isResolvingTorrent = true
+                                        try {
+                                            val resolvedTorrent = TorrentUriResolver(context.contentResolver).resolve(item.link.toUri())
+                                            pendingConfig = AddTorrentConfig(
+                                                path = resolvedTorrent.uri.toString(),
+                                                type = resolvedTorrent.type,
+                                                name = resolvedTorrent.name,
+                                                createSubfolderByName = feed.createSubfolderByName,
+                                                destinationSubdirectory = feed.destinationSubdirectory,
+                                                feedId = feed.id,
+                                                feedItemId = item.id,
+                                            )
+                                        } finally {
+                                            isResolvingTorrent = false
+                                        }
                                     }
                                 }
                             )
@@ -162,6 +177,22 @@ class MainActivity : ComponentActivity() {
                             pendingConfig = null
                         }
                     )
+                }
+
+                if (isResolvingTorrent) {
+                    Dialog(onDismissRequest = { }) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -213,12 +244,17 @@ class MainActivity : ComponentActivity() {
 
         if (action == Intent.ACTION_VIEW && data != null) {
             serviceScope.launch {
-                val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
-                pendingConfig = AddTorrentConfig(
-                    path = resolvedTorrent.uri.toString(),
-                    type = resolvedTorrent.type,
-                    name = resolvedTorrent.name,
-                )
+                isResolvingTorrent = true
+                try {
+                    val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
+                    pendingConfig = AddTorrentConfig(
+                        path = resolvedTorrent.uri.toString(),
+                        type = resolvedTorrent.type,
+                        name = resolvedTorrent.name,
+                    )
+                } finally {
+                    isResolvingTorrent = false
+                }
             }
         }
     }
