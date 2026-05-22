@@ -56,7 +56,7 @@ class RssParser(private val client: OkHttpClient) {
                             when (tagName) {
                                 "title" -> currentItemTitle = try { parser.nextText() } catch (e: Exception) { "" }
                                 "link" -> currentItemLink = try { parser.nextText() } catch (e: Exception) { "" }
-                                "description" -> currentItemDescription = try { parser.nextText() } catch (e: Exception) { "" }
+                                "description" -> currentItemDescription = try { stripHtml(parser.nextText()) } catch (e: Exception) { "" }
                                 "pubDate" -> currentItemPubDate = try { parseDate(parser.nextText()) } catch (e: Exception) { null }
                                 "enclosure" -> {
                                     val url = parser.getAttributeValue(null, "url")
@@ -104,5 +104,9 @@ class RssParser(private val client: OkHttpClient) {
             }
         }
         return null
+    }
+
+    private fun stripHtml(html: String): String {
+        return html.replace(Regex("<[^>]*>"), "")
     }
 }
