@@ -1,6 +1,10 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkCapabilities.TRANSPORT_VPN
 import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
@@ -24,6 +28,7 @@ import kotlin.io.encoding.Base64
 
 class LibTorrentProvider(
     private val sharedPreferences: SharedPreferences,
+    private val connectivityManager: ConnectivityManager,
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = false
@@ -35,13 +40,25 @@ class LibTorrentProvider(
 
         override fun build(): LibTorrentProvider {
             val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
+            val connectivityManager = Container.getService<ConnectivityManager>("ConnectivityManager")
 
-            return LibTorrentProvider(sharedPreferences)
+            return LibTorrentProvider(sharedPreferences, connectivityManager)
         }
     }
 
     private val sessionManager = SessionManager()
     private val defaultSessionSettings = SessionSettings()
+
+    private val requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+    private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network : Network, networkCapabilities : NetworkCapabilities) {
+            if (sessionManager.isPaused && isAllowedToRun(networkCapabilities)) {
+                sessionManager.resume()
+            } else if (!sessionManager.isPaused && !isAllowedToRun(networkCapabilities)) {
+                sessionManager.pause()
+            }
+        }
+    }
 
     init {
         if (defaultSessionSettings.useRandomPort) {
@@ -54,11 +71,20 @@ class LibTorrentProvider(
         val params = loadSessionParams()
         params.settings = settingsToSettingsPack(defaultSessionSettings)
         sessionManager.start(params)
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
+    }
+
+    private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {
+        if (!requireVpnConnection) {
+            return true
+        }
+        return capabilities.hasTransport(TRANSPORT_VPN)
     }
 
     override fun stop() {
         saveSessionParams()
         sessionManager.stop()
+        connectivityManager.unregisterNetworkCallback(networkCallback)
     }
 
     override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
@@ -109,7 +135,7 @@ class LibTorrentProvider(
         }
         var torrentState = torrentStatus.state().name.lowercase()
         val isPaused = torrentStatus.flags().and_(TorrentFlags.PAUSED).non_zero()
-        if (isPaused) {
+        if (isPaused || sessionManager.isPaused) {
             torrentState = "paused"
         }
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()

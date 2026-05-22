@@ -1,7 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -30,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -56,6 +60,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var realDebridApiToken by remember { mutableStateOf(sharedPreferences.getString("real_debrid_api_token", "") ?: "") }
     var localParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("local_parallel_downloads", 2).toString()) }
     var libTorrentParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString()) }
+    var libTorrentRequireVpnConnection by remember { mutableStateOf(sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)) }
 
     var expanded by remember { mutableStateOf(false) }
 
@@ -136,18 +141,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { libTorrentRequireVpnConnection = !libTorrentRequireVpnConnection }
+                ) {
+                    Checkbox(
+                        checked = libTorrentRequireVpnConnection,
+                        onCheckedChange = { newValue -> libTorrentRequireVpnConnection = newValue }
+                    )
+                    Text(text = stringResource(id = R.string.require_vpn_connection))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             Button(onClick = {
-                val newRealDebridApiToken = realDebridApiToken.trim()
-                val newLocalParallelDownloads = localParallelDownloads.toIntOrNull() ?: 2
-                val newLibTorrentParallelDownloads = libTorrentParallelDownloads.toIntOrNull() ?: 3
-
                 sharedPreferences.edit {
                     putString("provider", selectedProvider)
-                    putString("real_debrid_api_token", newRealDebridApiToken)
-                    putInt("local_parallel_downloads", newLocalParallelDownloads)
-                    putInt("libtorrent_parallel_downloads", newLibTorrentParallelDownloads)
+                    putString("real_debrid_api_token", realDebridApiToken.trim())
+                    putInt("local_parallel_downloads", localParallelDownloads.toIntOrNull() ?: 2)
+                    putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
+                    putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
                 }
                 onBack()
             }) {

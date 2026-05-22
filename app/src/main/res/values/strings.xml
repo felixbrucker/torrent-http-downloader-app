@@ -8,6 +8,7 @@
     <string name="add_torrent">Add Torrent</string>
     <string name="select_destination">Downloads Subdirectory</string>
     <string name="create_subfolder">Create subfolder by torrent name</string>
+    <string name="require_vpn_connection">Require VPN Connection</string>
     <string name="add">Add</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>

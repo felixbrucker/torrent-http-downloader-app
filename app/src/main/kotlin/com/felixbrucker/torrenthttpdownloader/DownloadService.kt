@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -60,6 +61,7 @@ class DownloadService : Service() {
         super.onCreate()
         Container
             .registerService("SharedPreferences", getSharedPreferences("settings", MODE_PRIVATE))
+            .registerService("ConnectivityManager", getSystemService(ConnectivityManager::class.java))
             .registerServiceBuilder(RealDebridProvider)
             .registerServiceBuilder(LibTorrentProvider)
             .registerService("TorrentProvider", ProviderFactory.getProvider())
