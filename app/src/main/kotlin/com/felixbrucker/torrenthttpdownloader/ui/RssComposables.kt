@@ -1,6 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,13 +46,15 @@ fun RssFeedsScreen(
     val feeds by DownloadTracker.rssFeeds.collectAsState()
     var selectedFeedId by remember { mutableStateOf<String?>(null) }
 
-    BackHandler {
-        if (selectedFeedId != null) {
+    val navState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+
+    NavigationBackHandler(
+        state = navState,
+        isBackEnabled = selectedFeedId != null,
+        onBackCompleted = {
             selectedFeedId = null
-        } else {
-            onBack()
         }
-    }
+    )
 
     val selectedFeed = remember(feeds, selectedFeedId) { feeds.find { it.id == selectedFeedId } }
     var showAddFeedDialog by remember { mutableStateOf(false) }
@@ -90,40 +96,62 @@ fun RssFeedsScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            if (selectedFeedId == null) {
-                if (feeds.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.no_rss_feeds))
+            AnimatedContent(
+                targetState = selectedFeedId,
+                transitionSpec = {
+                    if (targetState != null) {
+                        (slideInHorizontally { it } + fadeIn())
+                            .togetherWith(slideOutHorizontally { -it / 3 } + fadeOut())
+                    } else {
+                        (slideInHorizontally { -it / 3 } + fadeIn())
+                            .togetherWith(slideOutHorizontally { it } + fadeOut())
+                    }
+                },
+                label = "RssDetailTransition"
+            ) { currentFeedId ->
+                if (currentFeedId == null) {
+                    if (feeds.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.no_rss_feeds))
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(feeds, key = { it.id }) { feed ->
+                                RssFeedItem(
+                                    feed = feed,
+                                    onClick = { selectedFeedId = feed.id },
+                                    onDelete = { DownloadTracker.removeRssFeed(feed.id) },
+                                    syncFeed = { syncFeed(feed) },
+                                    editFeed = { editFeedConfig = feed },
+                                )
+                            }
+                        }
                     }
                 } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    val feedToShow = remember(feeds, currentFeedId) { feeds.find { it.id == currentFeedId } }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
-                        items(feeds, key = { it.id }) { feed ->
-                            RssFeedItem(
+                        feedToShow?.let { feed ->
+                            RssItemsList(
                                 feed = feed,
-                                onClick = { selectedFeedId = feed.id },
-                                onDelete = { DownloadTracker.removeRssFeed(feed.id) },
-                                syncFeed = { syncFeed(feed) },
-                                editFeed = { editFeedConfig = feed },
+                                onItemClick = { item ->
+                                    DownloadTracker.updateRssFeed(feed.id) { f ->
+                                        f.copy(items = f.items.map {
+                                            if (it.id == item.id) it.copy(isRead = true) else it
+                                        })
+                                    }
+                                    onAddItem(feed, item)
+                                }
                             )
                         }
                     }
-                }
-            } else {
-                selectedFeed?.let { feed ->
-                    RssItemsList(
-                        feed = feed,
-                        onItemClick = { item ->
-                            DownloadTracker.updateRssFeed(feed.id) { f ->
-                                f.copy(items = f.items.map {
-                                    if (it.id == item.id) it.copy(isRead = true) else it
-                                })
-                            }
-                            onAddItem(feed, item)
-                        }
-                    )
                 }
             }
         }

@@ -5,12 +5,22 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +33,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -213,29 +224,15 @@ fun MainScreen(
     val unreadRssCount by DownloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
     var showRssScreen by remember { mutableStateOf(false) }
 
-    if (showRssScreen) {
-        BackHandler {
+    val rssNavigationState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+
+    NavigationBackHandler(
+        state = rssNavigationState,
+        isBackEnabled = showRssScreen,
+        onBackCompleted = {
             showRssScreen = false
         }
-        RssFeedsScreen(
-            onBack = { showRssScreen = false },
-            onAddItem = addFeedItem,
-            syncFeed = syncFeed,
-            syncFeeds = syncFeeds,
-        )
-
-        pendingConfig?.let { config ->
-            AddTorrentBottomSheet(
-                config = config,
-                onDismiss = onConfigDismiss,
-                onConfirm = { updatedConfig ->
-                    onConfigConfirm(updatedConfig)
-                }
-            )
-        }
-
-        return
-    }
+    )
 
     val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
     val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
@@ -294,10 +291,35 @@ fun MainScreen(
                 }
             )
         }
-    ) {
-        LazyColumn(modifier = Modifier.padding(it)) {
-            items(tasks, key = { task -> task.id }) { task ->
-                DownloadItem(task = task, onRemove = { removeTask(task.id) })
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Main Content
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(tasks, key = { task -> task.id }) { task ->
+                        DownloadItem(task = task, onRemove = { removeTask(task.id) })
+                    }
+                }
+            }
+
+            // RSS Screen overlay
+            AnimatedVisibility(
+                visible = showRssScreen,
+                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    RssFeedsScreen(
+                        onBack = { showRssScreen = false },
+                        onAddItem = addFeedItem,
+                        syncFeed = syncFeed,
+                        syncFeeds = syncFeeds,
+                    )
+                }
             }
         }
 
