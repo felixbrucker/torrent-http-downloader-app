@@ -805,6 +805,13 @@ class DownloadService : Service() {
                 TorrentState.DELETING_FROM_PROVIDER -> {
                     val isTorrentDeleted = provider.deleteTorrent(task.id)
                     if (isTorrentDeleted) {
+                        // Also delete local torrent file
+                        if (task.torrent.type == TorrentType.TORRENT_FILE) {
+                            val fileRef = File(task.torrent.path)
+                            if (fileRef.exists()) {
+                                fileRef.delete()
+                            }
+                        }
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
                         delay(5000)
