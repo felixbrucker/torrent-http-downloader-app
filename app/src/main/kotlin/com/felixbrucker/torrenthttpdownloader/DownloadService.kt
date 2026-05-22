@@ -73,7 +73,7 @@ class DownloadService : Service() {
         startForegroundService()
 
         val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val limit = sharedPreferences.getInt("parallel_downloads", 2)
+        val limit = sharedPreferences.getInt("local_parallel_downloads", 2)
         repeat(limit) {
             launchWorker()
         }

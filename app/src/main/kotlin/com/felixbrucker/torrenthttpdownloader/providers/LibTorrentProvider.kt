@@ -49,6 +49,7 @@ class LibTorrentProvider(
             defaultSessionSettings.portRangeFirst = range.first
             defaultSessionSettings.portRangeSecond = range.second
         }
+        defaultSessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
 
         val params = loadSessionParams()
         params.settings = settingsToSettingsPack(defaultSessionSettings)
@@ -93,8 +94,6 @@ class LibTorrentProvider(
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
-        torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
-        torrentHandle.unsetFlags(TorrentFlags.PAUSED)
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
@@ -181,7 +180,7 @@ class LibTorrentProvider(
 
     override suspend fun resume(id: String) {
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
-        torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
+        torrentHandle.flags = TorrentFlags.AUTO_MANAGED
         torrentHandle.resume()
     }
 

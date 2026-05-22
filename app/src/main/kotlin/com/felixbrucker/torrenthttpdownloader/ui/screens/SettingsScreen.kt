@@ -54,7 +54,8 @@ fun SettingsScreen(onBack: () -> Unit) {
         mutableStateOf(sharedPreferences.getString("provider", providers[0]) ?: providers[0])
     }
     var realDebridApiToken by remember { mutableStateOf(sharedPreferences.getString("real_debrid_api_token", "") ?: "") }
-    var parallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("parallel_downloads", 2).toString()) }
+    var localParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("local_parallel_downloads", 2).toString()) }
+    var libTorrentParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString()) }
 
     var expanded by remember { mutableStateOf(false) }
 
@@ -118,24 +119,35 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+                TextField(
+                    value = localParallelDownloads,
+                    onValueChange = { localParallelDownloads = it },
+                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            } else if (selectedProvider == LibTorrentProvider.NAME) {
+                TextField(
+                    value = libTorrentParallelDownloads,
+                    onValueChange = { libTorrentParallelDownloads = it },
+                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            TextField(
-                value = parallelDownloads,
-                onValueChange = { parallelDownloads = it },
-                label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = {
                 val newRealDebridApiToken = realDebridApiToken.trim()
-                val newParallelDownloads = parallelDownloads.toIntOrNull() ?: 2
+                val newLocalParallelDownloads = localParallelDownloads.toIntOrNull() ?: 2
+                val newLibTorrentParallelDownloads = libTorrentParallelDownloads.toIntOrNull() ?: 3
 
                 sharedPreferences.edit {
                     putString("provider", selectedProvider)
                     putString("real_debrid_api_token", newRealDebridApiToken)
-                    putInt("parallel_downloads", newParallelDownloads)
+                    putInt("local_parallel_downloads", newLocalParallelDownloads)
+                    putInt("libtorrent_parallel_downloads", newLibTorrentParallelDownloads)
                 }
                 onBack()
             }) {
