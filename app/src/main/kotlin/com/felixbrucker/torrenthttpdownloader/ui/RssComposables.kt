@@ -1,9 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
-import androidx.compose.animation.*
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +11,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.RssFeed
 import androidx.compose.material3.*
@@ -23,175 +18,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
 import java.text.SimpleDateFormat
 import java.util.*
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RssFeedsScreen(
-    onBack: () -> Unit,
-    onAddItem: (RssFeed, RssItem) -> Unit,
-    syncFeed: (RssFeed) -> Unit,
-    syncFeeds: () -> Unit,
-) {
-    val feeds by DownloadTracker.rssFeeds.collectAsState()
-    var selectedFeedId by remember { mutableStateOf<String?>(null) }
-
-    val navState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
-
-    NavigationBackHandler(
-        state = navState,
-        isBackEnabled = selectedFeedId != null,
-        onBackCompleted = {
-            selectedFeedId = null
-        }
-    )
-
-    val selectedFeed = remember(feeds, selectedFeedId) { feeds.find { it.id == selectedFeedId } }
-    var showAddFeedDialog by remember { mutableStateOf(false) }
-    var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(selectedFeed?.name ?: stringResource(R.string.rss_feeds)) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectedFeedId != null) selectedFeedId = null else onBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (selectedFeedId == null) {
-                        IconButton(onClick = syncFeeds) {
-                            Icon(Icons.Default.Sync, contentDescription = "Sync Feeds")
-                        }
-                        IconButton(onClick = { showAddFeedDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Feed")
-                        }
-                    } else {
-                        IconButton(onClick = { syncFeed(selectedFeed!!) }) {
-                            Icon(Icons.Default.Sync, contentDescription = "Sync Feed")
-                        }
-                        IconButton(onClick = {
-                            DownloadTracker.updateRssFeed(selectedFeedId!!) { feed ->
-                                feed.copy(items = feed.items.map { it.copy(isRead = true) })
-                            }
-                        }) {
-                            Icon(Icons.Default.DoneAll, contentDescription = stringResource(R.string.mark_all_read))
-                        }
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            AnimatedContent(
-                targetState = selectedFeedId,
-                transitionSpec = {
-                    if (targetState != null) {
-                        (slideInHorizontally { it } + fadeIn())
-                            .togetherWith(slideOutHorizontally { -it / 3 } + fadeOut())
-                    } else {
-                        (slideInHorizontally { -it / 3 } + fadeIn())
-                            .togetherWith(slideOutHorizontally { it } + fadeOut())
-                    }
-                },
-                label = "RssDetailTransition"
-            ) { currentFeedId ->
-                if (currentFeedId == null) {
-                    if (feeds.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.no_rss_feeds))
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(feeds, key = { it.id }) { feed ->
-                                RssFeedItem(
-                                    feed = feed,
-                                    onClick = { selectedFeedId = feed.id },
-                                    onDelete = { DownloadTracker.removeRssFeed(feed.id) },
-                                    syncFeed = { syncFeed(feed) },
-                                    editFeed = { editFeedConfig = feed },
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    val feedToShow = remember(feeds, currentFeedId) { feeds.find { it.id == currentFeedId } }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surface)
-                    ) {
-                        feedToShow?.let { feed ->
-                            RssItemsList(
-                                feed = feed,
-                                onItemClick = { item ->
-                                    DownloadTracker.updateRssFeed(feed.id) { f ->
-                                        f.copy(items = f.items.map {
-                                            if (it.id == item.id) it.copy(isRead = true) else it
-                                        })
-                                    }
-                                    onAddItem(feed, item)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showAddFeedDialog) {
-            EditRssFeedDialog(
-                onDismiss = { showAddFeedDialog = false },
-                onConfirm = { newFeed ->
-                    DownloadTracker.addRssFeed(newFeed)
-                    showAddFeedDialog = false
-                    syncFeed(newFeed)
-                }
-            )
-        }
-
-        editFeedConfig?.let { editingFeed ->
-            EditRssFeedDialog(
-                feed = editingFeed,
-                onDismiss = { editFeedConfig = null },
-                onConfirm = { newFeed ->
-                    DownloadTracker.updateRssFeed(newFeed.id) { feed ->
-                        val isResetState = feed.url != newFeed.url
-
-                        feed.copy(
-                            name = newFeed.name,
-                            url = newFeed.url,
-                            destinationSubdirectory = newFeed.destinationSubdirectory,
-                            createSubfolderByName = newFeed.createSubfolderByName,
-                            autoDownload = newFeed.autoDownload,
-                            lastCheck = if (isResetState) 0 else feed.lastCheck,
-                            items = if (isResetState) listOf() else feed.items,
-                        )
-                    }
-                    syncFeed(newFeed)
-                    editFeedConfig = null
-                }
-            )
-        }
-    }
-}
 
 @Composable
 fun RssFeedItem(

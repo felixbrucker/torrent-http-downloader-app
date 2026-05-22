@@ -10,6 +10,7 @@ appcompat = "1.7.1"
 junrar = "7.5.8"
 material = "1.13.0"
 compose = "2.3.10"
+kotlinSerialization = "2.3.21"
 activity-compose = "1.12.4"
 compose-material3 = "1.4.0"
 okhttp = "5.3.2"
@@ -21,7 +22,7 @@ lifecycle-viewmodel-compose = "2.10.0"
 material-icons-extended = "1.7.8"
 libtorrent4j = "2.1.0-39"
 workRuntimeKtx = "2.11.2"
-navigation-event = "1.1.1"
+navigation3 = "1.1.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,8 +46,11 @@ okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 libtorrent4j-android-arm64 = { group = "org.libtorrent4j", name = "libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
-androidx-navigation-event = { group = "androidx.navigationevent", name = "navigationevent-compose-android", version.ref = "navigation-event" }
+androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
+androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version = "1.8.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "compose" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinSerialization" }

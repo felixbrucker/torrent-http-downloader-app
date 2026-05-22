@@ -1,0 +1,131 @@
+package com.felixbrucker.torrenthttpdownloader.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.felixbrucker.torrenthttpdownloader.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.models.RssFeed
+import com.felixbrucker.torrenthttpdownloader.ui.EditRssFeedDialog
+import com.felixbrucker.torrenthttpdownloader.ui.RssFeedItem
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RssFeedsScreen(
+    onBack: () -> Unit,
+    syncFeed: (RssFeed) -> Unit,
+    syncFeeds: () -> Unit,
+    onNavigateToDetail: (String) -> Unit,
+) {
+    val feeds by DownloadTracker.rssFeeds.collectAsState()
+
+    var showAddFeedDialog by remember { mutableStateOf(false) }
+    var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.rss_feeds)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = syncFeeds) {
+                        Icon(Icons.Default.Sync, contentDescription = "Sync Feeds")
+                    }
+                    IconButton(onClick = { showAddFeedDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Feed")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            if (feeds.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(stringResource(R.string.no_rss_feeds))
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(feeds, key = { it.id }) { feed ->
+                        RssFeedItem(
+                            feed = feed,
+                            onClick = { onNavigateToDetail(feed.id) },
+                            onDelete = { DownloadTracker.removeRssFeed(feed.id) },
+                            syncFeed = { syncFeed(feed) },
+                            editFeed = { editFeedConfig = feed },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showAddFeedDialog) {
+            EditRssFeedDialog(
+                onDismiss = { showAddFeedDialog = false },
+                onConfirm = { newFeed ->
+                    DownloadTracker.addRssFeed(newFeed)
+                    showAddFeedDialog = false
+                    syncFeed(newFeed)
+                }
+            )
+        }
+
+        editFeedConfig?.let { editingFeed ->
+            EditRssFeedDialog(
+                feed = editingFeed,
+                onDismiss = { editFeedConfig = null },
+                onConfirm = { newFeed ->
+                    DownloadTracker.updateRssFeed(newFeed.id) { feed ->
+                        val isResetState = feed.url != newFeed.url
+
+                        feed.copy(
+                            name = newFeed.name,
+                            url = newFeed.url,
+                            destinationSubdirectory = newFeed.destinationSubdirectory,
+                            createSubfolderByName = newFeed.createSubfolderByName,
+                            autoDownload = newFeed.autoDownload,
+                            lastCheck = if (isResetState) 0 else feed.lastCheck,
+                            items = if (isResetState) listOf() else feed.items,
+                        )
+                    }
+                    syncFeed(newFeed)
+                    editFeedConfig = null
+                }
+            )
+        }
+    }
+}
