@@ -1,10 +1,12 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -190,31 +192,71 @@ fun RssItemsList(feed: RssFeed, onItemClick: (RssItem) -> Unit) {
 @Composable
 fun RssItemRow(item: RssItem, onClick: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()) }
+    val contentAlpha = if (item.isRead) 0.6f else 1f
+
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         headlineContent = {
             Text(
                 text = item.title,
-                fontWeight = if (item.isRead) FontWeight.Normal else FontWeight.Bold
+                fontWeight = if (item.isRead) FontWeight.Normal else FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         },
         supportingContent = {
             Column {
                 if (!item.description.isNullOrBlank()) {
-                    Text(item.description, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        text = item.description,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                    )
                 }
                 item.pubDate?.let {
-                    Text(dateFormat.format(Date(it)), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = dateFormat.format(Date(it)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.8f)
+                    )
+                }
+            }
+        },
+        leadingContent = {
+            Box(modifier = Modifier.size(8.dp)) {
+                if (!item.isRead) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    )
                 }
             }
         },
         trailingContent = {
             if (item.isDownloaded) {
-                Icon(Icons.Default.DownloadDone, contentDescription = "Downloaded", tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Downloaded",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             } else {
-                Icon(Icons.Default.Download, contentDescription = "Download")
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Download",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                )
             }
-        }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = if (!item.isRead) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     )
 }
 
