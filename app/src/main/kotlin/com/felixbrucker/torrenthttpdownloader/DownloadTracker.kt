@@ -21,6 +21,12 @@ object DownloadTracker {
     private val _rssFeeds = MutableStateFlow<List<RssFeed>>(emptyList())
     val rssFeeds = _rssFeeds.asStateFlow()
 
+    private val _syncingFeedIds = MutableStateFlow<Set<String>>(emptySet())
+    val syncingFeedIds = _syncingFeedIds.asStateFlow()
+
+    private val _isSyncingAll = MutableStateFlow(false)
+    val isSyncingAll = _isSyncingAll.asStateFlow()
+
     val totalUnreadRssCount = rssFeeds.map { feeds -> feeds.sumOf { it.unreadCount } }
 
     private val gson = Gson()
@@ -134,5 +140,13 @@ object DownloadTracker {
     fun removeRssFeed(id: String) {
         _rssFeeds.update { feeds -> feeds.filterNot { it.id == id } }
         saveRssFeeds()
+    }
+
+    fun setFeedSyncing(feedId: String, syncing: Boolean) {
+        _syncingFeedIds.update { if (syncing) it + feedId else it - feedId }
+    }
+
+    fun setAllFeedsSyncing(syncing: Boolean) {
+        _isSyncingAll.value = syncing
     }
 }

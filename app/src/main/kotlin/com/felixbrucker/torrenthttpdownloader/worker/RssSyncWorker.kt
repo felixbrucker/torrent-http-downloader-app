@@ -48,13 +48,16 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     }
 
     private suspend fun syncRssFeeds() {
-        val feeds = DownloadTracker.rssFeeds.value
-        for (feed in feeds) {
-            syncFeed(feed)
+        DownloadTracker.setAllFeedsSyncing(true)
+        try {
+            DownloadTracker.rssFeeds.value.forEach { syncFeed(it) }
+        } finally {
+            DownloadTracker.setAllFeedsSyncing(false)
         }
     }
 
     private suspend fun syncFeed(feed: RssFeed) {
+        DownloadTracker.setFeedSyncing(feed.id, true)
         try {
             val newItems = rssParser.fetchAndParse(feed.url)
             val existingItemIds = feed.items.map { it.id }.toSet()
@@ -80,6 +83,8 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        } finally {
+            DownloadTracker.setFeedSyncing(feed.id, false)
         }
     }
 

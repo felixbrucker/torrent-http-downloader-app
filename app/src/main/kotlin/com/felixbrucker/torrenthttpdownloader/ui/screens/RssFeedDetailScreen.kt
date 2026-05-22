@@ -1,5 +1,11 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -13,7 +19,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
@@ -29,6 +38,20 @@ fun RssFeedDetailScreen(
     syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
 ) {
+    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+    val isSyncing = syncingFeedIds.contains(feed.id)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -40,7 +63,11 @@ fun RssFeedDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = { syncFeed(feed) }) {
-                        Icon(Icons.Default.Sync, contentDescription = "Sync Feed")
+                        Icon(
+                            Icons.Default.Sync,
+                            contentDescription = "Sync Feed",
+                            modifier = if (isSyncing) Modifier.rotate(rotation) else Modifier
+                        )
                     }
                     IconButton(onClick = {
                         DownloadTracker.updateRssFeed(feed.id) { feed ->

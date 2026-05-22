@@ -1,5 +1,11 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
@@ -42,6 +49,19 @@ fun RssFeedsScreen(
     onNavigateToDetail: (String) -> Unit,
 ) {
     val feeds by DownloadTracker.rssFeeds.collectAsState()
+    val isSyncingAll by DownloadTracker.isSyncingAll.collectAsState()
+    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+
+    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
 
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
@@ -57,7 +77,11 @@ fun RssFeedsScreen(
                 },
                 actions = {
                     IconButton(onClick = syncFeeds) {
-                        Icon(Icons.Default.Sync, contentDescription = "Sync Feeds")
+                        Icon(
+                            Icons.Default.Sync,
+                            contentDescription = "Sync Feeds",
+                            modifier = if (isSyncingAll) Modifier.rotate(rotation) else Modifier
+                        )
                     }
                     IconButton(onClick = { showAddFeedDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Feed")
@@ -87,6 +111,7 @@ fun RssFeedsScreen(
                             onDelete = { DownloadTracker.removeRssFeed(feed.id) },
                             syncFeed = { syncFeed(feed) },
                             editFeed = { editFeedConfig = feed },
+                            isSyncing = syncingFeedIds.contains(feed.id)
                         )
                     }
                 }
