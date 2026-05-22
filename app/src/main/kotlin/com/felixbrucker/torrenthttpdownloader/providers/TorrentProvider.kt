@@ -14,8 +14,33 @@ data class ProviderTorrentInfo(
     val leechers: Int?,
     val peers: Int?,
     val totalPeers: Int?,
-    val links: List<String> = listOf()
+    val links: List<String> = listOf(),
+    val files: List<ProviderTorrentFile> = listOf(),
 )
+
+data class ProviderTorrentFile(
+    val path: String,
+    val size: Long,
+    val progress: Float?, // 0-100
+    val downloadedBytes: Long?,
+) {
+    val name: String get() {
+        return path.substringAfterLast('/')
+    }
+
+    val state: ProviderTorrentFileState get() {
+        if (progress == null) return ProviderTorrentFileState.PENDING
+        if (progress == 100f) return ProviderTorrentFileState.COMPLETED
+
+        return ProviderTorrentFileState.DOWNLOADING
+    }
+}
+
+enum class ProviderTorrentFileState {
+    DOWNLOADING,
+    COMPLETED,
+    PENDING,
+}
 
 enum class ProviderTorrentState {
     PROCESSING,

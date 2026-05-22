@@ -58,18 +58,23 @@ import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFile
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFileState
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
+import kotlin.math.roundToInt
 
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
     val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
     var isExpanded by remember { mutableStateOf(false) }
-    val isExpandable = task.files.isNotEmpty()
+    val isLocal = task.location == TaskLocation.LOCAL
+    val unfinishedLocalDownloads = task.files.filter { it.state != LocalDownloadState.COMPLETED }
+    val isExpandable = (isLocal && unfinishedLocalDownloads.isNotEmpty()) || (!isLocal && task.providerTorrentInfo?.files?.isNotEmpty() == true)
 
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
@@ -236,11 +241,15 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
 
             if (isExpandable && isExpanded) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    task.files
-                        .filter { it.state != LocalDownloadState.COMPLETED }
-                        .forEach { file ->
+                    if (isLocal) {
+                        unfinishedLocalDownloads.forEach { file ->
                             SubDownloadItem(task = task, file = file)
                         }
+                    } else {
+                        task.providerTorrentInfo?.files?.forEach { file ->
+                            ProviderTorrentFileItem(file = file)
+                        }
+                    }
                 }
             }
         }
@@ -370,6 +379,63 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
 }
 
 @Composable
+fun ProviderTorrentFileItem(file: ProviderTorrentFile) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            ProviderTorrentFileStateIcon(file.state)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = file.name, style = MaterialTheme.typography.titleSmall)
+                if (file.progress != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = file.progress / 100f,
+                            animationSpec = tween(durationMillis = 1000),
+                            label = "file progress"
+                        )
+                        LinearProgressIndicator(
+                            trackColor = MaterialTheme.colorScheme.surfaceContainer,
+                            progress = { animatedProgress },
+                            modifier = Modifier.weight(1f),
+                            drawStopIndicator = {}
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${file.progress.roundToInt()}%",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val downloadedBytes = file.downloadedBytes
+                val totalBytes = file.size
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val text = if (downloadedBytes == null) Formatter.formatBytes(totalBytes) else "${Formatter.formatBytes(downloadedBytes)} / ${Formatter.formatBytes(totalBytes)}"
+                    StatItem(
+                        icon = Icons.Default.DataUsage,
+                        text = text
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun LocalDownloadStateIcon(state: LocalDownloadState) {
     val icon = when (state) {
         LocalDownloadState.DOWNLOADING -> Icons.Default.Download
@@ -377,6 +443,16 @@ fun LocalDownloadStateIcon(state: LocalDownloadState) {
         LocalDownloadState.ERROR -> Icons.Default.Error
         LocalDownloadState.COMPLETED -> Icons.Default.CheckCircle
         LocalDownloadState.PENDING -> Icons.Default.HourglassEmpty
+    }
+    Icon(icon, contentDescription = state.name)
+}
+
+@Composable
+fun ProviderTorrentFileStateIcon(state: ProviderTorrentFileState) {
+    val icon = when (state) {
+        ProviderTorrentFileState.DOWNLOADING -> Icons.Default.Download
+        ProviderTorrentFileState.COMPLETED -> Icons.Default.CheckCircle
+        ProviderTorrentFileState.PENDING -> Icons.Default.HourglassEmpty
     }
     Icon(icon, contentDescription = state.name)
 }

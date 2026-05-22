@@ -73,6 +73,14 @@ class RealDebridProvider(
             peers = null,
             totalPeers = null,
             links = info.links,
+            files = info.files.map {
+                ProviderTorrentFile(
+                    path = it.path,
+                    size = it.bytes,
+                    progress = null,
+                    downloadedBytes = null,
+                )
+            }
         )
     }
 

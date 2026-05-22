@@ -17,6 +17,7 @@ import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.swig.torrent_flags_t
+import org.libtorrent4j.swig.torrent_handle
 import java.util.Random
 import kotlin.io.encoding.Base64
 
@@ -102,10 +103,10 @@ class LibTorrentProvider(
         val totalBytes = torrentStatus.totalWanted()
         val downloadedBytes = torrentStatus.totalWantedDone()
         val torrentFileInfo = torrentHandle.torrentFile()
-        val filePathList = if (torrentFileInfo == null) {
+        val files = if (torrentFileInfo == null) {
             listOf()
         } else {
-            getFilePathList(torrentFileInfo.files())
+            getFileList(torrentFileInfo.files())
         }
         var torrentState = torrentStatus.state().name.lowercase()
         val isPaused = torrentStatus.flags().and_(TorrentFlags.PAUSED).non_zero()
@@ -113,6 +114,7 @@ class LibTorrentProvider(
             torrentState = "paused"
         }
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
+        val fileProgress = torrentHandle.fileProgress(torrent_handle.piece_granularity)
 
         return ProviderTorrentInfo(
             id = id,
@@ -128,7 +130,17 @@ class LibTorrentProvider(
             leechers = torrentStatus.numPeers() - torrentStatus.numSeeds(),
             peers = torrentStatus.numPeers(),
             totalPeers = if (totalPeers > 0) totalPeers else torrentStatus.listPeers(),
-            links = filePathList,
+            links = files.map { it.first },
+            files = files.mapIndexed { index, (path, size) ->
+                val downloadedBytes = fileProgress[index]
+
+                ProviderTorrentFile(
+                    path = path,
+                    size = size,
+                    progress = downloadedBytes / size.toFloat() * 100,
+                    downloadedBytes = downloadedBytes,
+                )
+            },
         )
     }
 
@@ -173,14 +185,14 @@ class LibTorrentProvider(
         torrentHandle.resume()
     }
 
-    private fun getFilePathList(storage: FileStorage): List<String> {
+    private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
         // relative paths in the torrent
-        val filePaths: MutableList<String> = mutableListOf()
+        val files: MutableList<Pair<String, Long>> = mutableListOf()
         for (i in 0..<storage.numFiles()) {
-            filePaths.add(storage.filePath(i))
+            files.add(storage.filePath(i) to storage.fileSize(i))
         }
 
-        return filePaths
+        return files
     }
 
     private fun getFileSize(storage: FileStorage, filePath: String): Long {
