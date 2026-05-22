@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.libtorrent4j.android.arm)
     implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
+import java.util.UUID
 import kotlin.math.max
 
 enum class TorrentState {
@@ -28,7 +29,7 @@ enum class LocalDownloadState {
 
 enum class TorrentType {
     MAGNET,
-    TORRENT
+    TORRENT_FILE,
 }
 
 enum class TaskLocation {
@@ -130,3 +131,36 @@ data class DownloadTask(
         }
     }
 }
+
+data class RssFeed(
+    val id: String,
+    val name: String,
+    val url: String,
+    val destinationSubdirectory: String? = null,
+    val createSubfolderByName: Boolean = true,
+    val autoDownload: Boolean = false,
+    val lastCheck: Long = 0,
+    val items: List<RssItem> = listOf()
+) {
+    val unreadCount get() = items.count { !it.isRead }
+
+    companion object {
+        fun make(name: String = "", url: String = ""): RssFeed {
+            return RssFeed(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                url = url,
+            )
+        }
+    }
+}
+
+data class RssItem(
+    val id: String,
+    val title: String,
+    val link: String,
+    val description: String? = null,
+    val pubDate: Long? = null,
+    val isRead: Boolean = false,
+    val isDownloaded: Boolean = false
+)

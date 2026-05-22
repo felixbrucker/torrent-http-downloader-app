@@ -41,7 +41,6 @@ import kotlin.coroutines.cancellation.CancellationException
 private data class DownloadWork(val taskId: String, val file: DownloadFile)
 
 class DownloadService : Service() {
-
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
@@ -621,6 +620,12 @@ class DownloadService : Service() {
         // Explicitly make sure to delete all files
         for (filePath in task.files.mapNotNull { file -> file.filePath }) {
             val fileRef = File(filePath)
+            if (fileRef.exists()) {
+                fileRef.delete()
+            }
+        }
+        if (task.torrent.type == TorrentType.TORRENT_FILE) {
+            val fileRef = File(task.torrent.path)
             if (fileRef.exists()) {
                 fileRef.delete()
             }
