@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RssFeed
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -212,7 +210,6 @@ fun MainScreen(
     val context = LocalContext.current
     val tasks by DownloadTracker.tasks.collectAsState()
     val unreadRssCount by DownloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
-    var showMenu by remember { mutableStateOf(false) }
     var showRssScreen by remember { mutableStateOf(false) }
 
     if (showRssScreen) {
@@ -285,20 +282,10 @@ fun MainScreen(
                         }
                     }
 
-                    IconButton(onClick = { showMenu = !showMenu }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(id = R.string.action_settings)) },
-                            onClick = {
-                                showMenu = false
-                                context.startActivity(Intent(context, SettingsActivity::class.java))
-                            }
-                        )
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, SettingsActivity::class.java))
+                    }) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(id = R.string.action_settings))
                     }
                 }
             )
