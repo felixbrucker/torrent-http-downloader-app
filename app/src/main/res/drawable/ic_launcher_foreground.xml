@@ -1,9 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Subtle Drop Shadow -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M19.35,10.04C18.67,6.59 15.64,4 12,4 9.11,4 6.6,5.64 5.35,8.04 2.34,8.36 0,10.91 0,14c0,3.31 2.69,6 6,6h13c2.76,0 5,-2.24 5,-5 0,-2.64 -2.05,-4.78 -4.65,-4.96zM17,13l-5,5 -5,-5h3V9h4v4h3z" />
+        android:fillColor="#1A000000"
+        android:pathData="M54,82L30,58L42,58L42,30C42,27.8 43.8,26 46,26L62,26C64.2,26 66,27.8 66,30L66,58L78,58L54,82Z" />
+
+    <!-- Main Downward Arrow - Symmetrical and Clean -->
+    <path
+        android:pathData="M54,80 L28,54 L40,54 L40,28 C40,25.8 41.8,24 44,24 L64,24 C66.2,24 68,25.8 68,28 L68,54 L80,54 L54,80 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="24"
+                android:endX="54"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0" android:color="#FFFFFF" />
+                <item android:offset="1" android:color="#F0F0F0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner Symmetry Detail for depth -->
+    <path
+        android:fillColor="#0D000000"
+        android:pathData="M54,24 L64,24 C66.2,24 68,25.8 68,28 L68,54 L80,54 L54,80 Z" />
+
 </vector>
