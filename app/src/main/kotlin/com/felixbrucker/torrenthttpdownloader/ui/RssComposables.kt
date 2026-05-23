@@ -3,8 +3,10 @@ package com.felixbrucker.torrenthttpdownloader.ui
 import android.text.format.DateUtils
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +36,7 @@ import com.felixbrucker.torrenthttpdownloader.models.RssItem
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RssFeedItem(
     feed: RssFeed,
@@ -44,6 +49,7 @@ fun RssFeedItem(
     var showMenu by remember { mutableStateOf(false) }
 
     val resources = LocalResources.current
+    val haptic = LocalHapticFeedback.current
     val lastSyncedText = remember(feed.lastCheck) {
         if (feed.lastCheck == 0L) {
             resources.getString(R.string.never_synced)
@@ -76,7 +82,13 @@ fun RssFeedItem(
     )
 
     ElevatedCard(
-        onClick = onClick,
+        modifier = Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                editFeed()
+            }
+        ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
