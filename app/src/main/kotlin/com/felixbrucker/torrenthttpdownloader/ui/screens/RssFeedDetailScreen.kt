@@ -7,7 +7,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DoneAll
@@ -18,9 +21,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
@@ -80,18 +85,35 @@ fun RssFeedDetailScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            RssItemsList(
-                feed = feed,
-                onItemClick = { item ->
-                    DownloadTracker.updateRssFeed(feed.id) { f ->
-                        f.copy(items = f.items.map {
-                            if (it.id == item.id) it.copy(isRead = true) else it
-                        })
-                    }
-                    addTorrentFromFeed(feed, item)
+        PullToRefreshBox(
+            isRefreshing = isSyncing,
+            onRefresh = { syncFeed(feed) },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            if (feed.items.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(stringResource(R.string.no_rss_items))
                 }
-            )
+            } else {
+                RssItemsList(
+                    feed = feed,
+                    onItemClick = { item ->
+                        DownloadTracker.updateRssFeed(feed.id) { f ->
+                            f.copy(items = f.items.map {
+                                if (it.id == item.id) it.copy(isRead = true) else it
+                            })
+                        }
+                        addTorrentFromFeed(feed, item)
+                    }
+                )
+            }
         }
     }
 }

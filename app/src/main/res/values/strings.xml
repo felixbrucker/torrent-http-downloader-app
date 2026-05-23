@@ -19,6 +19,7 @@
     <string name="rss_feed_url">Feed URL</string>
     <string name="auto_download">Auto Download</string>
     <string name="no_rss_feeds">No RSS feeds added yet</string>
+    <string name="no_rss_items">No items in this feed</string>
     <string name="delete">Delete</string>
     <string name="mark_all_read">Mark all as read</string>
     <string name="last_synced">Last synced: %s</string>
