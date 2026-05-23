@@ -21,4 +21,7 @@
     <string name="no_rss_feeds">No RSS feeds added yet</string>
     <string name="delete">Delete</string>
     <string name="mark_all_read">Mark all as read</string>
+    <string name="last_synced">Last synced: %s</string>
+    <string name="never_synced">Never synced</string>
+    <string name="just_now">Just now</string>
 </resources>

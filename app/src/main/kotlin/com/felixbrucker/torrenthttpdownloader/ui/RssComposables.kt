@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
+import android.text.format.DateUtils
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +42,27 @@ fun RssFeedItem(
     isSyncing: Boolean = false,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+
+    val resources = LocalResources.current
+    val lastSyncedText = remember(feed.lastCheck) {
+        if (feed.lastCheck == 0L) {
+            resources.getString(R.string.never_synced)
+        } else {
+            val now = System.currentTimeMillis()
+            val timeText = if (now - feed.lastCheck < DateUtils.MINUTE_IN_MILLIS) {
+                resources.getString(R.string.just_now)
+            } else if (now - feed.lastCheck < DateUtils.DAY_IN_MILLIS) {
+                DateUtils.getRelativeTimeSpanString(
+                    feed.lastCheck,
+                    now,
+                    DateUtils.MINUTE_IN_MILLIS,
+                ).toString()
+            } else {
+                SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(feed.lastCheck))
+            }
+            resources.getString(R.string.last_synced, timeText)
+        }
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
     val rotation by infiniteTransition.animateFloat(
@@ -63,13 +86,20 @@ fun RssFeedItem(
         ListItem(
             headlineContent = { Text(feed.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
             supportingContent = {
-                Text(
-                    feed.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column {
+                    Text(
+                        feed.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        lastSyncedText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
             },
             leadingContent = {
                 Surface(
