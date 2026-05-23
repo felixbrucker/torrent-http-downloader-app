@@ -43,8 +43,8 @@ fun RssFeedItem(
 
     val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
     val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
+        initialValue = 360f,
+        targetValue = 0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
