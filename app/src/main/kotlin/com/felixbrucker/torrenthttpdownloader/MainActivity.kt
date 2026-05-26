@@ -223,7 +223,7 @@ class MainActivity : ComponentActivity() {
             .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "RssSyncRequest",
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             rssSyncRequest,
         )
     }
