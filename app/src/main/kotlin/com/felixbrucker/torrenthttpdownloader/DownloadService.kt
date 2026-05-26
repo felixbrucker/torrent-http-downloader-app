@@ -590,6 +590,7 @@ class DownloadService : Service() {
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
+        val notifyOnCompletion = intent.getBooleanExtra(EXTRA_NOTIFY_ON_COMPLETION, false)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
         if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
@@ -600,6 +601,7 @@ class DownloadService : Service() {
             torrent = TorrentDescriptor(type, path),
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
+            notifyOnCompletion = notifyOnCompletion,
             state = TorrentState.ADDING_TO_PROVIDER
         )
         DownloadTracker.addTask(task)
@@ -872,6 +874,13 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.COMPLETED -> {
+                    if (task.notifyOnCompletion) {
+                        postNotification(
+                            "Download finished",
+                            "${task.name} finished downloading",
+                        )
+                    }
+
                     DownloadTracker.removeTask(taskId)
                     stopSelfIfIdle()
                 }
@@ -1026,11 +1035,10 @@ class DownloadService : Service() {
     private fun postNotification(title: String, message: String) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        val notificationBuilder =
-            NotificationCompat.Builder(this, GENERAL_NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                .setContentTitle(title)
-                .setContentText(message)
+        val notificationBuilder = NotificationCompat.Builder(this, GENERAL_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle(title)
+            .setContentText(message)
 
         notificationManager.notify(0, notificationBuilder.build())
     }
@@ -1070,6 +1078,7 @@ class DownloadService : Service() {
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
+        const val EXTRA_NOTIFY_ON_COMPLETION = "EXTRA_NOTIFY_ON_COMPLETION"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
     }
 }

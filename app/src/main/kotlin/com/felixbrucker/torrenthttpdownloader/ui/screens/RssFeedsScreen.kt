@@ -148,14 +148,9 @@ fun RssFeedsScreen(
                     DownloadTracker.updateRssFeed(newFeed.id) { feed ->
                         val isResetState = feed.url != newFeed.url
 
-                        feed.copy(
-                            name = newFeed.name,
-                            url = newFeed.url,
-                            destinationSubdirectory = newFeed.destinationSubdirectory,
-                            createSubfolderByName = newFeed.createSubfolderByName,
-                            autoDownload = newFeed.autoDownload,
-                            lastCheck = if (isResetState) 0 else feed.lastCheck,
-                            items = if (isResetState) listOf() else feed.items,
+                        newFeed.copy(
+                            lastCheck = if (isResetState) 0 else newFeed.lastCheck,
+                            items = if (isResetState) listOf() else newFeed.items,
                         )
                     }
                     syncFeed(newFeed)

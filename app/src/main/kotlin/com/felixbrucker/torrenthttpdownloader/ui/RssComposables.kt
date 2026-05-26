@@ -340,6 +340,7 @@ fun EditRssFeedDialog(
     var autoDownload by remember { mutableStateOf(feed.autoDownload) }
     var selectedSubDir by remember { mutableStateOf(feed.destinationSubdirectory) }
     var createSubfolderByName by remember { mutableStateOf(feed.createSubfolderByName) }
+    var notifyOnCompletion by remember { mutableStateOf(feed.notifyOnCompletion) }
     val titleTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add_rss_feed else R.string.edit_rss_feed) }
     val confirmTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add else R.string.save) }
 
@@ -366,8 +367,10 @@ fun EditRssFeedDialog(
                 AddTorrentConfigFields(
                     selectedSubDir = selectedSubDir,
                     createSubfolderByName = createSubfolderByName,
+                    notifyOnCompletion = notifyOnCompletion,
                     onSubdirectorySelected = { selectedSubDir = it },
-                    onCreateSubfolderByNameChanged = { createSubfolderByName = it }
+                    onCreateSubfolderByNameChanged = { createSubfolderByName = it },
+                    onNotifyOnCompletionChanged = { notifyOnCompletion = it },
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { autoDownload = !autoDownload }) {
@@ -384,6 +387,7 @@ fun EditRssFeedDialog(
                         url = url,
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
+                        notifyOnCompletion = notifyOnCompletion,
                         autoDownload = autoDownload
                     )
                     onConfirm(newFeed)

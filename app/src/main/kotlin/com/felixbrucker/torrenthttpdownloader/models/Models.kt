@@ -70,6 +70,7 @@ data class DownloadTask(
     val errorMessage: String? = null,
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
+    val notifyOnCompletion: Boolean = false,
 ) {
     val providerProgress: Int get() {
         return providerTorrentInfo?.progress?.toInt() ?: 0
@@ -138,6 +139,7 @@ data class RssFeed(
     val url: String,
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
+    val notifyOnCompletion: Boolean = true,
     val autoDownload: Boolean = false,
     val lastCheck: Long = 0,
     val items: List<RssItem> = listOf()

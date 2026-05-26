@@ -9,6 +9,7 @@ import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_ADD_TASK
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_CREATE_SUBFOLDER_BY_NAME
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_DESTINATION_SUBDIRECTORY
+import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_NOTIFY_ON_COMPLETION
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_NAME
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_PATH
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_TYPE
@@ -96,6 +97,7 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             putExtra(EXTRA_TORRENT_NAME, result.name ?: item.title)
             putExtra(EXTRA_DESTINATION_SUBDIRECTORY, feed.destinationSubdirectory)
             putExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, feed.createSubfolderByName)
+            putExtra(EXTRA_NOTIFY_ON_COMPLETION, feed.notifyOnCompletion)
             putExtra(EXTRA_TORRENT_TYPE, result.type.name)
         }
         applicationContext.startService(intent)
