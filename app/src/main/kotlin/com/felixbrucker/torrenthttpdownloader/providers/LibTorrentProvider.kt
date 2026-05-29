@@ -161,11 +161,16 @@ class LibTorrentProvider(
             files = files.mapIndexed { index, (path, size) ->
                 if (hasAllFileProgress) {
                     val downloadedBytes = fileProgress[index]
+                    val progress: Float = if (size == 0L) {
+                        0F
+                    } else {
+                        downloadedBytes / size.toFloat() * 100
+                    }
 
                     ProviderTorrentFile(
                         path = path,
                         size = size,
-                        progress = downloadedBytes / size.toFloat() * 100,
+                        progress = progress,
                         downloadedBytes = downloadedBytes,
                     )
                 } else {
