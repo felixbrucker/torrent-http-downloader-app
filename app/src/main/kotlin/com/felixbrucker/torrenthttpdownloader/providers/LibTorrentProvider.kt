@@ -140,13 +140,15 @@ class LibTorrentProvider(
         }
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
         val fileProgress = torrentHandle.fileProgress(torrent_handle.piece_granularity)
+        val overallProgress = torrentStatus.progress() * 100
+        val hasAllFileProgress = fileProgress.size == files.size
 
         return ProviderTorrentInfo(
             id = id,
             name = torrentHandle.name,
             state = mapTorrentStateToProviderTorrentState(torrentState),
             status = torrentState,
-            progress = torrentStatus.progress() * 100,
+            progress = overallProgress,
             totalSizeInBytes = totalBytes,
             downloadedBytes = downloadedBytes,
             downloadSpeed = torrentStatus.downloadRate().toLong(),
@@ -157,14 +159,23 @@ class LibTorrentProvider(
             totalPeers = if (totalPeers > 0) totalPeers else torrentStatus.listPeers(),
             links = files.map { it.first },
             files = files.mapIndexed { index, (path, size) ->
-                val downloadedBytes = fileProgress[index]
+                if (hasAllFileProgress) {
+                    val downloadedBytes = fileProgress[index]
 
-                ProviderTorrentFile(
-                    path = path,
-                    size = size,
-                    progress = downloadedBytes / size.toFloat() * 100,
-                    downloadedBytes = downloadedBytes,
-                )
+                    ProviderTorrentFile(
+                        path = path,
+                        size = size,
+                        progress = downloadedBytes / size.toFloat() * 100,
+                        downloadedBytes = downloadedBytes,
+                    )
+                } else {
+                    ProviderTorrentFile(
+                        path = path,
+                        size = size,
+                        progress = null,
+                        downloadedBytes = null,
+                    )
+                }
             },
         )
     }
