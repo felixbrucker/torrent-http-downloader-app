@@ -120,6 +120,9 @@ class LibTorrentProvider(
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
+        torrentHandle.flags = torrentHandle.flags
+            .or_(TorrentFlags.AUTO_MANAGED)
+            .or_(TorrentFlags.SEQUENTIAL_DOWNLOAD)
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
