@@ -163,7 +163,7 @@ class LibTorrentProvider(
                 if (hasAllFileProgress) {
                     val downloadedBytes = fileProgress[index]
                     val progress: Float = if (size == 0L) {
-                        0F
+                        100F
                     } else {
                         downloadedBytes / size.toFloat() * 100
                     }
