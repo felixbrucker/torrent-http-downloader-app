@@ -62,6 +62,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFile
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFileState
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.asStateText
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
@@ -127,9 +128,9 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        StatItem(icon = Icons.Default.Info, text = task.state.name.replace("_", " ").lowercase())
+                        StatItem(icon = Icons.Default.Info, text = task.state.name.asStateText())
                         if (task.location == TaskLocation.PROVIDER && task.providerTorrentInfo?.status != null) {
-                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerTorrentInfo.status}")
+                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerTorrentInfo.status.asStateText()}")
                         }
                         if (task.overallDownloadSpeed > 0) {
                             StatItem(
@@ -325,7 +326,7 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    StatItem(icon = Icons.Default.Info, text = file.state.name.replace("_", " ").lowercase())
+                    StatItem(icon = Icons.Default.Info, text = file.state.name.asStateText())
                     if (speed > 0) {
                         StatItem(icon = downloading, text = Formatter.formatSpeed(speed))
                     }
