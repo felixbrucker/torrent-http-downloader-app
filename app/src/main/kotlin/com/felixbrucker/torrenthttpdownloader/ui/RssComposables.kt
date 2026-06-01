@@ -341,6 +341,7 @@ fun EditRssFeedDialog(
     var selectedSubDir by remember { mutableStateOf(feed.destinationSubdirectory) }
     var createSubfolderByName by remember { mutableStateOf(feed.createSubfolderByName) }
     var notifyOnCompletion by remember { mutableStateOf(feed.notifyOnCompletion) }
+    var onlyDownloadBiggestFile by remember { mutableStateOf(feed.onlyDownloadBiggestFile) }
     val titleTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add_rss_feed else R.string.edit_rss_feed) }
     val confirmTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add else R.string.save) }
 
@@ -368,9 +369,11 @@ fun EditRssFeedDialog(
                     selectedSubDir = selectedSubDir,
                     createSubfolderByName = createSubfolderByName,
                     notifyOnCompletion = notifyOnCompletion,
+                    onlyDownloadBiggestFile = onlyDownloadBiggestFile,
                     onSubdirectorySelected = { selectedSubDir = it },
                     onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                     onNotifyOnCompletionChanged = { notifyOnCompletion = it },
+                    onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { autoDownload = !autoDownload }) {
@@ -388,6 +391,7 @@ fun EditRssFeedDialog(
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
                         notifyOnCompletion = notifyOnCompletion,
+                        onlyDownloadBiggestFile = onlyDownloadBiggestFile,
                         autoDownload = autoDownload
                     )
                     onConfirm(newFeed)

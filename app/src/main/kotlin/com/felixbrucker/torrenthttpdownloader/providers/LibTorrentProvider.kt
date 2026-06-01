@@ -35,7 +35,7 @@ import java.util.Random
 
 
 class LibTorrentProvider(
-    private val sharedPreferences: SharedPreferences,
+    sharedPreferences: SharedPreferences,
     private val connectivityManager: ConnectivityManager,
 ) : TorrentProvider {
     override val name: String = NAME

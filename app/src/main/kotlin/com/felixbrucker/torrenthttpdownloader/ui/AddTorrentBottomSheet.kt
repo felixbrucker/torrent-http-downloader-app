@@ -45,6 +45,7 @@ data class AddTorrentConfig(
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean? = null,
     val notifyOnCompletion: Boolean? = null,
+    val onlyDownloadBiggestFile: Boolean? = null,
     val feedId: String? = null,
     val feedItemId: String? = null,
 )
@@ -62,6 +63,7 @@ fun AddTorrentBottomSheet(
     var selectedSubDir by remember { mutableStateOf(config.destinationSubdirectory ?: sharedPreferences.getString("default_sub_dir", null)) }
     var createSubfolderByName by remember { mutableStateOf(config.createSubfolderByName ?: sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var notifyOnCompletion by remember { mutableStateOf(config.notifyOnCompletion ?: sharedPreferences.getBoolean("default_notify_on_completion", false)) }
+    var onlyDownloadBiggestFile by remember { mutableStateOf(config.onlyDownloadBiggestFile ?: sharedPreferences.getBoolean("default_only_download_biggest_file", false)) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -91,9 +93,11 @@ fun AddTorrentBottomSheet(
                 selectedSubDir = selectedSubDir,
                 createSubfolderByName = createSubfolderByName,
                 notifyOnCompletion = notifyOnCompletion,
+                onlyDownloadBiggestFile = onlyDownloadBiggestFile,
                 onSubdirectorySelected = { selectedSubDir = it },
                 onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                 onNotifyOnCompletionChanged = { notifyOnCompletion = it },
+                onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -113,12 +117,14 @@ fun AddTorrentBottomSheet(
                             putString("default_sub_dir", selectedSubDir)
                             putBoolean("default_create_subfolder", createSubfolderByName)
                             putBoolean("default_notify_on_completion", notifyOnCompletion)
+                            putBoolean("default_only_download_biggest_file", onlyDownloadBiggestFile)
                         }
                     }
                     onConfirm(config.copy(
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
                         notifyOnCompletion = notifyOnCompletion,
+                        onlyDownloadBiggestFile = onlyDownloadBiggestFile,
                     ))
                 }) {
                     Text(stringResource(id = R.string.add))
@@ -135,9 +141,11 @@ fun AddTorrentConfigFields(
     selectedSubDir: String?,
     createSubfolderByName: Boolean,
     notifyOnCompletion: Boolean,
+    onlyDownloadBiggestFile: Boolean,
     onSubdirectorySelected: (String?) -> Unit,
     onCreateSubfolderByNameChanged: (Boolean) -> Unit,
     onNotifyOnCompletionChanged: (Boolean) -> Unit,
+    onOnlyDownloadBiggestFileChanged: (Boolean) -> Unit,
 ) {
     var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -204,6 +212,17 @@ fun AddTorrentConfigFields(
             onCheckedChange = { onCreateSubfolderByNameChanged(it) }
         )
         Text(text = stringResource(id = R.string.create_subfolder))
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable { onOnlyDownloadBiggestFileChanged(!onlyDownloadBiggestFile) }
+    ) {
+        Checkbox(
+            checked = onlyDownloadBiggestFile,
+            onCheckedChange = { onOnlyDownloadBiggestFileChanged(it) }
+        )
+        Text(text = stringResource(id = R.string.only_download_biggest_file))
     }
 
     Row(

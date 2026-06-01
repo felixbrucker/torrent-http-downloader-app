@@ -14,7 +14,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
-import com.felixbrucker.torrenthttpdownloader.network.ApiException
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
@@ -592,6 +591,7 @@ class DownloadService : Service() {
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
         val notifyOnCompletion = intent.getBooleanExtra(EXTRA_NOTIFY_ON_COMPLETION, false)
+        val onlyDownloadBiggestFile = intent.getBooleanExtra(EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE, false)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
         if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
@@ -603,6 +603,7 @@ class DownloadService : Service() {
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
             notifyOnCompletion = notifyOnCompletion,
+            onlyDownloadBiggestFile = onlyDownloadBiggestFile,
             state = TorrentState.ADDING_TO_PROVIDER
         )
         DownloadTracker.addTask(task)
@@ -718,8 +719,15 @@ class DownloadService : Service() {
 
                 TorrentState.SELECTING_FILES -> {
                     val torrentInfo = provider.getTorrentInfo(task.id)
+                    val fileIdsToSelect = if (task.onlyDownloadBiggestFile) {
+                        val biggestFile = torrentInfo.files.maxBy { it.size }
+
+                        listOf(biggestFile.id)
+                    } else {
+                        torrentInfo.files.map { it.id }
+                    }
                     try {
-                        val isSuccessful = provider.selectFiles(task.id, torrentInfo.files.map { it.id })
+                        val isSuccessful = provider.selectFiles(task.id, fileIdsToSelect)
                         if (isSuccessful) {
                             DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
 
@@ -1087,6 +1095,7 @@ class DownloadService : Service() {
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
         const val EXTRA_NOTIFY_ON_COMPLETION = "EXTRA_NOTIFY_ON_COMPLETION"
+        const val EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE = "EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
     }
 }
