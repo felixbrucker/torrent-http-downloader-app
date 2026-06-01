@@ -64,7 +64,7 @@ interface TorrentProvider {
     val requiresLocalDownloads: Boolean
     val requiresFileSelection: Boolean
     val supportsPauseResume: Boolean
-
+    fun restoreTorrent(id: String)
     suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String
     suspend fun addMagnet(magnetUri: String, name: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo

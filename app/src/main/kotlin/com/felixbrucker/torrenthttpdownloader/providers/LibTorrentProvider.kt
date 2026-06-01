@@ -5,10 +5,10 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
-import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
@@ -16,14 +16,21 @@ import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentFlags
+import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
+import org.libtorrent4j.Vectors
+import org.libtorrent4j.alerts.Alert
+import org.libtorrent4j.alerts.AlertType
+import org.libtorrent4j.alerts.SaveResumeDataAlert
+import org.libtorrent4j.alerts.TorrentAlert
+import org.libtorrent4j.swig.bdecode_node
 import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.swig.torrent_flags_t
 import org.libtorrent4j.swig.torrent_handle
+import java.io.File
 import java.util.Random
-import kotlin.io.encoding.Base64
 
 
 class LibTorrentProvider(
@@ -59,8 +66,50 @@ class LibTorrentProvider(
             }
         }
     }
+    private val lastResumeDataSavedAt = mutableMapOf<String, Long>()
+    private val minimumTimeBetweenResumeDataSavesInMs = 10_000L
+    private val libTorrentListener = object : AlertListener {
+        override fun types(): IntArray {
+            return intArrayOf(
+                AlertType.SAVE_RESUME_DATA.swig(),
+                AlertType.PIECE_FINISHED.swig(),
+                AlertType.METADATA_RECEIVED.swig(),
+                AlertType.TORRENT_PAUSED.swig(),
+            )
+        }
+
+        override fun alert(alert: Alert<*>?) {
+            if (alert !is TorrentAlert<*>) return
+
+            val type: AlertType = alert.type()
+            val handle = alert.handle()
+            val id = handle.infoHash().toHex()
+            when (type) {
+                AlertType.SAVE_RESUME_DATA -> {
+                    val data = libtorrent
+                        .write_resume_data((alert as SaveResumeDataAlert).params().swig())
+                        .bencode()
+                    saveResumeData(id, data.toByteArray())
+                }
+                AlertType.PIECE_FINISHED -> {
+                    triggerResumeDataSaveIfNecessary(id, handle)
+                }
+                AlertType.METADATA_RECEIVED -> {
+                    triggerResumeDataSaveIfNecessary(id, handle, forceSave = true)
+                }
+                AlertType.TORRENT_PAUSED -> {
+                    triggerResumeDataSaveIfNecessary(id, handle, forceSave = true)
+                }
+                else -> return
+            }
+        }
+    }
 
     init {
+        if (!PathFactory.getResumeDataDirectory().exists()) {
+            PathFactory.getResumeDataDirectory().mkdirs()
+        }
+
         if (defaultSessionSettings.useRandomPort) {
             val range = SessionSettings.randomRangePort
             defaultSessionSettings.portRangeFirst = range.first
@@ -70,6 +119,7 @@ class LibTorrentProvider(
 
         val params = loadSessionParams()
         params.settings = settingsToSettingsPack(defaultSessionSettings)
+        sessionManager.addListener(libTorrentListener)
         sessionManager.start(params)
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
     }
@@ -84,7 +134,27 @@ class LibTorrentProvider(
     override fun stop() {
         saveSessionParams()
         sessionManager.stop()
+        sessionManager.removeListener(libTorrentListener)
         connectivityManager.unregisterNetworkCallback(networkCallback)
+    }
+
+    override fun restoreTorrent(id: String) {
+        val resumeData = readResumeData(id) ?: return
+        val ec = error_code()
+        val buffer = Vectors.bytes2byte_vector(resumeData)
+
+        val n = bdecode_node()
+        val ret = bdecode_node.bdecode(buffer, n, ec)
+        require(ret == 0) { "Can't decode data: " + ec.message() }
+        ec.clear()
+
+        val p = libtorrent.read_resume_data(n, ec)
+        require(ec.value() == 0) { "Unable to read the resume data: " + ec.message() }
+
+        // Disable force saving resume data on add
+        p.flags = p.getFlags().and_(TorrentFlags.NEED_SAVE_RESUME.inv())
+
+        sessionManager.swig().async_add_torrent(p)
     }
 
     override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
@@ -94,6 +164,10 @@ class LibTorrentProvider(
         sessionManager.download(
             info,
             PathFactory.getScopedTemporaryDirectory(name),
+            null,
+            null,
+            null,
+            makeDefaultTorrentFlags(),
         )
         setPerTorrentSettings(torrentId)
 
@@ -109,7 +183,7 @@ class LibTorrentProvider(
         sessionManager.download(
             magnetUri,
             PathFactory.getScopedTemporaryDirectory(name),
-            torrent_flags_t(),
+            makeDefaultTorrentFlags(),
         )
         setPerTorrentSettings(torrentId)
 
@@ -120,7 +194,6 @@ class LibTorrentProvider(
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
-        torrentHandle.flags = TorrentFlags.AUTO_MANAGED
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
@@ -260,19 +333,50 @@ class LibTorrentProvider(
     }
 
     private fun loadSessionParams(): SessionParams {
-        val sessionDataBase64String = sharedPreferences.getString("libtorrent_session_params", null)
-        if (sessionDataBase64String == null) {
+        val sessionFile = File(PathFactory.getResumeDataDirectory(), "session")
+        if (!sessionFile.exists()) {
             return SessionParams()
         }
 
-        return SessionParams(Base64.decode(sessionDataBase64String))
+        return SessionParams(sessionFile.readBytes())
     }
 
     private fun saveSessionParams() {
         val params = sessionManager.saveState() ?: return
-        sharedPreferences.edit {
-            putString("libtorrent_session_params", Base64.encode(params))
+        val sessionFile = File(PathFactory.getResumeDataDirectory(), "session")
+        sessionFile.writeBytes(params)
+    }
+
+    private fun readResumeData(id: String): ByteArray? {
+        val path = PathFactory.getResumeDataPath(id)
+        if (!path.exists()) {
+            return null
         }
+
+        return path.readBytes()
+    }
+
+    private fun saveResumeData(id: String, data: ByteArray) {
+        val path = PathFactory.getResumeDataPath(id)
+        path.writeBytes(data)
+    }
+
+    private fun triggerResumeDataSaveIfNecessary(id: String, handle: TorrentHandle, forceSave: Boolean = false) {
+        val now = System.currentTimeMillis()
+        val lastSaveAt = lastResumeDataSavedAt[id]
+        if (!forceSave && lastSaveAt !== null && (now - lastSaveAt) < minimumTimeBetweenResumeDataSavesInMs) {
+            return
+        }
+        if (handle.isValid && handle.needSaveResumeData()) {
+            handle.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
+            lastResumeDataSavedAt[id] = now
+        }
+    }
+
+    private fun makeDefaultTorrentFlags(): torrent_flags_t {
+        return torrent_flags_t()
+            .or_(TorrentFlags.NEED_SAVE_RESUME)
+            .or_(TorrentFlags.AUTO_MANAGED)
     }
 
     private fun settingsToSettingsPack(settings: SessionSettings): SettingsPack {

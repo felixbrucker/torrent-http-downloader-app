@@ -7,6 +7,16 @@ import java.io.File
 
 class PathFactory {
     companion object {
+        fun getResumeDataPath(id: String): File {
+            return File(getResumeDataDirectory(), id)
+        }
+
+        fun getResumeDataDirectory(): File {
+            return File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "tmp/resume"
+            )
+        }
         fun getScopedTemporaryDirectory(taskName: String): File {
             return File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,

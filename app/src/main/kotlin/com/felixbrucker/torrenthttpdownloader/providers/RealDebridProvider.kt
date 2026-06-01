@@ -30,6 +30,10 @@ class RealDebridProvider(
 
     private val auth = "Bearer $apiToken"
 
+    override fun restoreTorrent(id: String) {
+        // Nothing to do
+    }
+
     override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
         checkApiToken()
 

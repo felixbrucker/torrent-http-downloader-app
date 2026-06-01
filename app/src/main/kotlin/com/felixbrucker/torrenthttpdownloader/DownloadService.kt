@@ -68,8 +68,6 @@ class DownloadService : Service() {
 
         provider = Container.getService("TorrentProvider")
 
-        resumeDownloads()
-
         createServiceNotificationChannel()
         createGeneralNotificationChannel()
         startForegroundService()
@@ -80,6 +78,9 @@ class DownloadService : Service() {
             launchWorker()
         }
         startNotificationUpdates()
+
+        resumeDownloads()
+
         processTaskQueue()
     }
 
@@ -816,6 +817,10 @@ class DownloadService : Service() {
                                 fileRef.delete()
                             }
                         }
+                        // Also delete resume data
+                        if (PathFactory.getResumeDataPath(task.id).exists()) {
+                            PathFactory.getResumeDataPath(task.id).delete()
+                        }
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
                         delay(5000)
@@ -1015,6 +1020,11 @@ class DownloadService : Service() {
     }
 
     private fun resumeDownloads() {
+        DownloadTracker
+            .getTasks()
+            .filter { it.location == TaskLocation.PROVIDER }
+            .forEach { provider.restoreTorrent(it.id) }
+
         DownloadTracker.getTasks().forEach { task -> taskIdsToProcess.add(task.id) }
     }
 
