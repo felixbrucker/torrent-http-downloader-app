@@ -635,6 +635,9 @@ class DownloadService : Service() {
                 fileRef.delete()
             }
         }
+        if (PathFactory.getResumeDataPath(task.id).exists()) {
+            PathFactory.getResumeDataPath(task.id).delete()
+        }
 
         // Remove scoped temp directory if available
         val tempDir = PathFactory.getScopedTemporaryDirectory(task.name)
