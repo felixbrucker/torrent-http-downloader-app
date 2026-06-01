@@ -14,7 +14,6 @@ class RealDebridProvider(
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
-    override val requiresFileSelection: Boolean = true
     override val supportsPauseResume: Boolean = false
 
     companion object: ServiceBuilder {
@@ -79,8 +78,10 @@ class RealDebridProvider(
             links = info.links,
             files = info.files.map {
                 ProviderTorrentFile(
+                    id = it.id,
                     path = it.path,
                     size = it.bytes,
+                    isSelected = it.selected == 1,
                     progress = null,
                     downloadedBytes = null,
                 )
@@ -88,10 +89,10 @@ class RealDebridProvider(
         )
     }
 
-    override suspend fun selectFiles(id: String, files: String): Boolean {
+    override suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean {
         checkApiToken()
 
-        val response = RetrofitClient.instance.selectFiles(auth, id, files)
+        val response = RetrofitClient.instance.selectFiles(auth, id, fileIds.joinToString(","))
 
         return response.isSuccessful
     }

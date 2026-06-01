@@ -704,13 +704,7 @@ class DownloadService : Service() {
                         return task.id
                     }
 
-                    if (!provider.requiresFileSelection) {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
-
-                        return task.id
-                    }
-
-                    if (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION) {
+                    if (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION || torrentInfo.state == ProviderTorrentState.DOWNLOADING) {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(state = TorrentState.SELECTING_FILES)
                         }
@@ -723,14 +717,15 @@ class DownloadService : Service() {
                 }
 
                 TorrentState.SELECTING_FILES -> {
+                    val torrentInfo = provider.getTorrentInfo(task.id)
                     try {
-                        val isSuccessful = provider.selectFiles(task.id, "all")
+                        val isSuccessful = provider.selectFiles(task.id, torrentInfo.files.map { it.id })
                         if (isSuccessful) {
                             DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
 
                             return task.id
                         }
-                    } catch (e: ApiException) {
+                    } catch (e: Exception) {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(
                                 state = TorrentState.ERROR,

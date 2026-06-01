@@ -10,6 +10,7 @@ import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
+import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
@@ -39,7 +40,6 @@ class LibTorrentProvider(
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = false
-    override val requiresFileSelection: Boolean = false
     override val supportsPauseResume: Boolean = true
 
     companion object: ServiceBuilder {
@@ -202,7 +202,7 @@ class LibTorrentProvider(
         val totalBytes = torrentStatus.totalWanted()
         val downloadedBytes = torrentStatus.totalWantedDone()
         val torrentFileInfo = torrentHandle.torrentFile()
-        val files = if (torrentFileInfo == null) {
+        val fileList = if (torrentFileInfo == null) {
             listOf()
         } else {
             getFileList(torrentFileInfo.files())
@@ -214,15 +214,32 @@ class LibTorrentProvider(
         }
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
         val fileProgress = torrentHandle.fileProgress(torrent_handle.piece_granularity)
-        val overallProgress = torrentStatus.progress() * 100
-        val hasAllFileProgress = fileProgress.size == files.size
+        val priorities = torrentHandle.filePriorities()
+        val files = fileList.mapIndexed { index, (path, size) ->
+            val downloadedBytes = fileProgress.getOrElse(index) { 0L }
+            val priority = priorities.getOrElse(index) { Priority.IGNORE }
+            val progress: Float = if (size == 0L) {
+                100F
+            } else {
+                downloadedBytes / size.toFloat() * 100
+            }
+
+            ProviderTorrentFile(
+                id = index,
+                path = path,
+                size = size,
+                isSelected = priority !== Priority.IGNORE,
+                progress = progress,
+                downloadedBytes = downloadedBytes,
+            )
+        }
 
         return ProviderTorrentInfo(
             id = id,
             name = torrentHandle.name,
             state = mapTorrentStateToProviderTorrentState(torrentState),
             status = torrentState,
-            progress = overallProgress,
+            progress = torrentStatus.progress() * 100,
             totalSizeInBytes = totalBytes,
             downloadedBytes = downloadedBytes,
             downloadSpeed = torrentStatus.downloadRate().toLong(),
@@ -231,36 +248,24 @@ class LibTorrentProvider(
             leechers = torrentStatus.numPeers() - torrentStatus.numSeeds(),
             peers = torrentStatus.numPeers(),
             totalPeers = if (totalPeers > 0) totalPeers else torrentStatus.listPeers(),
-            links = files.map { it.first },
-            files = files.mapIndexed { index, (path, size) ->
-                if (hasAllFileProgress) {
-                    val downloadedBytes = fileProgress[index]
-                    val progress: Float = if (size == 0L) {
-                        100F
-                    } else {
-                        downloadedBytes / size.toFloat() * 100
-                    }
-
-                    ProviderTorrentFile(
-                        path = path,
-                        size = size,
-                        progress = progress,
-                        downloadedBytes = downloadedBytes,
-                    )
-                } else {
-                    ProviderTorrentFile(
-                        path = path,
-                        size = size,
-                        progress = null,
-                        downloadedBytes = null,
-                    )
-                }
-            },
+            links = files
+                .filter { it.isSelected }
+                .map { it.path },
+            files = files,
         )
     }
 
-    override suspend fun selectFiles(id: String, files: String): Boolean {
-        // NOOP
+    override suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentFileInfo = torrentHandle.torrentFile() ?: throw Exception("Torrent has no file info")
+        val fileStorage = torrentFileInfo.files()
+        val prioritiesToSet: MutableList<Priority> = mutableListOf()
+        for (i in 0..<fileStorage.numFiles()) {
+            val priority = if (fileIds.contains(i)) Priority.DEFAULT else Priority.IGNORE
+            prioritiesToSet.add(priority)
+        }
+        torrentHandle.prioritizeFiles(prioritiesToSet.toTypedArray())
+
         return true
     }
 

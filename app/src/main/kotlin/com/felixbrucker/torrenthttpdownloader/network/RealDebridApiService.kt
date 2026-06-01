@@ -60,7 +60,7 @@ data class AddMagnetResponse(
 )
 
 data class TorrentFile(
-    val id: Long,
+    val id: Int,
     val path: String,
     val bytes: Long,
     val selected: Int

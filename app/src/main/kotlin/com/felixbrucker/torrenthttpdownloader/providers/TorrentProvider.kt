@@ -19,8 +19,10 @@ data class ProviderTorrentInfo(
 )
 
 data class ProviderTorrentFile(
+    val id: Int,
     val path: String,
     val size: Long,
+    val isSelected: Boolean,
     val progress: Float?, // 0-100
     val downloadedBytes: Long?,
 ) {
@@ -62,13 +64,12 @@ data class UnrestrictedLink(
 interface TorrentProvider {
     val name: String
     val requiresLocalDownloads: Boolean
-    val requiresFileSelection: Boolean
     val supportsPauseResume: Boolean
     fun restoreTorrent(id: String)
     suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String
     suspend fun addMagnet(magnetUri: String, name: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo
-    suspend fun selectFiles(id: String, files: String): Boolean
+    suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean
     suspend fun deleteTorrent(id: String, deleteFiles: Boolean = false): Boolean
     suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink
     suspend fun pause(id: String)
