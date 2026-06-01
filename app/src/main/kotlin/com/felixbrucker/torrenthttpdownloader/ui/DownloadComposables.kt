@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
@@ -45,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -384,14 +386,28 @@ fun ProviderTorrentFileItem(file: ProviderTorrentFile) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+            .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (file.isSelected) {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
+        )
     ) {
         Row(
-            modifier = Modifier.padding(8.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth()
+                .alpha(if (file.isSelected) 1f else 0.6f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ProviderTorrentFileStateIcon(file.state)
+            if (file.isSelected) {
+                ProviderTorrentFileStateIcon(file.state)
+            } else {
+                Icon(Icons.Default.Block, contentDescription = "Not selected")
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = file.name, style = MaterialTheme.typography.titleSmall)
                 if (file.progress != null) {
