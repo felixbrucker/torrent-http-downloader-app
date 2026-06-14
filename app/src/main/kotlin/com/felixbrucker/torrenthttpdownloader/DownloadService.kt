@@ -705,7 +705,11 @@ class DownloadService : Service() {
                         return task.id
                     }
 
-                    if (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION || torrentInfo.state == ProviderTorrentState.DOWNLOADING) {
+                    if (
+                        torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION
+                        || torrentInfo.state == ProviderTorrentState.DOWNLOADING
+                        || torrentInfo.state == ProviderTorrentState.COMPLETED
+                    ) {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(state = TorrentState.SELECTING_FILES)
                         }
