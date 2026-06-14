@@ -586,7 +586,7 @@ class DownloadService : Service() {
     }
 
     private fun handleAddTask(intent: Intent) {
-        val path = intent.getStringExtra(EXTRA_TORRENT_PATH) ?: return
+        val uri = intent.getStringExtra(EXTRA_TORRENT_URI) ?: return
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
@@ -594,12 +594,12 @@ class DownloadService : Service() {
         val onlyDownloadBiggestFile = intent.getBooleanExtra(EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE, false)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (DownloadTracker.getTasks().any { it.torrent.path == path }) return
+        if (DownloadTracker.getTasks().any { it.torrent.uri == uri }) return
 
         val task = DownloadTask(
-            id = path,
-            name = torrentName ?: path,
-            torrent = TorrentDescriptor(type, path),
+            id = uri,
+            name = torrentName ?: uri,
+            torrent = TorrentDescriptor(type, uri),
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
             notifyOnCompletion = notifyOnCompletion,
@@ -631,7 +631,7 @@ class DownloadService : Service() {
             }
         }
         if (task.torrent.type == TorrentType.TORRENT_FILE) {
-            val fileRef = File(task.torrent.path)
+            val fileRef = File(task.torrent.uri)
             if (fileRef.exists()) {
                 fileRef.delete()
             }
@@ -677,9 +677,9 @@ class DownloadService : Service() {
             when (task.state) {
                 TorrentState.ADDING_TO_PROVIDER -> {
                     val newId = if (task.torrent.type == TorrentType.MAGNET) {
-                        provider.addMagnet(task.torrent.path, task.name)
+                        provider.addMagnet(task.torrent.uri, task.name)
                     } else {
-                        contentResolver.openInputStream(task.torrent.path.toUri())?.use {
+                        contentResolver.openInputStream(task.torrent.uri.toUri())?.use {
                             provider.addTorrent(it.readBytes(), task.name)
                         } ?: throw Exception("Could not open torrent file")
                     }
@@ -822,7 +822,7 @@ class DownloadService : Service() {
                     if (isTorrentDeleted) {
                         // Also delete local torrent file
                         if (task.torrent.type == TorrentType.TORRENT_FILE) {
-                            val fileRef = File(task.torrent.path)
+                            val fileRef = File(task.torrent.uri)
                             if (fileRef.exists()) {
                                 fileRef.delete()
                             }
@@ -1046,7 +1046,7 @@ class DownloadService : Service() {
     private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         DownloadTracker.updateTask(taskId) {
             it.copy(
-                name = if (it.name == it.torrent.path) torrentInfo.name else it.name,
+                name = if (it.name == it.torrent.uri) torrentInfo.name else it.name,
                 providerTorrentInfo = torrentInfo,
             )
         }
@@ -1094,7 +1094,7 @@ class DownloadService : Service() {
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
-        const val EXTRA_TORRENT_PATH = "EXTRA_TORRENT_PATH"
+        const val EXTRA_TORRENT_URI = "EXTRA_TORRENT_URI"
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"

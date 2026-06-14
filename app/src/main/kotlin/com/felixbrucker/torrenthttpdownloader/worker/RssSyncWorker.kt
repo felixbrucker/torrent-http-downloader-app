@@ -12,7 +12,7 @@ import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_DE
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_NOTIFY_ON_COMPLETION
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_NAME
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_PATH
+import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_URI
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_TYPE
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
@@ -94,7 +94,7 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val result = TorrentUriResolver(applicationContext.contentResolver).resolve(item.link.toUri())
         val intent = Intent(applicationContext, DownloadService::class.java).apply {
             action = ACTION_ADD_TASK
-            putExtra(EXTRA_TORRENT_PATH, result.uri.toString())
+            putExtra(EXTRA_TORRENT_URI, result.uri.toString())
             putExtra(EXTRA_TORRENT_NAME, result.name ?: item.title)
             putExtra(EXTRA_DESTINATION_SUBDIRECTORY, feed.destinationSubdirectory)
             putExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, feed.createSubfolderByName)

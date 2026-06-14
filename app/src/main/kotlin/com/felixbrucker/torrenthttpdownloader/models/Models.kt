@@ -40,7 +40,7 @@ enum class TaskLocation {
 
 data class TorrentDescriptor(
     val type: TorrentType,
-    val path: String
+    val uri: String
 )
 
 data class DownloadFile(

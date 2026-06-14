@@ -39,7 +39,7 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 
 data class AddTorrentConfig(
-    val path: String,
+    val uri: String,
     val type: TorrentType,
     val name: String? = null,
     val destinationSubdirectory: String? = null,
