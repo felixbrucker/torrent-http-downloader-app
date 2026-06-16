@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import java.util.UUID
 import kotlin.math.max
 
@@ -73,6 +74,12 @@ data class DownloadTask(
     val notifyOnCompletion: Boolean = false,
     val onlyDownloadBiggestFile: Boolean = false,
 ) {
+    val isDownloadingOnProvider: Boolean get() {
+        return providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING
+    }
+    val isDownloadingLocally: Boolean get() {
+        return files.any { it.state == LocalDownloadState.DOWNLOADING }
+    }
     val providerProgress: Int get() {
         return providerTorrentInfo?.progress?.toInt() ?: 0
     }

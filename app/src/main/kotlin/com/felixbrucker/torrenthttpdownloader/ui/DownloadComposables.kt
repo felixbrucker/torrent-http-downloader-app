@@ -294,8 +294,10 @@ fun StatItem(
 
 @Composable
 fun DownloadStatsBar(tasks: List<DownloadTask>) {
-    val runningTasks = tasks.filter { it.state != TorrentState.COMPLETED && it.state != TorrentState.ERROR && it.providerTorrentInfo?.state != ProviderTorrentState.PAUSED }
     val pendingTasks = tasks.filter { it.state != TorrentState.COMPLETED }
+    val runningTasks = pendingTasks.filter {
+        it.state != TorrentState.ERROR && (it.isDownloadingOnProvider || it.isDownloadingLocally)
+    }
     val totalDownloadSpeed = tasks.sumOf { it.overallDownloadSpeed }
     val totalUploadSpeed = tasks.sumOf { it.providerUploadSpeed }
     val totalSize = tasks.sumOf { it.totalBytes }
