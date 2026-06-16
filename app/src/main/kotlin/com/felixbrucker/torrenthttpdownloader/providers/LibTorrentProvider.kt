@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
+import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
@@ -106,9 +107,7 @@ class LibTorrentProvider(
     }
 
     init {
-        if (!PathFactory.getResumeDataDirectory().exists()) {
-            PathFactory.getResumeDataDirectory().mkdirs()
-        }
+        PathFactory.getResumeDataDirectory().createDirectoryRecursivelyIfNotExists()
 
         if (defaultSessionSettings.useRandomPort) {
             val range = SessionSettings.randomRangePort

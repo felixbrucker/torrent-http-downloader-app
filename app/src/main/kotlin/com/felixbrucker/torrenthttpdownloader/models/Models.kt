@@ -1,7 +1,10 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
+import com.felixbrucker.torrenthttpdownloader.asFile
+import com.felixbrucker.torrenthttpdownloader.deleteIfExists
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import java.util.UUID
 import kotlin.math.max
 
@@ -137,6 +140,29 @@ data class DownloadTask(
             TaskLocation.PROVIDER
         } else {
             TaskLocation.LOCAL
+        }
+    }
+
+    fun deleteFiles() {
+        for (filePath in files.mapNotNull { file -> file.filePath }) {
+            filePath.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeTorrentFile() {
+        if (torrent.type == TorrentType.TORRENT_FILE) {
+            torrent.uri.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeResumeData() {
+        PathFactory.getResumeDataPath(id).deleteIfExists()
+    }
+
+    fun removeScopedTemporaryDirectory() {
+        val tempDir = PathFactory.getScopedTemporaryDirectory(name)
+        if (tempDir.exists()) {
+            tempDir.deleteRecursively()
         }
     }
 }

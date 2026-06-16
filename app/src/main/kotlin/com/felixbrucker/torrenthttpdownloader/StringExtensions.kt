@@ -1,5 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import androidx.core.net.toUri
+import java.io.File
 import java.security.MessageDigest
 
 fun String.cleanedForUseAsPath(): String {
@@ -15,4 +17,10 @@ fun String.hash(algorithm: String = "SHA-256"): String {
     md.update(this.toByteArray())
 
     return md.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun String.asFile(): File {
+    val path = this.toUri().path ?: this
+
+    return File(path)
 }

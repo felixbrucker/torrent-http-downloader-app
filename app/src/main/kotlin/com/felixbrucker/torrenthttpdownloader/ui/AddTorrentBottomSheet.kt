@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.asFile
+import com.felixbrucker.torrenthttpdownloader.deleteIfExists
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 
 data class AddTorrentConfig(
@@ -48,7 +50,14 @@ data class AddTorrentConfig(
     val onlyDownloadBiggestFile: Boolean? = null,
     val feedId: String? = null,
     val feedItemId: String? = null,
-)
+) {
+    fun cleanupTemporaryTorrentFile() {
+        if (type != TorrentType.TORRENT_FILE || !uri.contains("tmp/torrents/")) {
+            return
+        }
+        uri.asFile().deleteIfExists()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

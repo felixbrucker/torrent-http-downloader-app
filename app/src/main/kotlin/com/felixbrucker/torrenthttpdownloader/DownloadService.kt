@@ -349,9 +349,7 @@ class DownloadService : Service() {
         val destFile = File(filePath)
 
         // Ensure we can create the file
-        if (destFile.parentFile?.exists() == false) {
-            destFile.parentFile?.mkdirs()
-        }
+        destFile.parentFile?.createDirectoryRecursivelyIfNotExists()
 
         val existingBytes = if (destFile.exists()) destFile.length() else 0L
 
@@ -634,27 +632,10 @@ class DownloadService : Service() {
         }
 
         // Explicitly make sure to delete all files
-        for (filePath in task.files.mapNotNull { file -> file.filePath }) {
-            val fileRef = File(filePath)
-            if (fileRef.exists()) {
-                fileRef.delete()
-            }
-        }
-        if (task.torrent.type == TorrentType.TORRENT_FILE) {
-            val fileRef = File(task.torrent.uri)
-            if (fileRef.exists()) {
-                fileRef.delete()
-            }
-        }
-        if (PathFactory.getResumeDataPath(task.id).exists()) {
-            PathFactory.getResumeDataPath(task.id).delete()
-        }
-
-        // Remove scoped temp directory if available
-        val tempDir = PathFactory.getScopedTemporaryDirectory(task.name)
-        if (tempDir.exists()) {
-            tempDir.deleteRecursively()
-        }
+        task.deleteFiles()
+        task.removeTorrentFile()
+        task.removeResumeData()
+        task.removeScopedTemporaryDirectory()
 
         // If the task is on Provider, delete it there
         if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
@@ -830,17 +811,8 @@ class DownloadService : Service() {
                 TorrentState.DELETING_FROM_PROVIDER -> {
                     val isTorrentDeleted = provider.deleteTorrent(task.id)
                     if (isTorrentDeleted) {
-                        // Also delete local torrent file
-                        if (task.torrent.type == TorrentType.TORRENT_FILE) {
-                            val fileRef = File(task.torrent.uri)
-                            if (fileRef.exists()) {
-                                fileRef.delete()
-                            }
-                        }
-                        // Also delete resume data
-                        if (PathFactory.getResumeDataPath(task.id).exists()) {
-                            PathFactory.getResumeDataPath(task.id).delete()
-                        }
+                        task.removeTorrentFile()
+                        task.removeResumeData()
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
                         delay(5.seconds)
@@ -879,11 +851,7 @@ class DownloadService : Service() {
                     ensureTorrentIsFlattened(source)
 
                     val destination = PathFactory.getScopedDestinationDirectory(task)
-
-                    val parentDestinationDir = destination.parentFile
-                    if (parentDestinationDir != null && !parentDestinationDir.exists()) {
-                        parentDestinationDir.mkdirs()
-                    }
+                    destination.parentFile?.createDirectoryRecursivelyIfNotExists()
 
                     if (destination.exists()) {
                         // Directory merge, move files individually

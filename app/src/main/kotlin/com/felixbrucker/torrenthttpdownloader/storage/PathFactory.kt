@@ -18,6 +18,12 @@ class PathFactory {
                 "tmp/resume"
             )
         }
+        fun getTemporaryTorrentFileDirectory(): File {
+            return File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "tmp/torrents"
+            )
+        }
         fun getScopedTemporaryDirectory(taskName: String): File {
             val subDirName = if (taskName.length > 64) {
                 taskName.hash()

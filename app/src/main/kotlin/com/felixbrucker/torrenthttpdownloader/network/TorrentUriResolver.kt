@@ -3,7 +3,9 @@ package com.felixbrucker.torrenthttpdownloader.network
 import android.content.ContentResolver
 import android.net.Uri
 import androidx.core.net.toUri
+import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -29,21 +31,20 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
         var newUri: Uri = uri
         if (uri.scheme == "http" || uri.scheme == "https") {
             // Fetch torrent file
-            val torrentFileNameWithoutExtension = uri.toString().substringAfterLast("/").replace(".torrent", "")
-            val tmpTorrentFile = withContext(Dispatchers.IO) {
-                File.createTempFile(torrentFileNameWithoutExtension, ".torrent")
-            }
+            val torrentFileName = uri.toString().substringAfterLast("/")
+            val temporaryTorrentFile = File(PathFactory.getTemporaryTorrentFileDirectory(), torrentFileName)
+            PathFactory.getTemporaryTorrentFileDirectory().createDirectoryRecursivelyIfNotExists()
             val request = Request.Builder().url(uri.toString()).build()
             withContext(Dispatchers.IO) {
                 httpClient.newCall(request).execute().use { response ->
                     response.body.byteStream().use { input ->
-                        tmpTorrentFile.outputStream().use { output ->
+                        temporaryTorrentFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
                 }
             }
-            newUri = tmpTorrentFile.toUri()
+            newUri = temporaryTorrentFile.toUri()
         }
         val type = when (uri.scheme) {
             "magnet" -> {

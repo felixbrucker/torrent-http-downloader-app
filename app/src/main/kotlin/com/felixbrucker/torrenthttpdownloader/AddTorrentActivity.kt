@@ -44,6 +44,7 @@ class AddTorrentActivity : ComponentActivity() {
                     AddTorrentBottomSheet(
                         config = config,
                         onDismiss = {
+                            pendingConfig?.cleanupTemporaryTorrentFile()
                             pendingConfig = null
                             finish()
                         },

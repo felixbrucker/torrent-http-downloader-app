@@ -159,7 +159,10 @@ class MainActivity : ComponentActivity() {
                 pendingConfig?.let { config ->
                     AddTorrentBottomSheet(
                         config = config,
-                        onDismiss = { pendingConfig = null },
+                        onDismiss = {
+                            pendingConfig?.cleanupTemporaryTorrentFile()
+                            pendingConfig = null
+                        },
                         onConfirm = { updatedConfig ->
                             val intent = Intent(this, DownloadService::class.java).apply {
                                 action = DownloadService.ACTION_ADD_TASK
