@@ -86,6 +86,15 @@ object DownloadTracker {
         saveTasks()
     }
 
+    fun moveTask(fromIndex: Int, toIndex: Int) {
+        _tasks.update { tasks ->
+            tasks.toMutableList().apply {
+                add(toIndex, removeAt(fromIndex))
+            }
+        }
+        saveTasks()
+    }
+
     fun findTask(id: String): DownloadTask? {
         return _tasks.value.find { it.id == id }
     }
