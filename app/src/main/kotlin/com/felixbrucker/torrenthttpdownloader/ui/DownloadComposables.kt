@@ -294,6 +294,7 @@ fun StatItem(
 
 @Composable
 fun DownloadStatsBar(tasks: List<DownloadTask>) {
+    val runningTasks = tasks.filter { it.state != TorrentState.COMPLETED && it.state != TorrentState.ERROR && it.providerTorrentInfo?.state != ProviderTorrentState.PAUSED }
     val pendingTasks = tasks.filter { it.state != TorrentState.COMPLETED }
     val totalDownloadSpeed = tasks.sumOf { it.overallDownloadSpeed }
     val totalUploadSpeed = tasks.sumOf { it.providerUploadSpeed }
@@ -338,7 +339,7 @@ fun DownloadStatsBar(tasks: List<DownloadTask>) {
             // Progress/Tasks
             Column(verticalArrangement = Arrangement.Center) {
                 Text(
-                    text = "${pendingTasks.size} tasks",
+                    text = "${runningTasks.size} / ${pendingTasks.size} tasks",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

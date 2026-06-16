@@ -36,6 +36,7 @@ import com.felixbrucker.torrenthttpdownloader.NavRoute
 import com.felixbrucker.torrenthttpdownloader.Navigator
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +49,8 @@ fun DownloadsScreen(
 
     val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
     val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
+    val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
+    val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
 
     fun removeTask(taskId: String) {
         val intent = Intent(context, DownloadService::class.java).apply {
@@ -78,6 +81,31 @@ fun DownloadsScreen(
                     }
                 },
                 actions = {
+                    if (anyPaused || anyPausedOnProvider) {
+                        IconButton(onClick = {
+                            context.startService(Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_RESUME_ALL
+                            })
+                            context.startService(Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
+                            })
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
+                        }
+                    }
+                    if (anyDownloading || anyDownloadingOnProvider) {
+                        IconButton(onClick = {
+                            context.startService(Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_PAUSE_ALL
+                            })
+                            context.startService(Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
+                            })
+                        }) {
+                            Icon(Icons.Default.Pause, contentDescription = "Pause All")
+                        }
+                    }
+
                     Box {
                         IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
                             Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
@@ -90,28 +118,6 @@ fun DownloadsScreen(
                             ) {
                                 Text(unreadRssCount.toString())
                             }
-                        }
-                    }
-
-
-                    if (anyDownloading) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_ALL
-                            }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.Pause, contentDescription = "Pause All")
-                        }
-                    }
-                    if (anyPaused) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_ALL
-                            }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
                         }
                     }
 

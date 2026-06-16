@@ -571,6 +571,7 @@ class DownloadService : Service() {
     }
 
     private suspend fun pauseAllOnProvider() {
+        if (!provider.supportsPauseResume) return
         DownloadTracker
             .getTasks()
             .filter { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
@@ -586,6 +587,7 @@ class DownloadService : Service() {
     }
 
     private suspend fun resumeAllOnProvider() {
+        if (!provider.supportsPauseResume) return
         DownloadTracker
             .getTasks()
             .filter { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
