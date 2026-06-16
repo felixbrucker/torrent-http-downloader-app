@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.storage
 
 import android.os.Environment
 import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
+import com.felixbrucker.torrenthttpdownloader.hash
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import java.io.File
 
@@ -18,9 +19,15 @@ class PathFactory {
             )
         }
         fun getScopedTemporaryDirectory(taskName: String): File {
+            val subDirName = if (taskName.length > 64) {
+                taskName.hash()
+            } else {
+                taskName.cleanedForUseAsPath()
+            }
+
             return File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
-                "tmp/${taskName.cleanedForUseAsPath()}"
+                "tmp/${subDirName}"
             )
         }
 
