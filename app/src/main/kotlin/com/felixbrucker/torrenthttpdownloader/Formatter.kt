@@ -6,6 +6,7 @@ import kotlin.math.pow
 
 class Formatter {
     companion object {
+        const val SECONDS_PER_DAY = 3600 * 24
         fun formatSpeed(bytesPerSecond: Long): String {
             return "${formatBytes(bytesPerSecond)}/s"
         }
@@ -25,10 +26,12 @@ class Formatter {
         }
 
         fun formatTime(seconds: Long): String {
-            val hours = seconds / 3600
+            val days = seconds / SECONDS_PER_DAY
+            val hours = (seconds % SECONDS_PER_DAY) / 3600
             val minutes = (seconds % 3600) / 60
             val secs = seconds % 60
             return when {
+                days > 0 -> String.format(Locale.US, "%dd %dh %dm %ds", days, hours, minutes, secs)
                 hours > 0 -> String.format(Locale.US, "%dh %dm %ds", hours, minutes, secs)
                 minutes > 0 -> String.format(Locale.US, "%dm %ds", minutes, secs)
                 else -> String.format(Locale.US, "%ds", secs)
