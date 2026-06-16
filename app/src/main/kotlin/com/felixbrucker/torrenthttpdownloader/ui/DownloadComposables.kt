@@ -340,6 +340,7 @@ fun DownloadStatsBar(tasks: List<DownloadTask>) {
                 Text(
                     text = "${pendingTasks.size} tasks",
                     style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(

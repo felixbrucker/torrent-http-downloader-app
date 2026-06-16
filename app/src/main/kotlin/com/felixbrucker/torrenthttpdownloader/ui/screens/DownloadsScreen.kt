@@ -2,7 +2,9 @@ package com.felixbrucker.torrenthttpdownloader.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,10 +60,24 @@ fun DownloadsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.app_name)) },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.app_name),
+                            maxLines = 1
+                        )
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DownloadStatsBar(tasks = tasks)
+                        }
+                    }
+                },
                 actions = {
-                    DownloadStatsBar(tasks = tasks)
-
                     Box {
                         IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
                             Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
