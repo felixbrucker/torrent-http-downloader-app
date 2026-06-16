@@ -3,7 +3,6 @@ package com.felixbrucker.torrenthttpdownloader
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
@@ -63,10 +62,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (savedInstanceState == null) {
-            handleIntent(intent)
-        }
 
         setContent {
             TorrentHttpDownloaderTheme {
@@ -208,12 +203,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
-    }
-
     override fun onStart() {
         super.onStart()
 
@@ -248,25 +237,5 @@ class MainActivity : ComponentActivity() {
         WorkManager.getInstance(this).enqueue(rssSyncRequest)
     }
 
-    private fun handleIntent(intent: Intent) {
-        val action = intent.action
-        val data: Uri? = intent.data
-
-        if (action == Intent.ACTION_VIEW && data != null) {
-            serviceScope.launch {
-                isResolvingTorrent = true
-                try {
-                    val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
-                    pendingConfig = AddTorrentConfig(
-                        uri = resolvedTorrent.uri.toString(),
-                        type = resolvedTorrent.type,
-                        name = resolvedTorrent.name,
-                    )
-                } finally {
-                    isResolvingTorrent = false
-                }
-            }
-        }
-    }
 }
 
