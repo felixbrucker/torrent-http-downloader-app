@@ -494,18 +494,17 @@ class SessionSettings {
 
     enum class EncryptMode {
         ENABLED,
-
         FORCED,
     }
 
     companion object {
         const val DEFAULT_ACTIVE_DOWNLOADS: Int = 3
-        const val DEFAULT_ACTIVE_SEEDS: Int = 3
+        const val DEFAULT_ACTIVE_SEEDS: Int = 8
         const val DEFAULT_MAX_PEER_LIST_SIZE: Int = 200
         const val DEFAULT_TICK_INTERVAL: Int = 1000
         const val DEFAULT_INACTIVITY_TIMEOUT: Int = 60
         const val DEFAULT_CONNECTIONS_LIMIT: Int = 200
-        const val DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT: Int = 40
+        const val DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT: Int = 50
         const val DEFAULT_UPLOADS_LIMIT_PER_TORRENT: Int = 4
         const val DEFAULT_DOWNLOAD_RATE_LIMIT: Int = 0
         const val DEFAULT_UPLOAD_RATE_LIMIT: Int = 0
