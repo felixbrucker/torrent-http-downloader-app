@@ -37,6 +37,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 private data class DownloadWork(val taskId: String, val file: DownloadFile)
 
@@ -87,7 +90,7 @@ class DownloadService : Service() {
         while (isActive) {
             val taskId = taskIdsToProcess.poll()
             if (taskId == null) {
-                delay(500) // Wait before polling again
+                delay(500.milliseconds) // Wait before polling again
                 continue
             }
             serviceScope.launch(Dispatchers.IO) {
@@ -277,7 +280,7 @@ class DownloadService : Service() {
         notificationUpdateJob = serviceScope.launch {
             while (isActive) {
                 updateNotification()
-                delay(2000)
+                delay(2.seconds)
             }
         }
     }
@@ -291,7 +294,7 @@ class DownloadService : Service() {
         while (isActive) {
             val work = downloadQueue.poll()
             if (work == null) {
-                delay(1000) // Wait before polling again
+                delay(1.seconds) // Wait before polling again
                 continue
             }
             inProgressWork.add(work)
@@ -720,7 +723,7 @@ class DownloadService : Service() {
                         }
                     } else {
                         // Still processing, check again later
-                        delay(2000)
+                        delay(2.seconds)
                     }
 
                     return task.id
@@ -772,7 +775,7 @@ class DownloadService : Service() {
                         }
                     } else {
                         // Still downloading on provider, check again later
-                        delay(5000)
+                        delay(5.seconds)
                     }
 
                     return task.id
@@ -812,7 +815,7 @@ class DownloadService : Service() {
 
                     var files = task.files
                     while (files.any { it.state != LocalDownloadState.COMPLETED }) {
-                        delay(2000)
+                        delay(2.seconds)
                         files = DownloadTracker.findTask(task.id)?.files ?: return null
                     }
 
@@ -838,7 +841,7 @@ class DownloadService : Service() {
                         }
                         DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
-                        delay(5000)
+                        delay(5.seconds)
                     }
 
                     return task.id
@@ -914,14 +917,14 @@ class DownloadService : Service() {
             e.printStackTrace()
 
             // Retry after 15 sec
-            delay(15_000)
+            delay(15.seconds)
 
             return task.id
         } catch (e: BandwidthLimitExceededException) {
             e.printStackTrace()
 
             // Retry after 1 min
-            delay(60_000)
+            delay(1.minutes)
 
             return task.id
         } catch (_: ResourceNotFoundException) {
@@ -1001,7 +1004,7 @@ class DownloadService : Service() {
             "Torrent file ${file.fileName} encountered an error while downloading: $errorMessage"
         )
         serviceScope.launch(Dispatchers.IO) {
-            delay(5000)
+            delay(5.seconds)
             enqueueDownload(work.copy(file = file))
         }
     }
