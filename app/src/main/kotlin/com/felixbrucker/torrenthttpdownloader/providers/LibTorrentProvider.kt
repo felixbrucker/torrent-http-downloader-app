@@ -35,7 +35,7 @@ import java.util.Random
 
 
 class LibTorrentProvider(
-    sharedPreferences: SharedPreferences,
+    private val sharedPreferences: SharedPreferences,
     private val connectivityManager: ConnectivityManager,
 ) : TorrentProvider {
     override val name: String = NAME
@@ -56,7 +56,7 @@ class LibTorrentProvider(
     private val sessionManager = SessionManager()
     private val defaultSessionSettings = SessionSettings()
 
-    private val requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+    private var requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
     private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network : Network, networkCapabilities : NetworkCapabilities) {
             if (sessionManager.isPaused && isAllowedToRun(networkCapabilities)) {
@@ -305,6 +305,13 @@ class LibTorrentProvider(
         torrentHandle.resume()
     }
 
+    override fun reloadSettings() {
+        requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+        defaultSessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
+        sessionManager.settings().activeDownloads(defaultSessionSettings.activeDownloads)
+        sessionManager.settings().activeLimit(defaultSessionSettings.activeDownloads + defaultSessionSettings.activeSeeds)
+    }
+
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
         // relative paths in the torrent
         val files: MutableList<Pair<String, Long>> = mutableListOf()
@@ -388,7 +395,7 @@ class LibTorrentProvider(
         val sp = SettingsPack()
         sp.activeDownloads(settings.activeDownloads)
         sp.activeSeeds(settings.activeSeeds)
-        sp.activeLimit(settings.activeLimit)
+        sp.activeLimit(settings.activeDownloads + settings.activeSeeds)
         sp.maxPeerlistSize(settings.maxPeerListSize)
         sp.tickInterval(settings.tickInterval)
         sp.inactivityTimeout(settings.inactivityTimeout)
@@ -468,7 +475,6 @@ class SessionSettings {
     var connectionsLimit: Int = DEFAULT_CONNECTIONS_LIMIT
     var connectionsLimitPerTorrent: Int = DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT
     var uploadsLimitPerTorrent: Int = DEFAULT_UPLOADS_LIMIT_PER_TORRENT
-    var activeLimit: Int = DEFAULT_ACTIVE_LIMIT
     var portRangeFirst: Int = DEFAULT_PORT_RANGE_FIRST
     var portRangeSecond: Int = DEFAULT_PORT_RANGE_SECOND
     var downloadRateLimit: Int = DEFAULT_DOWNLOAD_RATE_LIMIT
@@ -493,15 +499,14 @@ class SessionSettings {
     }
 
     companion object {
-        const val DEFAULT_ACTIVE_DOWNLOADS: Int = 4
-        const val DEFAULT_ACTIVE_SEEDS: Int = 4
+        const val DEFAULT_ACTIVE_DOWNLOADS: Int = 3
+        const val DEFAULT_ACTIVE_SEEDS: Int = 3
         const val DEFAULT_MAX_PEER_LIST_SIZE: Int = 200
         const val DEFAULT_TICK_INTERVAL: Int = 1000
         const val DEFAULT_INACTIVITY_TIMEOUT: Int = 60
         const val DEFAULT_CONNECTIONS_LIMIT: Int = 200
         const val DEFAULT_CONNECTIONS_LIMIT_PER_TORRENT: Int = 40
         const val DEFAULT_UPLOADS_LIMIT_PER_TORRENT: Int = 4
-        const val DEFAULT_ACTIVE_LIMIT: Int = 6
         const val DEFAULT_DOWNLOAD_RATE_LIMIT: Int = 0
         const val DEFAULT_UPLOAD_RATE_LIMIT: Int = 0
         const val DEFAULT_DHT_ENABLED: Boolean = true

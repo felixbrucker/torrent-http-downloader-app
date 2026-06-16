@@ -46,7 +46,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
@@ -162,6 +162,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
                     putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
                 }
+                onSave()
                 onBack()
             }) {
                 Text("Save")

@@ -75,4 +75,5 @@ interface TorrentProvider {
     suspend fun pause(id: String)
     suspend fun resume(id: String)
     fun stop()
+    fun reloadSettings()
 }

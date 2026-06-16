@@ -451,6 +451,7 @@ class DownloadService : Service() {
             ACTION_RESUME_TASK -> resumeTask(intent.getStringExtra(EXTRA_TASK_ID))
             ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
+            ACTION_RELOAD_SETTINGS -> reloadSettings()
             ACTION_PAUSE_ALL -> pauseAll()
             ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
             ACTION_RESUME_ALL -> resumeAll()
@@ -460,6 +461,10 @@ class DownloadService : Service() {
         }
 
         return START_STICKY
+    }
+
+    private fun reloadSettings() {
+        provider.reloadSettings()
     }
 
     private fun stopAllDownloadsAndExit() {
@@ -1092,6 +1097,7 @@ class DownloadService : Service() {
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
+        const val ACTION_RELOAD_SETTINGS = "ACTION_RELOAD_SETTINGS"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
         const val EXTRA_TORRENT_URI = "EXTRA_TORRENT_URI"

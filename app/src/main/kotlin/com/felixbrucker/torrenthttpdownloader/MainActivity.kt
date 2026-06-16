@@ -144,7 +144,15 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     entry<NavRoute.Settings> {
-                        SettingsScreen(onBack = { navigator.goBack() })
+                        SettingsScreen(
+                            onBack = { navigator.goBack() },
+                            onSave = {
+                                val intent = Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_RELOAD_SETTINGS
+                                }
+                                startService(intent)
+                            }
+                        )
                     }
                 }
 

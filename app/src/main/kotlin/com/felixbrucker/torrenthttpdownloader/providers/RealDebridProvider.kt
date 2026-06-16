@@ -10,7 +10,7 @@ import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import kotlin.math.min
 
 class RealDebridProvider(
-    private val apiToken: String,
+    private val sharedPreferences: SharedPreferences,
 ) : TorrentProvider {
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
@@ -21,13 +21,13 @@ class RealDebridProvider(
 
         override fun build(): RealDebridProvider {
             val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-            val apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
 
-            return RealDebridProvider(apiToken)
+            return RealDebridProvider(sharedPreferences)
         }
     }
 
-    private val auth = "Bearer $apiToken"
+    private var apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
+    private val auth: String get() = "Bearer $apiToken"
 
     override fun restoreTorrent(id: String) {
         // Nothing to do
@@ -130,6 +130,10 @@ class RealDebridProvider(
 
     override fun stop() {
         // Nothing to do
+    }
+
+    override fun reloadSettings() {
+        apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
     }
 
     private fun checkApiToken() {
