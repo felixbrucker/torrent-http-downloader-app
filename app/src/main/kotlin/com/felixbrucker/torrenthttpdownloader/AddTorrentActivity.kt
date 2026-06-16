@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 class AddTorrentActivity : ComponentActivity() {
     private val serviceJob = Job()
@@ -91,9 +92,29 @@ class AddTorrentActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent) {
         val action = intent.action
-        val data: Uri? = intent.data
+        val data: Uri? = when (action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> {
+                if (intent.type == "text/plain") {
+                    intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
+                        val trimmedText = text.trim()
+                        if (trimmedText.startsWith("magnet:") ||
+                            trimmedText.startsWith("http://") ||
+                            trimmedText.startsWith("https://")
+                        ) {
+                            trimmedText.toUri()
+                        } else {
+                            null
+                        }
+                    }
+                } else {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                }
+            }
+            else -> null
+        }
 
-        if (action == Intent.ACTION_VIEW && data != null) {
+        if (data != null) {
             serviceScope.launch {
                 isResolvingTorrent = true
                 try {
