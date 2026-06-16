@@ -5,6 +5,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -38,7 +39,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +52,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
@@ -274,10 +280,97 @@ fun StateIcon(state: TorrentState) {
 }
 
 @Composable
-fun StatItem(icon: ImageVector, text: String) {
+fun StatItem(
+    icon: ImageVector,
+    text: String,
+    iconSize: Dp = 16.dp,
+    textStyle: TextStyle = MaterialTheme.typography.bodySmall
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-        Text(text = text, style = MaterialTheme.typography.bodySmall)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize))
+        Text(text = text, style = textStyle)
+    }
+}
+
+@Composable
+fun DownloadStatsBar(tasks: List<DownloadTask>) {
+    val pendingTasks = tasks.filter { it.state != TorrentState.COMPLETED }
+    val totalDownloadSpeed = tasks.sumOf { it.overallDownloadSpeed }
+    val totalUploadSpeed = tasks.sumOf { it.providerUploadSpeed }
+    val totalSize = tasks.sumOf { it.totalBytes }
+    val totalDownloaded = tasks.sumOf { it.downloadedBytes }
+    val remainingBytes = totalSize - totalDownloaded
+    val etaSeconds = if (totalDownloadSpeed > 0) remainingBytes / totalDownloadSpeed else 0L
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .height(IntrinsicSize.Min)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Speeds
+            Column(verticalArrangement = Arrangement.Center) {
+                StatItem(
+                    arrow_upload_progress,
+                    Formatter.formatSpeed(totalUploadSpeed),
+                    iconSize = 14.dp,
+                    textStyle = MaterialTheme.typography.labelSmall
+                )
+                StatItem(
+                    downloading,
+                    Formatter.formatSpeed(totalDownloadSpeed),
+                    iconSize = 14.dp,
+                    textStyle = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            VerticalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            // Progress/Tasks
+            Column(verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = "${pendingTasks.size} tasks",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${Formatter.formatBytes(totalDownloaded)} / ${Formatter.formatBytes(totalSize)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (etaSeconds > 0) {
+                VerticalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
+                // ETA
+                Column(verticalArrangement = Arrangement.Center) {
+                    Text(
+                        text = "ETA",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = Formatter.formatTime(etaSeconds),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
 

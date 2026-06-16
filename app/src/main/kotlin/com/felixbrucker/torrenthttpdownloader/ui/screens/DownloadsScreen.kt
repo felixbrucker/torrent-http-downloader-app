@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.felixbrucker.torrenthttpdownloader.ui.DownloadItem
+import com.felixbrucker.torrenthttpdownloader.ui.DownloadStatsBar
 import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.NavRoute
@@ -59,6 +60,8 @@ fun DownloadsScreen(
             TopAppBar(
                 title = { Text(stringResource(id = R.string.app_name)) },
                 actions = {
+                    DownloadStatsBar(tasks = tasks)
+
                     Box {
                         IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
                             Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
