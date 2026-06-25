@@ -133,7 +133,7 @@ fun DownloadsScreen(
                     if (anyPaused || anyPausedOnProvider) {
                         IconButton(onClick = {
                             context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_ALL
+                                action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
                             })
                             context.startService(Intent(context, DownloadService::class.java).apply {
                                 action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
@@ -145,7 +145,7 @@ fun DownloadsScreen(
                     if (anyDownloading || anyDownloadingOnProvider) {
                         IconButton(onClick = {
                             context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_ALL
+                                action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
                             })
                             context.startService(Intent(context, DownloadService::class.java).apply {
                                 action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER

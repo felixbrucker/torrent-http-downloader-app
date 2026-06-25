@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.app.BackgroundServiceStartNotAllowedException
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,53 +10,23 @@ import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
-import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
-import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
-import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
-import com.github.junrar.Junrar
 import kotlinx.coroutines.*
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okio.BufferedSink
-import okio.BufferedSource
-import okio.buffer
-import okio.sink
-import java.io.File
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Duration.Companion.minutes
-
-private data class DownloadWork(val taskId: String, val file: DownloadFile)
 
 class DownloadService : Service() {
-    private val serviceJob = Job()
+    private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-    private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
-    private val inProgressWork: MutableList<DownloadWork> = mutableListOf()
-    private val processingTasks: MutableSet<String> = mutableSetOf()
-    private val activeDownloads = ConcurrentHashMap<String, Job>()
-    private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
     private var notificationUpdateJob: Job? = null
     private lateinit var provider: TorrentProvider
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    private lateinit var localDownloadManager: LocalDownloadManager
+    private lateinit var torrentStateMachine: TorrentStateMachine
 
     override fun onCreate() {
         super.onCreate()
@@ -70,36 +39,35 @@ class DownloadService : Service() {
 
         provider = Container.getService("TorrentProvider")
 
+        localDownloadManager = LocalDownloadManager(
+            scope = serviceScope,
+            sharedPreferences = Container.getService("SharedPreferences"),
+            onLinkExpired = { task, file ->
+                torrentStateMachine.updateFileInfo(task, file)
+            },
+            onPostNotification = ::postNotification,
+        )
+
+        torrentStateMachine = TorrentStateMachine(
+            scope = serviceScope,
+            provider = provider,
+            localDownloadManager = localDownloadManager,
+            contentResolver = contentResolver,
+            onTaskCompleted = { _ ->
+                updateNotification()
+                stopSelfIfIdle()
+            },
+            onPostNotification = ::postNotification,
+        )
+
         createServiceNotificationChannel()
         createGeneralNotificationChannel()
         startForegroundService()
 
-        val sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
-        val limit = sharedPreferences.getInt("local_parallel_downloads", 2)
-        repeat(limit) {
-            launchWorker()
-        }
         startNotificationUpdates()
 
-        resumeDownloads()
-
-        processTaskQueue()
-    }
-
-    private fun processTaskQueue() = serviceScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            val taskId = taskIdsToProcess.poll()
-            if (taskId == null) {
-                delay(500.milliseconds) // Wait before polling again
-                continue
-            }
-            serviceScope.launch(Dispatchers.IO) {
-                val newId = processTaskSafely(taskId)
-                if (newId != null) {
-                    taskIdsToProcess.add(newId)
-                }
-            }
-        }
+        localDownloadManager.start()
+        torrentStateMachine.start()
     }
 
     private fun createServiceNotificationChannel() {
@@ -213,7 +181,7 @@ class DownloadService : Service() {
         val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
         if (anyDownloading) {
             val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
-                action = ACTION_PAUSE_ALL
+                action = ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
             }
             val pauseAllPendingIntent: PendingIntent = PendingIntent.getService(
                 this, 3, pauseAllIntent,
@@ -223,7 +191,7 @@ class DownloadService : Service() {
         }
         if (anyPaused) {
             val resumeAllIntent = Intent(this, DownloadService::class.java).apply {
-                action = ACTION_RESUME_ALL
+                action = ACTION_RESUME_ALL_LOCAL_DOWNLOADS
             }
             val resumeAllPendingIntent: PendingIntent = PendingIntent.getService(
                 this, 4, resumeAllIntent,
@@ -290,175 +258,23 @@ class DownloadService : Service() {
         notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification())
     }
 
-    private fun launchWorker() = serviceScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            val work = downloadQueue.poll()
-            if (work == null) {
-                delay(1.seconds) // Wait before polling again
-                continue
-            }
-            inProgressWork.add(work)
-            try {
-                processDownload(work)
-            } finally {
-                inProgressWork.remove(work)
-            }
-        }
-    }
-
-    private suspend fun processDownload(work: DownloadWork) {
-        var file = work.file
-        // Should not happen, we enqueued an already completed file
-        if (file.state == LocalDownloadState.COMPLETED) {
-            return
-        }
-        val task = DownloadTracker.findTask(work.taskId) ?: return
-
-        try {
-            // Support regenerating the link if the existing one expires (
-            // TODO: how to detect expired links?
-            if (file.unrestrictedLink == null) {
-                updateFileInfo(task, file)
-                file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
-            }
-            val downloadUrl = file.unrestrictedLink ?: return
-
-            val job = serviceScope.launch(Dispatchers.IO) {
-                performDownload(work, downloadUrl, file)
-            }
-            activeDownloads[file.link] = job
-            job.join()
-        } catch (e: CancellationException) {
-            throw e // Let the coroutine be cancelled
-        } catch (e: Exception) {
-            DownloadTracker.updateTaskFile(work.taskId, work.file.link) {
-                it.copy(
-                    state = LocalDownloadState.ERROR,
-                    stateDescription = "Error: ${e.message}",
-                    speed = 0,
-                )
-            }
-        } finally {
-            activeDownloads.remove(file.link)
-        }
-    }
-
-    private suspend fun performDownload(work: DownloadWork, unrestrictedLink: String, downloadFile: DownloadFile) {
-        val taskId = work.taskId
-        val filePath = downloadFile.filePath ?: return
-        val destFile = File(filePath)
-
-        // Ensure we can create the file
-        destFile.parentFile?.createDirectoryRecursivelyIfNotExists()
-
-        val existingBytes = if (destFile.exists()) destFile.length() else 0L
-
-        val request = Request.Builder()
-            .url(unrestrictedLink)
-            .apply {
-                if (existingBytes > 0) {
-                    header("Range", "bytes=$existingBytes-")
-                }
-            }
-            .build()
-
-        try {
-            val call = httpClient.newCall(request)
-
-            // Link coroutine cancellation to OkHttp call cancellation
-            val currentJob = currentCoroutineContext()[Job]
-            currentJob?.invokeOnCompletion {
-                call.cancel()
-            }
-
-            withContext(Dispatchers.IO) {
-                call.execute().use { response ->
-                    if (!response.isSuccessful && response.code != 206) {
-                        handleFailedLocalDownload(work, downloadFile, "HTTP ${response.code}")
-                        return@withContext
-                    }
-
-                    val body = response.body
-                    val contentLength = body.contentLength()
-                    val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
-
-                    DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                        file.copy(
-                            state = LocalDownloadState.DOWNLOADING,
-                            totalBytes = totalBytes,
-                            downloadedBytes = existingBytes
-                        )
-                    }
-
-                    val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
-                    val source: BufferedSource = body.source()
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalDownloaded = existingBytes
-                    var lastUpdate = System.currentTimeMillis()
-                    var bytesSinceLastUpdate = 0L
-
-                    sink.use { bufferedSink ->
-                        while (source.read(buffer).also { bytesRead = it } != -1) {
-                            if (!isActive) {
-                                return@withContext
-                            }
-                            bufferedSink.write(buffer, 0, bytesRead)
-                            totalDownloaded += bytesRead
-                            bytesSinceLastUpdate += bytesRead
-
-                            val now = System.currentTimeMillis()
-                            if (now - lastUpdate > 1000) {
-                                val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
-                                val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
-
-                                DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                                    file.copy(
-                                        progress = progress,
-                                        downloadedBytes = totalDownloaded,
-                                        speed = speed,
-                                        lastTimestamp = now,
-                                        lastBytes = totalDownloaded
-                                    )
-                                }
-                                lastUpdate = now
-                                bytesSinceLastUpdate = 0
-                            }
-                        }
-                    }
-                    updateFileState(taskId, downloadFile.link, LocalDownloadState.COMPLETED)
-                }
-            }
-        } catch (e: Exception) {
-            if (e !is CancellationException) {
-                handleFailedLocalDownload(work, downloadFile, e.message ?: "unknown error")
-            }
-        }
-    }
-
-    private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        DownloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(state = state, stateDescription = error, speed = 0)
-        }
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_PAUSE_FILE -> pauseFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
-            ACTION_RESUME_FILE -> resumeFile(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
-            ACTION_PAUSE_TASK -> pauseTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_PAUSE_LOCAL_FILE_DOWNLOAD -> pauseLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
+            ACTION_RESUME_LOCAL_FILE_DOWNLOAD -> resumeLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
+            ACTION_PAUSE_TASK_LOCAL_DOWNLOADS -> pauseTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
             ACTION_PAUSE_TASK_ON_PROVIDER -> serviceScope.launch { pauseTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_RESUME_TASK -> resumeTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_RESUME_TASK_LOCAL_DOWNLOADS -> resumeTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
             ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RELOAD_SETTINGS -> reloadSettings()
-            ACTION_PAUSE_ALL -> pauseAll()
+            ACTION_PAUSE_ALL_LOCAL_DOWNLOADS -> pauseAllLocalDownloads()
             ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
-            ACTION_RESUME_ALL -> resumeAll()
+            ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> resumeAllLocalDownloads()
             ACTION_RESUME_ALL_ON_PROVIDER -> serviceScope.launch { resumeAllOnProvider() }
             ACTION_ADD_TASK -> handleAddTask(intent)
-            ACTION_STOP_SERVICE -> stopAllDownloadsAndExit()
+            ACTION_STOP_SERVICE -> stopSelf()
         }
 
         return START_STICKY
@@ -468,128 +284,71 @@ class DownloadService : Service() {
         provider.reloadSettings()
     }
 
-    private fun stopAllDownloadsAndExit() {
-        downloadQueue.clear()
-        activeDownloads.values.forEach { it.cancel() }
-        activeDownloads.clear()
-
-        stopSelf()
-    }
-
     private fun stopSelfIfIdle() {
         if (!DownloadTracker.hasTasksWhichNeedProcessing()) {
             stopSelf()
         }
     }
 
-    private fun pauseFile(taskId: String?, fileLink: String?) {
+    private fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
-        activeDownloads[fileLink]?.cancel()
-        activeDownloads.remove(fileLink)
-        downloadQueue.removeIf { it.taskId == taskId && it.file.link == fileLink }
-        updateFileState(taskId, fileLink, LocalDownloadState.PAUSED)
+        localDownloadManager.pauseFile(taskId, fileLink)
+        updateNotification()
     }
 
-    private fun resumeFile(taskId: String?, fileLink: String?) {
+    private fun resumeLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        val file = task.files.find { it.link == fileLink } ?: return
-        enqueueDownload(DownloadWork(taskId, file))
+        localDownloadManager.resumeFile(taskId, fileLink)
+        updateNotification()
     }
 
-    private fun pauseTask(taskId: String?) {
+    private fun pauseTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        task.files.forEach { file ->
-            if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
-                pauseFile(taskId, file.link)
-            }
-        }
+        localDownloadManager.pauseTask(taskId)
+        updateNotification()
+    }
+
+    private fun resumeTaskLocalDownloads(taskId: String?) {
+        if (taskId == null) return
+        localDownloadManager.resumeTask(taskId)
+        updateNotification()
+    }
+
+    private fun pauseAllLocalDownloads() {
+        localDownloadManager.pauseAll()
+        updateNotification()
+    }
+
+    private fun resumeAllLocalDownloads() {
+        localDownloadManager.resumeAll()
+        updateNotification()
     }
 
     private suspend fun pauseTaskOnProvider(taskId: String?) {
         if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        val providerId = task.providerId ?: return
-        provider.pause(providerId)
-        DownloadTracker.updateTask(task.id) {
-            it.copy(
-                providerTorrentInfo = it.providerTorrentInfo?.copy(
-                    state = ProviderTorrentState.PAUSED
-                )
-            )
-        }
-    }
-
-    private fun resumeTask(taskId: String?) {
-        if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        task.files.forEach { file ->
-            if (file.state == LocalDownloadState.PAUSED) {
-                resumeFile(taskId, file.link)
-            }
-        }
+        torrentStateMachine.pauseTaskOnProvider(taskId)
+        updateNotification()
     }
 
     private suspend fun resumeTaskOnProvider(taskId: String?) {
         if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        val providerId = task.providerId ?: return
-        provider.resume(providerId)
-        DownloadTracker.updateTask(task.id) {
-            it.copy(
-                providerTorrentInfo = it.providerTorrentInfo?.copy(
-                    state = ProviderTorrentState.DOWNLOADING
-                )
-            )
-        }
+        torrentStateMachine.resumeTaskOnProvider(taskId)
+        updateNotification()
     }
 
     private suspend fun restartTask(taskId: String?) {
         if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-        try {
-            resetTorrent(task)
-            taskIdsToProcess.add(task.id)
-        } catch (e: Exception) {
-            DownloadTracker.updateTask(task.id) {
-                it.copy(
-                    state = TorrentState.ERROR,
-                    errorMessage = "Failed to restart task: ${e.message}",
-                )
-            }
-        }
-    }
-
-    private fun pauseAll() {
-        DownloadTracker.getTasks().forEach { task ->
-            pauseTask(task.id)
-        }
+        torrentStateMachine.restartTask(taskId)
         updateNotification()
     }
 
     private suspend fun pauseAllOnProvider() {
-        if (!provider.supportsPauseResume) return
-        DownloadTracker
-            .getTasks()
-            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
-            .forEach { task -> pauseTaskOnProvider(task.id) }
-        updateNotification()
-    }
-
-    private fun resumeAll() {
-        DownloadTracker.getTasks().forEach { task ->
-            resumeTask(task.id)
-        }
+        torrentStateMachine.pauseAllTasksOnProvider()
         updateNotification()
     }
 
     private suspend fun resumeAllOnProvider() {
-        if (!provider.supportsPauseResume) return
-        DownloadTracker
-            .getTasks()
-            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
-            .forEach { task -> resumeTaskOnProvider(task.id) }
+        torrentStateMachine.resumeAllTasksOnProvider()
         updateNotification()
     }
 
@@ -614,420 +373,14 @@ class DownloadService : Service() {
             onlyDownloadBiggestFile = onlyDownloadBiggestFile,
             state = TorrentState.ADDING_TO_PROVIDER
         )
-        DownloadTracker.addTask(task)
-        taskIdsToProcess.add(task.id)
+        torrentStateMachine.addTask(task)
     }
 
     private suspend fun removeTask(taskId: String?) {
         if (taskId == null) return
-        val task = DownloadTracker.findTask(taskId) ?: return
-
-        // Remove pending local downloads
-        downloadQueue.removeIf { it.taskId == taskId }
-
-        // Cancel active downloads
-        for (file in task.files) {
-            activeDownloads[file.link]?.cancel()
-            activeDownloads.remove(file.link)
-        }
-
-        // Explicitly make sure to delete all files
-        task.deleteFiles()
-        task.removeTorrentFile()
-        task.removeResumeData()
-        task.removeScopedTemporaryDirectory()
-
-        // If the task is on Provider, delete it there
-        if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
-            provider.deleteTorrent(task.providerId, deleteFiles = true)
-        }
-
-        DownloadTracker.removeTask(taskId)
+        torrentStateMachine.removeTask(taskId)
 
         stopSelfIfIdle()
-    }
-
-    private suspend fun processTaskSafely(taskId: String?): String? {
-        if (taskId == null) return null
-        if (processingTasks.contains(taskId)) return null
-        processingTasks.add(taskId)
-        var newId: String?
-        try {
-            newId = processTask(taskId)
-        } finally {
-            processingTasks.remove(taskId)
-        }
-
-        return newId
-    }
-
-    private suspend fun processTask(taskId: String): String? {
-        val task = DownloadTracker.findTask(taskId) ?: return null
-
-        try {
-            when (task.state) {
-                TorrentState.ADDING_TO_PROVIDER -> {
-                    val newId = if (task.torrent.type == TorrentType.MAGNET) {
-                        provider.addMagnet(task.torrent.uri, task.name)
-                    } else {
-                        contentResolver.openInputStream(task.torrent.uri.toUri())?.use {
-                            provider.addTorrent(it.readBytes(), task.name)
-                        } ?: throw Exception("Could not open torrent file")
-                    }
-                    DownloadTracker.replaceTask(
-                        task.id,
-                        task.copy(
-                            id = newId,
-                            providerId = newId,
-                            state = TorrentState.WAITING_FOR_FILE_SELECTION
-                        )
-                    )
-
-                    return newId
-                }
-
-                TorrentState.WAITING_FOR_FILE_SELECTION -> {
-                    val torrentInfo = provider.getTorrentInfo(task.id)
-                    updateTaskWithTorrentInfo(task.id, torrentInfo)
-
-                    if (torrentInfo.state == ProviderTorrentState.ERROR) {
-                        handleFailedProviderTask(task)
-
-                        return task.id
-                    }
-
-                    if (
-                        torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION
-                        || torrentInfo.state == ProviderTorrentState.DOWNLOADING
-                        || torrentInfo.state == ProviderTorrentState.COMPLETED
-                    ) {
-                        DownloadTracker.updateTask(task.id) {
-                            it.copy(state = TorrentState.SELECTING_FILES)
-                        }
-                    } else {
-                        // Still processing, check again later
-                        delay(2.seconds)
-                    }
-
-                    return task.id
-                }
-
-                TorrentState.SELECTING_FILES -> {
-                    val torrentInfo = provider.getTorrentInfo(task.id)
-                    val fileIdsToSelect = if (task.onlyDownloadBiggestFile) {
-                        val biggestFile = torrentInfo.files.maxBy { it.size }
-
-                        listOf(biggestFile.id)
-                    } else {
-                        torrentInfo.files.map { it.id }
-                    }
-                    try {
-                        val isSuccessful = provider.selectFiles(task.id, fileIdsToSelect)
-                        if (isSuccessful) {
-                            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
-
-                            return task.id
-                        }
-                    } catch (e: Exception) {
-                        DownloadTracker.updateTask(task.id) {
-                            it.copy(
-                                state = TorrentState.ERROR,
-                                errorMessage = "Failed to select files: ${e.message}"
-                            )
-                        }
-                    }
-                }
-
-                TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD -> {
-                    val torrentInfo = provider.getTorrentInfo(task.id)
-                    updateTaskWithTorrentInfo(task.id, torrentInfo)
-
-                    if (torrentInfo.state == ProviderTorrentState.ERROR) {
-                        handleFailedProviderTask(task)
-
-                        return task.id
-                    }
-
-                    if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
-                        val files = torrentInfo.links.map { DownloadFile(it) }
-                        DownloadTracker.updateTask(task.id) {
-                            it.copy(
-                                files = files,
-                                state = TorrentState.POPULATING_FILE_INFOS,
-                            )
-                        }
-                    } else {
-                        // Still downloading on provider, check again later
-                        delay(5.seconds)
-                    }
-
-                    return task.id
-                }
-
-                TorrentState.POPULATING_FILE_INFOS -> {
-                    for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
-                        updateFileInfo(task, file)
-                    }
-                    if (!provider.requiresLocalDownloads) {
-                        DownloadTracker.updateTaskFiles(task.id) {
-                            it.copy(
-                                unrestrictedLink = null,
-                                state = LocalDownloadState.COMPLETED,
-                                progress = 100,
-                                downloadedBytes = it.totalBytes,
-                            )
-                        }
-                    }
-
-                    val updatedTask = DownloadTracker.findTask(task.id) ?: return null
-
-                    DownloadTracker.updateTask(task.id) { currentTask ->
-                        currentTask.copy(
-                            files = updatedTask.files.sortedBy { it.fileName },
-                            state = TorrentState.DOWNLOADING_LOCALLY,
-                        )
-                    }
-
-                    return task.id
-                }
-
-                TorrentState.DOWNLOADING_LOCALLY -> {
-                    task.files.filter { it.state != LocalDownloadState.COMPLETED && it.state != LocalDownloadState.PAUSED }.forEach {
-                        enqueueDownload(DownloadWork(task.id, it))
-                    }
-
-                    var files = task.files
-                    while (files.any { it.state != LocalDownloadState.COMPLETED }) {
-                        delay(2.seconds)
-                        files = DownloadTracker.findTask(task.id)?.files ?: return null
-                    }
-
-                    // All done, continue to next state
-                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_PROVIDER) }
-
-                    return task.id
-                }
-
-                TorrentState.DELETING_FROM_PROVIDER -> {
-                    val isTorrentDeleted = provider.deleteTorrent(task.id)
-                    if (isTorrentDeleted) {
-                        task.removeTorrentFile()
-                        task.removeResumeData()
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
-                    } else {
-                        delay(5.seconds)
-                    }
-
-                    return task.id
-                }
-
-                TorrentState.CHECKING_FOR_ARCHIVES -> {
-                    if (task.files.any { it.filePath?.endsWith(".rar", true) == true }) {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.EXTRACTING_ARCHIVES) }
-                    } else {
-                        DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.MOVING_TO_DESTINATION) }
-                    }
-
-                    return task.id
-                }
-
-                TorrentState.EXTRACTING_ARCHIVES -> {
-                    val rarFile = task.files.firstOrNull { it.filePath?.endsWith(".rar", true) == true }
-                    if (rarFile?.filePath != null) {
-                        extractFile(rarFile.filePath).join()
-                        val rarFileDescriptor = File(rarFile.filePath)
-                        if (rarFileDescriptor.exists() && rarFileDescriptor.isFile) {
-                            rarFileDescriptor.delete()
-                        }
-                    }
-                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.MOVING_TO_DESTINATION) }
-
-                    return task.id
-                }
-
-                TorrentState.MOVING_TO_DESTINATION -> {
-                    val source = PathFactory.getScopedTemporaryDirectory(task.name)
-
-                    ensureTorrentIsFlattened(source)
-
-                    val destination = PathFactory.getScopedDestinationDirectory(task)
-                    destination.parentFile?.createDirectoryRecursivelyIfNotExists()
-
-                    if (destination.exists()) {
-                        // Directory merge, move files individually
-                        mergeDirectory(source, destination)
-                    } else {
-                        // No conflict, just move the whole directory
-                        source.renameTo(destination)
-                    }
-
-                    DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.COMPLETED) }
-
-                    return task.id
-                }
-
-                TorrentState.COMPLETED -> {
-                    if (task.notifyOnCompletion) {
-                        postNotification(
-                            "Download finished",
-                            "${task.name} finished downloading",
-                        )
-                    }
-
-                    DownloadTracker.removeTask(taskId)
-                    stopSelfIfIdle()
-                }
-                else -> { /* No action needed for COMPLETED or ERROR */ }
-            }
-        } catch (e: CancellationException) {
-            throw e // Let the coroutine be cancelled
-        } catch (e: BackgroundServiceStartNotAllowedException) {
-            throw e // Ignore
-        } catch (e: RateLimitExceededException) {
-            e.printStackTrace()
-
-            // Retry after 15 sec
-            delay(15.seconds)
-
-            return task.id
-        } catch (e: BandwidthLimitExceededException) {
-            e.printStackTrace()
-
-            // Retry after 1 min
-            delay(1.minutes)
-
-            return task.id
-        } catch (_: ResourceNotFoundException) {
-            removeTask(taskId)
-        } catch (e: Exception) {
-            DownloadTracker.updateTask(task.id) { it.copy(state = TorrentState.ERROR, errorMessage = e.message) }
-            e.printStackTrace()
-        }
-
-        return null
-    }
-
-    private suspend fun handleFailedProviderTask(task: DownloadTask) {
-        resetTorrent(task)
-        postNotification(
-            "Torrent has been restarted",
-            "Torrent ${task.name} encountered an error on provider and has been restarted"
-        )
-    }
-
-    private fun ensureTorrentIsFlattened(directory: File) {
-        var filesInRoot = directory.listFiles() ?: arrayOf()
-        while (filesInRoot.size == 1 && filesInRoot[0].isDirectory) {
-            mergeDirectory(filesInRoot[0], directory)
-            filesInRoot = directory.listFiles() ?: arrayOf()
-        }
-    }
-
-    private fun mergeDirectory(sourceDirectory: File, destinationDirectory: File) {
-        sourceDirectory.listFiles()?.forEach { file ->
-            if (!file.exists()) {
-                return@forEach
-            }
-            val destFile = File(destinationDirectory, file.name)
-            if (destFile.exists()) {
-                if (file.isDirectory && destFile.isDirectory) {
-                    return@forEach mergeDirectory(file, destFile)
-                } else {
-                    destFile.delete()
-                }
-            }
-            file.renameTo(destFile)
-        }
-        if (sourceDirectory.listFiles()?.size == 0) {
-            sourceDirectory.delete()
-        }
-    }
-
-    private suspend fun resetTorrent(task: DownloadTask) {
-        // Remove pending local downloads
-        downloadQueue.removeIf { it.taskId == task.id }
-
-        // Cancel active downloads
-        for (file in task.files) {
-            activeDownloads[file.link]?.cancel()
-            activeDownloads.remove(file.link)
-        }
-        // Tasks not added to provider yet don't need to get deleted from there
-        if (task.providerId != null) {
-            provider.deleteTorrent(task.providerId)
-        }
-        DownloadTracker.updateTask(task.id) {
-            it.copy(
-                providerId = null,
-                state = TorrentState.ADDING_TO_PROVIDER,
-                providerTorrentInfo = null,
-                files = listOf(),
-                errorMessage = null,
-            )
-        }
-    }
-
-    private fun handleFailedLocalDownload(work: DownloadWork, file: DownloadFile, errorMessage: String) {
-        updateFileState(work.taskId, file.link, LocalDownloadState.ERROR, errorMessage)
-        postNotification(
-            "Torrent download encountered an error",
-            "Torrent file ${file.fileName} encountered an error while downloading: $errorMessage"
-        )
-        serviceScope.launch(Dispatchers.IO) {
-            delay(5.seconds)
-            enqueueDownload(work.copy(file = file))
-        }
-    }
-
-    private fun extractFile(filePath: String): Job {
-        return serviceScope.launch(Dispatchers.IO) {
-            try {
-                val file = File(filePath)
-                val destination = file.parentFile
-                Junrar.extract(file, destination)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile) {
-        val unrestrictLinkResponse = provider.unrestrictLink(task.id, file.link)
-        val filePath = File(
-            PathFactory.getScopedTemporaryDirectory(task.name).absolutePath,
-            unrestrictLinkResponse.filename.cleanedForUseAsPath()
-        ).absolutePath
-
-        DownloadTracker.updateTaskFile(task.id, file.link) {
-            it.copy(
-                totalBytes = unrestrictLinkResponse.size,
-                filePath = filePath,
-                unrestrictedLink = unrestrictLinkResponse.downloadUrl,
-            )
-        }
-    }
-
-    private fun resumeDownloads() {
-        DownloadTracker
-            .getTasks()
-            .filter { it.location == TaskLocation.PROVIDER }
-            .forEach { provider.restoreTorrent(it.id) }
-
-        DownloadTracker.getTasks().forEach { task -> taskIdsToProcess.add(task.id) }
-    }
-
-    private fun enqueueDownload(work: DownloadWork) {
-        updateFileState(work.taskId, work.file.link, LocalDownloadState.PENDING)
-        downloadQueue.add(work)
-    }
-
-    private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
-        DownloadTracker.updateTask(taskId) {
-            it.copy(
-                name = if (it.name == it.torrent.uri) torrentInfo.name else it.name,
-                providerTorrentInfo = torrentInfo,
-            )
-        }
     }
 
     private fun postNotification(title: String, message: String) {
@@ -1047,6 +400,8 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        torrentStateMachine.stop()
+        localDownloadManager.stop()
         provider.stop()
         Container.clear()
         serviceJob.cancel()
@@ -1057,15 +412,15 @@ class DownloadService : Service() {
         private const val SERVICE_NOTIFICATION_CHANNEL_ID = "download_service"
         private const val GENERAL_NOTIFICATION_CHANNEL_ID = "general"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
-        const val ACTION_PAUSE_FILE = "ACTION_PAUSE_FILE"
-        const val ACTION_RESUME_FILE = "ACTION_RESUME_FILE"
-        const val ACTION_PAUSE_TASK = "ACTION_PAUSE_TASK"
+        const val ACTION_PAUSE_LOCAL_FILE_DOWNLOAD = "ACTION_PAUSE_LOCAL_FILE_DOWNLOAD"
+        const val ACTION_RESUME_LOCAL_FILE_DOWNLOAD = "ACTION_RESUME_LOCAL_FILE_DOWNLOAD"
+        const val ACTION_PAUSE_TASK_LOCAL_DOWNLOADS = "ACTION_PAUSE_TASK_LOCAL_DOWNLOADS"
         const val ACTION_PAUSE_TASK_ON_PROVIDER = "ACTION_PAUSE_TASK_ON_PROVIDER"
-        const val ACTION_RESUME_TASK = "ACTION_RESUME_TASK"
+        const val ACTION_RESUME_TASK_LOCAL_DOWNLOADS = "ACTION_RESUME_TASK_LOCAL_DOWNLOADS"
         const val ACTION_RESUME_TASK_ON_PROVIDER = "ACTION_RESUME_TASK_ON_PROVIDER"
-        const val ACTION_PAUSE_ALL = "ACTION_PAUSE_ALL"
+        const val ACTION_PAUSE_ALL_LOCAL_DOWNLOADS = "ACTION_PAUSE_ALL_LOCAL_DOWNLOADS"
         const val ACTION_PAUSE_ALL_ON_PROVIDER = "ACTION_PAUSE_ALL_ON_PROVIDER"
-        const val ACTION_RESUME_ALL = "ACTION_RESUME_ALL"
+        const val ACTION_RESUME_ALL_LOCAL_DOWNLOADS = "ACTION_RESUME_ALL_LOCAL_DOWNLOADS"
         const val ACTION_RESUME_ALL_ON_PROVIDER = "ACTION_RESUME_ALL_ON_PROVIDER"
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"

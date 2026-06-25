@@ -205,7 +205,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     if (isDownloading) {
                         IconButton(onClick = {
                             val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_TASK
+                                action = DownloadService.ACTION_PAUSE_TASK_LOCAL_DOWNLOADS
                                 putExtra(DownloadService.EXTRA_TASK_ID, task.id)
                             }
                             context.startService(intent)
@@ -215,7 +215,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     } else if (isPaused) {
                         IconButton(onClick = {
                             val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_TASK
+                                action = DownloadService.ACTION_RESUME_TASK_LOCAL_DOWNLOADS
                                 putExtra(DownloadService.EXTRA_TASK_ID, task.id)
                             }
                             context.startService(intent)
@@ -453,7 +453,7 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
             if (file.state == LocalDownloadState.PAUSED || file.state == LocalDownloadState.ERROR) {
                 IconButton(onClick = {
                     val intent = Intent(context, DownloadService::class.java).apply {
-                        action = DownloadService.ACTION_RESUME_FILE
+                        action = DownloadService.ACTION_RESUME_LOCAL_FILE_DOWNLOAD
                         putExtra(DownloadService.EXTRA_TASK_ID, task.id)
                         putExtra(DownloadService.EXTRA_FILE_LINK, file.link)
                     }
@@ -465,7 +465,7 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
             } else if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
                 IconButton(onClick = {
                     val intent = Intent(context, DownloadService::class.java).apply {
-                        action = DownloadService.ACTION_PAUSE_FILE
+                        action = DownloadService.ACTION_PAUSE_LOCAL_FILE_DOWNLOAD
                         putExtra(DownloadService.EXTRA_TASK_ID, task.id)
                         putExtra(DownloadService.EXTRA_FILE_LINK, file.link)
                     }
