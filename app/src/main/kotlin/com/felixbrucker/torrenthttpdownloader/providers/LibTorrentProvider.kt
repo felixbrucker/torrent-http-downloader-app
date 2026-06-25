@@ -55,7 +55,7 @@ class LibTorrentProvider(
     }
 
     private val sessionManager = SessionManager()
-    private val defaultSessionSettings = SessionSettings()
+    private val sessionSettings = SessionSettings()
 
     private var requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
     private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -109,15 +109,15 @@ class LibTorrentProvider(
     init {
         PathFactory.getResumeDataDirectory().createDirectoryRecursivelyIfNotExists()
 
-        if (defaultSessionSettings.useRandomPort) {
+        if (sessionSettings.useRandomPort) {
             val range = SessionSettings.randomRangePort
-            defaultSessionSettings.portRangeFirst = range.first
-            defaultSessionSettings.portRangeSecond = range.second
+            sessionSettings.portRangeFirst = range.first
+            sessionSettings.portRangeSecond = range.second
         }
-        defaultSessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
+        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
 
         val params = loadSessionParams()
-        params.settings = settingsToSettingsPack(defaultSessionSettings)
+        params.settings = settingsToSettingsPack(sessionSettings)
         sessionManager.addListener(libTorrentListener)
         sessionManager.start(params)
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -191,8 +191,8 @@ class LibTorrentProvider(
 
     private fun setPerTorrentSettings(torrentId: String) {
         val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
-        torrentHandle.swig().set_max_connections(defaultSessionSettings.connectionsLimitPerTorrent)
-        torrentHandle.swig().set_max_uploads(defaultSessionSettings.uploadsLimitPerTorrent)
+        torrentHandle.swig().set_max_connections(sessionSettings.connectionsLimitPerTorrent)
+        torrentHandle.swig().set_max_uploads(sessionSettings.uploadsLimitPerTorrent)
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
@@ -306,9 +306,8 @@ class LibTorrentProvider(
 
     override fun reloadSettings() {
         requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
-        defaultSessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
-        sessionManager.settings().activeDownloads(defaultSessionSettings.activeDownloads)
-        sessionManager.settings().activeLimit(defaultSessionSettings.activeDownloads + defaultSessionSettings.activeSeeds)
+        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
+        sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
     }
 
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
