@@ -163,6 +163,7 @@ fun AddTorrentConfigFields(
         "Musicolet",
         "tmp",
         "update",
+        "Quick Share",
     )
 
     LifecycleResumeEffect(Unit) {
