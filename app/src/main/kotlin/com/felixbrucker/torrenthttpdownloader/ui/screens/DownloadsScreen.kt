@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,7 +39,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.felixbrucker.torrenthttpdownloader.ui.DownloadItem
 import kotlinx.coroutines.launch
@@ -57,6 +60,8 @@ fun DownloadsScreen(
     navigator: Navigator,
 ) {
     val context = LocalContext.current
+    val windowInfo = LocalWindowInfo.current
+    val isNarrowScreen = windowInfo.containerSize.width.dp < 1400.dp
     val tasks by DownloadTracker.tasks.collectAsState()
     val unreadRssCount by DownloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
 
@@ -111,75 +116,92 @@ fun DownloadsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.app_name),
-                            maxLines = 1
-                        )
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            DownloadStatsBar(tasks = tasks)
-                        }
-                    }
-                },
-                actions = {
-                    if (anyPaused || anyPausedOnProvider) {
-                        IconButton(onClick = {
-                            context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
-                            })
-                            context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
-                            })
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
-                        }
-                    }
-                    if (anyDownloading || anyDownloadingOnProvider) {
-                        IconButton(onClick = {
-                            context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
-                            })
-                            context.startService(Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
-                            })
-                        }) {
-                            Icon(Icons.Default.Pause, contentDescription = "Pause All")
-                        }
-                    }
-
-                    Box {
-                        IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
-                            Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
-                        }
-                        if (unreadRssCount > 0) {
-                            Badge(
-                                modifier = Modifier.align(Alignment.TopEnd),
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
+            Column {
+                TopAppBar(
+                    title = {
+                        if (isNarrowScreen) {
+                            Text(
+                                text = stringResource(id = R.string.app_name),
+                                maxLines = 1
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(unreadRssCount.toString())
+                                Text(
+                                    text = stringResource(id = R.string.app_name),
+                                    maxLines = 1
+                                )
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    DownloadStatsBar(tasks = tasks)
+                                }
                             }
                         }
-                    }
+                    },
+                    actions = {
+                        if (anyPaused || anyPausedOnProvider) {
+                            IconButton(onClick = {
+                                context.startService(Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
+                                })
+                                context.startService(Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
+                                })
+                            }) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
+                            }
+                        }
+                        if (anyDownloading || anyDownloadingOnProvider) {
+                            IconButton(onClick = {
+                                context.startService(Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
+                                })
+                                context.startService(Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
+                                })
+                            }) {
+                                Icon(Icons.Default.Pause, contentDescription = "Pause All")
+                            }
+                        }
 
-                    IconButton(onClick = {
-                        navigator.navigate(NavRoute.Settings)
-                    }) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = stringResource(id = R.string.action_settings)
-                        )
+                        Box {
+                            IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
+                                Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
+                            }
+                            if (unreadRssCount > 0) {
+                                Badge(
+                                    modifier = Modifier.align(Alignment.TopEnd),
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ) {
+                                    Text(unreadRssCount.toString())
+                                }
+                            }
+                        }
+
+                        IconButton(onClick = {
+                            navigator.navigate(NavRoute.Settings)
+                        }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = stringResource(id = R.string.action_settings)
+                            )
+                        }
+                    }
+                )
+                if (isNarrowScreen) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DownloadStatsBar(tasks = tasks)
                     }
                 }
-            )
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {

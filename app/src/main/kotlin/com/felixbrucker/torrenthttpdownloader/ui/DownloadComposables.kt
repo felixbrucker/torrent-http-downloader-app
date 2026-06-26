@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -88,6 +89,72 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
 
+    val actions: @Composable () -> Unit = {
+        if (task.location == TaskLocation.PROVIDER && provider?.supportsPauseResume == true) {
+            if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
+                IconButton(onClick = {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_PAUSE_TASK_ON_PROVIDER
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                    }
+                    context.startService(intent)
+                }) {
+                    Icon(Icons.Default.Pause, contentDescription = "Pause")
+                }
+            } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
+                IconButton(onClick = {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_RESUME_TASK_ON_PROVIDER
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                    }
+                    context.startService(intent)
+                }) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                }
+            }
+        }
+
+        if (task.state == TorrentState.DOWNLOADING_LOCALLY) {
+            if (isDownloading) {
+                IconButton(onClick = {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_PAUSE_TASK_LOCAL_DOWNLOADS
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                    }
+                    context.startService(intent)
+                }) {
+                    Icon(Icons.Default.Pause, contentDescription = "Pause")
+                }
+            } else if (isPaused) {
+                IconButton(onClick = {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_RESUME_TASK_LOCAL_DOWNLOADS
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                    }
+                    context.startService(intent)
+                }) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                }
+            }
+        }
+
+        if (task.state == TorrentState.ERROR) {
+            IconButton(onClick = {
+                val intent = Intent(context, DownloadService::class.java).apply {
+                    action = ACTION_RESTART_TASK
+                    putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                }
+                context.startService(intent)
+            }) {
+                Icon(Icons.Default.Replay, contentDescription = "Restart")
+            }
+        }
+
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Default.Delete, contentDescription = "Remove")
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -102,161 +169,129 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        BoxWithConstraints {
+            val isNarrow = maxWidth < 600.dp
+            Column(
+                modifier = Modifier.padding(16.dp)
             ) {
-                StateIcon(state = task.state)
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = task.name, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val animatedProgress by animateFloatAsState(
-                            targetValue = task.overallProgress / 100f,
-                            animationSpec = tween(durationMillis = 1000),
-                            label = "overall progress"
-                        )
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier.weight(1f),
-                            drawStopIndicator = {}
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!isNarrow) {
+                        StateIcon(state = task.state)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${task.overallProgress}%",
-                            style = MaterialTheme.typography.bodySmall
-                        )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        StatItem(icon = Icons.Default.Info, text = task.state.name.asStateText())
-                        if (task.location == TaskLocation.PROVIDER && task.providerTorrentInfo?.status != null) {
-                            StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerTorrentInfo.status.asStateText()}")
-                        }
-                        if (task.overallDownloadSpeed > 0) {
-                            StatItem(
-                                icon = downloading,
-                                text = Formatter.formatSpeed(task.overallDownloadSpeed)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isNarrow) {
+                                StateIcon(state = task.state)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = task.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
                             )
                         }
-                        if (task.providerUploadSpeed > 0) {
-                            StatItem(
-                                icon = arrow_upload_progress,
-                                text = Formatter.formatSpeed(task.providerUploadSpeed)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val animatedProgress by animateFloatAsState(
+                                targetValue = task.overallProgress / 100f,
+                                animationSpec = tween(durationMillis = 1000),
+                                label = "overall progress"
+                            )
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier.weight(1f),
+                                drawStopIndicator = {}
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${task.overallProgress}%",
+                                style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        StatItem(
-                            icon = Icons.Default.DataUsage,
-                            text = "${Formatter.formatBytes(task.downloadedBytes)} / ${Formatter.formatBytes(task.totalBytes)}"
-                        )
-                        if (task.overallDownloadSpeed > 0) {
-                            val remainingBytes = task.totalBytes - task.downloadedBytes
-                            val remainingTime =
-                                if (task.overallDownloadSpeed > 0) remainingBytes / task.overallDownloadSpeed else 0
-                            StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
-                        }
-                        if (task.providerTorrentInfo?.peers != null && task.providerTorrentInfo.totalPeers != null) {
-                            StatItem(icon = graph_3, text = "${task.providerTorrentInfo.peers}/${task.providerTorrentInfo.totalPeers}")
-                        }
-                    }
-                    if (task.errorMessage != null) {
-                        Text(
-                            text = "Error: ${task.errorMessage}",
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-
-                if (task.location == TaskLocation.PROVIDER && provider?.supportsPauseResume == true) {
-                    if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_TASK_ON_PROVIDER
-                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            StatItem(icon = Icons.Default.Info, text = task.state.name.asStateText())
+                            if (task.location == TaskLocation.PROVIDER && task.providerTorrentInfo?.status != null) {
+                                StatItem(icon = Icons.Default.Info, text = "Provider: ${task.providerTorrentInfo.status.asStateText()}")
                             }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.Pause, contentDescription = "Pause")
-                        }
-                    } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_TASK_ON_PROVIDER
-                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                            if (task.overallDownloadSpeed > 0) {
+                                StatItem(
+                                    icon = downloading,
+                                    text = Formatter.formatSpeed(task.overallDownloadSpeed)
+                                )
                             }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                            if (task.providerUploadSpeed > 0) {
+                                StatItem(
+                                    icon = arrow_upload_progress,
+                                    text = Formatter.formatSpeed(task.providerUploadSpeed)
+                                )
+                            }
+                            StatItem(
+                                icon = Icons.Default.DataUsage,
+                                text = "${Formatter.formatBytes(task.downloadedBytes)} / ${Formatter.formatBytes(task.totalBytes)}"
+                            )
+                            if (task.overallDownloadSpeed > 0) {
+                                val remainingBytes = task.totalBytes - task.downloadedBytes
+                                val remainingTime =
+                                    if (task.overallDownloadSpeed > 0) remainingBytes / task.overallDownloadSpeed else 0
+                                StatItem(icon = Icons.Default.Timer, text = Formatter.formatTime(remainingTime))
+                            }
+                            if (task.providerTorrentInfo?.peers != null && task.providerTorrentInfo.totalPeers != null) {
+                                StatItem(icon = graph_3, text = "${task.providerTorrentInfo.peers}/${task.providerTorrentInfo.totalPeers}")
+                            }
+                        }
+                        if (task.errorMessage != null) {
+                            Text(
+                                text = "Error: ${task.errorMessage}",
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                        if (isNarrow) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                actions()
+                                if (isExpandable) {
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = if (isExpanded) "Collapse" else "Expand"
+                                    )
+                                }
+                            }
                         }
                     }
-
-                }
-
-                if (task.state == TorrentState.DOWNLOADING_LOCALLY) {
-                    if (isDownloading) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_PAUSE_TASK_LOCAL_DOWNLOADS
-                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
-                            }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.Pause, contentDescription = "Pause")
-                        }
-                    } else if (isPaused) {
-                        IconButton(onClick = {
-                            val intent = Intent(context, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_RESUME_TASK_LOCAL_DOWNLOADS
-                                putExtra(DownloadService.EXTRA_TASK_ID, task.id)
-                            }
-                            context.startService(intent)
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
+                    if (!isNarrow) {
+                        Spacer(modifier = Modifier.width(16.dp))
+                        actions()
+                        if (isExpandable) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isExpanded) "Collapse" else "Expand"
+                            )
                         }
                     }
                 }
 
-                if (task.state == TorrentState.ERROR) {
-                    IconButton(onClick = {
-                        val intent = Intent(context, DownloadService::class.java).apply {
-                            action = ACTION_RESTART_TASK
-                            putExtra(DownloadService.EXTRA_TASK_ID, task.id)
-                        }
-                        context.startService(intent)
-                    }) {
-                        Icon(Icons.Default.Replay, contentDescription = "Restart")
-                    }
-                }
-
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.Delete, contentDescription = "Remove")
-                }
-                if (isExpandable) {
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand"
-                    )
-                }
-            }
-
-            if (isExpandable && isExpanded) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    if (isLocal) {
-                        unfinishedLocalDownloads.forEach { file ->
-                            SubDownloadItem(task = task, file = file)
-                        }
-                    } else {
-                        task.providerTorrentInfo?.files?.forEach { file ->
-                            ProviderTorrentFileItem(file = file)
+                if (isExpandable && isExpanded) {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        if (isLocal) {
+                            unfinishedLocalDownloads.forEach { file ->
+                                SubDownloadItem(task = task, file = file)
+                            }
+                        } else {
+                            task.providerTorrentInfo?.files?.forEach { file ->
+                                ProviderTorrentFileItem(file = file)
+                            }
                         }
                     }
                 }
