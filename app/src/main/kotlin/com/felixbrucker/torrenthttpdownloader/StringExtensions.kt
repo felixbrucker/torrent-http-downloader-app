@@ -5,7 +5,7 @@ import java.io.File
 import java.security.MessageDigest
 
 fun String.cleanedForUseAsPath(): String {
-    return this.replace(":", " ")
+    return this.replace(":", " ").replace("|", " ")
 }
 
 fun String.asStateText(): String {

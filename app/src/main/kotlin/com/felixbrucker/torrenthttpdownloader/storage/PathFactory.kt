@@ -25,7 +25,7 @@ class PathFactory {
             )
         }
         fun getScopedTemporaryDirectory(taskName: String): File {
-            val subDirName = if (taskName.length > 64) {
+            val subDirName = if (taskName.length > 127) {
                 taskName.hash()
             } else {
                 taskName.cleanedForUseAsPath()
@@ -46,7 +46,12 @@ class PathFactory {
             }
 
             return if (task.createSubfolderByName) {
-                File(baseDir, task.name.cleanedForUseAsPath())
+                val subDirName = if (task.name.length > 127) {
+                    task.name.hash()
+                } else {
+                    task.name.cleanedForUseAsPath()
+                }
+                File(baseDir, subDirName)
             } else {
                 baseDir
             }
