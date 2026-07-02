@@ -113,20 +113,28 @@ class TorrentStateMachine(
         }
     }
 
-    suspend fun removeTask(taskId: String) {
+    suspend fun removeTask(
+        taskId: String,
+        deleteFiles: Boolean = true,
+        deleteTorrentFile: Boolean = true
+    ) {
         val task = DownloadTracker.findTask(taskId) ?: return
 
         localDownloadManager.removeTaskFromQueues(task)
 
-        // Explicitly make sure to delete all files
-        task.deleteFiles()
-        task.removeTorrentFile()
-        task.removeResumeData()
-        task.removeScopedTemporaryDirectory()
+        if (deleteFiles) {
+            task.deleteFiles()
+            task.removeScopedTemporaryDirectory()
+            task.removeResumeData()
+        }
+
+        if (deleteTorrentFile) {
+            task.removeTorrentFile()
+        }
 
         // If the task is on Provider, delete it there
         if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
-            provider.deleteTorrent(task.providerId, deleteFiles = true)
+            provider.deleteTorrent(task.providerId, deleteFiles = deleteFiles)
         }
 
         DownloadTracker.removeTask(taskId)

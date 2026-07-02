@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -17,13 +18,17 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -51,7 +56,9 @@ import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.NavRoute
 import com.felixbrucker.torrenthttpdownloader.Navigator
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +76,10 @@ fun DownloadsScreen(
     val coroutineScope = rememberCoroutineScope()
     var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
     var draggingOffset by remember { mutableFloatStateOf(0f) }
+
+    var taskToRemove by remember { mutableStateOf<DownloadTask?>(null) }
+    var deleteFiles by remember { mutableStateOf(true) }
+    var deleteTorrentFile by remember { mutableStateOf(true) }
 
     fun onDrag(dragAmount: Offset) {
         draggingOffset += dragAmount.y
@@ -106,10 +117,16 @@ fun DownloadsScreen(
     val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
     val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
 
-    fun removeTask(taskId: String) {
+    fun removeTask(
+        taskId: String,
+        deleteFiles: Boolean,
+        deleteTorrentFile: Boolean
+    ) {
         val intent = Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_REMOVE_TASK
             putExtra(DownloadService.EXTRA_TASK_ID, taskId)
+            putExtra(DownloadService.EXTRA_DELETE_FILES, deleteFiles)
+            putExtra(DownloadService.EXTRA_DELETE_TORRENT_FILE, deleteTorrentFile)
         }
         context.startService(intent)
     }
@@ -249,10 +266,70 @@ fun DownloadsScreen(
                                 shadowElevation = if (isDragging) 8f else 0f
                             }
                     ) {
-                        DownloadItem(task = task, onRemove = { removeTask(task.id) })
+                        DownloadItem(task = task, onRemove = {
+                            taskToRemove = task
+                            deleteFiles = true
+                            deleteTorrentFile = true
+                        })
                     }
                 }
             }
+        }
+
+        taskToRemove?.let { task ->
+            AlertDialog(
+                onDismissRequest = { taskToRemove = null },
+                title = { Text("Remove task") },
+                text = {
+                    Column {
+                        Text("Are you sure you want to remove ${task.name}?")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { deleteFiles = !deleteFiles }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Checkbox(checked = deleteFiles, onCheckedChange = { deleteFiles = it })
+                            Text("Delete temporary files")
+                        }
+                        if (task.torrent.type == TorrentType.TORRENT_FILE) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { deleteTorrentFile = !deleteTorrentFile }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = deleteTorrentFile,
+                                    onCheckedChange = { deleteTorrentFile = it })
+                                Text("Delete torrent file")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            removeTask(
+                                task.id,
+                                deleteFiles = deleteFiles,
+                                deleteTorrentFile = deleteTorrentFile
+                            )
+                            taskToRemove = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Remove")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { taskToRemove = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

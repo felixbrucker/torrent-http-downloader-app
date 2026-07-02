@@ -260,7 +260,13 @@ class DownloadService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) { removeTask(intent.getStringExtra(EXTRA_TASK_ID)) }
+            ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) {
+                removeTask(
+                    intent.getStringExtra(EXTRA_TASK_ID),
+                    deleteFiles = intent.getBooleanExtra(EXTRA_DELETE_FILES, true),
+                    deleteTorrentFile = intent.getBooleanExtra(EXTRA_DELETE_TORRENT_FILE, true)
+                )
+            }
             ACTION_PAUSE_LOCAL_FILE_DOWNLOAD -> pauseLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_RESUME_LOCAL_FILE_DOWNLOAD -> resumeLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
             ACTION_PAUSE_TASK_LOCAL_DOWNLOADS -> pauseTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
@@ -376,9 +382,17 @@ class DownloadService : Service() {
         torrentStateMachine.addTask(task)
     }
 
-    private suspend fun removeTask(taskId: String?) {
+    private suspend fun removeTask(
+        taskId: String?,
+        deleteFiles: Boolean,
+        deleteTorrentFile: Boolean
+    ) {
         if (taskId == null) return
-        torrentStateMachine.removeTask(taskId)
+        torrentStateMachine.removeTask(
+            taskId,
+            deleteFiles = deleteFiles,
+            deleteTorrentFile = deleteTorrentFile
+        )
 
         stopSelfIfIdle()
     }
@@ -435,5 +449,7 @@ class DownloadService : Service() {
         const val EXTRA_NOTIFY_ON_COMPLETION = "EXTRA_NOTIFY_ON_COMPLETION"
         const val EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE = "EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
+        const val EXTRA_DELETE_FILES = "EXTRA_DELETE_FILES"
+        const val EXTRA_DELETE_TORRENT_FILE = "EXTRA_DELETE_TORRENT_FILE"
     }
 }
