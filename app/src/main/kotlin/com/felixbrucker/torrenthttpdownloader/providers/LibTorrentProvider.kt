@@ -156,7 +156,8 @@ class LibTorrentProvider(
         val p = libtorrent.read_resume_data(n, ec)
         require(ec.value() == 0) { "Unable to read the resume data: " + ec.message() }
 
-        // Disable force saving resume data on add
+        // Disable force saving resume data on add, the flag will revert to true once new data is
+        // downloaded automatically.
         p.flags = p.getFlags().and_(TorrentFlags.NEED_SAVE_RESUME.inv())
 
         sessionManager.swig().async_add_torrent(p)
