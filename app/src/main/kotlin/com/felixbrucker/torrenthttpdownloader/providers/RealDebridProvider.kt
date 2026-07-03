@@ -29,7 +29,7 @@ class RealDebridProvider(
     private var apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
     private val auth: String get() = "Bearer $apiToken"
 
-    override fun restoreTorrent(id: String) {
+    override suspend fun restoreTorrent(id: String) {
         // Nothing to do
     }
 

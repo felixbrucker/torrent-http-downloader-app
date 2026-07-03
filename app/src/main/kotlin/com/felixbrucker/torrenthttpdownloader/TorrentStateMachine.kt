@@ -43,8 +43,7 @@ class TorrentStateMachine(
                 }
             }
         }
-
-        resumeDownloads()
+        scope.launch(Dispatchers.IO) { resumeDownloads() }
     }
 
     fun stop() {
@@ -156,7 +155,7 @@ class TorrentStateMachine(
         }
     }
 
-    private fun resumeDownloads() {
+    private suspend fun resumeDownloads() {
         DownloadTracker
             .getTasks()
             .filter { it.location == TaskLocation.PROVIDER }

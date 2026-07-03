@@ -9,6 +9,7 @@ import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import kotlinx.coroutines.delay
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.Priority
@@ -33,6 +34,7 @@ import org.libtorrent4j.swig.torrent_flags_t
 import org.libtorrent4j.swig.torrent_handle
 import java.io.File
 import java.util.Random
+import kotlin.time.Duration.Companion.milliseconds
 
 
 class LibTorrentProvider(
@@ -137,7 +139,7 @@ class LibTorrentProvider(
         connectivityManager.unregisterNetworkCallback(networkCallback)
     }
 
-    override fun restoreTorrent(id: String) {
+    override suspend fun restoreTorrent(id: String) {
         val resumeData = readResumeData(id) ?: return
         val ec = error_code()
         val buffer = Vectors.bytes2byte_vector(resumeData)
@@ -154,6 +156,7 @@ class LibTorrentProvider(
         p.flags = p.getFlags().and_(TorrentFlags.NEED_SAVE_RESUME.inv())
 
         sessionManager.swig().async_add_torrent(p)
+        delay(500.milliseconds)
     }
 
     override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
