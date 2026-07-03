@@ -398,9 +398,9 @@ class TorrentStateMachine(
                 else -> { /* No action needed */ }
             }
         } catch (e: CancellationException) {
-            throw e
+            throw e // Do not update task state for this exception
         } catch (e: BackgroundServiceStartNotAllowedException) {
-            throw e // Ignore
+            throw e // Do not update task state for this exception
         } catch (e: RateLimitExceededException) {
             e.printStackTrace()
 
