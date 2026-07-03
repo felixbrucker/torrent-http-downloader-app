@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -75,6 +77,10 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                var hasAllFilesPermission by remember {
+                    mutableStateOf(Environment.isExternalStorageManager())
+                }
+
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission(),
                     onResult = { isGranted ->
@@ -82,9 +88,21 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
-                LaunchedEffect(Unit) {
+                val allFilesPermissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult(),
+                    onResult = {
+                        hasAllFilesPermission = Environment.isExternalStorageManager()
+                    }
+                )
+
+                LaunchedEffect(hasNotificationPermission, hasAllFilesPermission) {
                     if (!hasNotificationPermission) {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else if (!hasAllFilesPermission) {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = "package:${context.packageName}".toUri()
+                        }
+                        allFilesPermissionLauncher.launch(intent)
                     }
                 }
 
