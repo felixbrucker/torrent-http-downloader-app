@@ -187,7 +187,12 @@ class TorrentStateMachine(
                     val newId = if (task.torrent.type == TorrentType.MAGNET) {
                         provider.addMagnet(task.torrent.uri, task.name)
                     } else {
-                        contentResolver.openInputStream(task.torrent.uri.toUri())?.use {
+                        val inputStream = try {
+                            contentResolver.openInputStream(task.torrent.uri.toUri())
+                        } catch (_: Exception) {
+                            contentResolver.openInputStream(task.torrent.uri.asFile().toUri())
+                        }
+                        inputStream?.use {
                             provider.addTorrent(it.readBytes(), task.name)
                         } ?: throw Exception("Could not open torrent file")
                     }
