@@ -78,6 +78,7 @@ class LibTorrentProvider(
                 AlertType.PIECE_FINISHED.swig(),
                 AlertType.METADATA_RECEIVED.swig(),
                 AlertType.TORRENT_PAUSED.swig(),
+                AlertType.ADD_TORRENT.swig(),
             )
         }
 
@@ -101,6 +102,9 @@ class LibTorrentProvider(
                     triggerResumeDataSaveIfNecessary(id, handle, forceSave = true)
                 }
                 AlertType.TORRENT_PAUSED -> {
+                    triggerResumeDataSaveIfNecessary(id, handle, forceSave = true)
+                }
+                AlertType.ADD_TORRENT -> {
                     triggerResumeDataSaveIfNecessary(id, handle, forceSave = true)
                 }
                 else -> return
