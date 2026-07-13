@@ -21,6 +21,7 @@ import com.felixbrucker.torrenthttpdownloader.network.RssParser
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     private val httpClient = OkHttpClient.Builder()
@@ -67,7 +68,9 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
             if (newlyDiscoveredItems.isNotEmpty()) {
                 DownloadTracker.updateRssFeed(feed.id) { currentFeed ->
-                    val updatedItems = (newlyDiscoveredItems + currentFeed.items).distinctBy { it.id }
+                    val updatedItems = (newlyDiscoveredItems + currentFeed.items)
+                        .distinctBy { it.id }
+                        .take(max(newItems.size, 25))
                     currentFeed.copy(
                         items = updatedItems,
                         lastCheck = System.currentTimeMillis()
