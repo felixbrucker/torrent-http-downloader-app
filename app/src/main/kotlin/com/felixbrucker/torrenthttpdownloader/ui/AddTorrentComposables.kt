@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -19,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,6 +58,8 @@ fun AddTorrentConfigFields(
 ) {
     var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var directoryToDelete by remember { mutableStateOf<String?>(null) }
+    var isEditingDirectories by remember { mutableStateOf(false) }
 
     fun loadSubDirectories() {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
@@ -70,10 +77,23 @@ fun AddTorrentConfigFields(
         }
     }
 
-    Text(
-        text = stringResource(id = R.string.select_destination),
-        style = MaterialTheme.typography.titleMedium
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = stringResource(id = R.string.select_destination),
+            style = MaterialTheme.typography.titleMedium
+        )
+        IconButton(onClick = { isEditingDirectories = !isEditingDirectories }) {
+            Icon(
+                imageVector = if (isEditingDirectories) Icons.Default.Check else Icons.Default.Edit,
+                contentDescription = if (isEditingDirectories) "Done" else "Edit",
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
     Spacer(modifier = Modifier.height(8.dp))
 
     FlowRow(
@@ -86,18 +106,33 @@ fun AddTorrentConfigFields(
                 onClick = {
                     onSubdirectorySelected(if (selectedSubDir == dir) null else dir)
                 },
-                label = { Text(dir) }
+                label = { Text(dir) },
+                trailingIcon = if (isEditingDirectories) {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Delete",
+                            modifier = Modifier
+                                .size(FilterChipDefaults.IconSize)
+                                .clickable {
+                                    directoryToDelete = dir
+                                }
+                        )
+                    }
+                } else null
             )
         }
-        FilterChip(
-            selected = false,
-            onClick = { showCreateFolderDialog = true },
-            label = { Icon(Icons.Default.Add, contentDescription = null) },
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+        if (isEditingDirectories) {
+            FilterChip(
+                selected = false,
+                onClick = { showCreateFolderDialog = true },
+                label = { Icon(Icons.Default.Add, contentDescription = null) },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             )
-        )
+        }
     }
 
     if (showCreateFolderDialog) {
@@ -110,6 +145,37 @@ fun AddTorrentConfigFields(
                 onSubdirectorySelected(newPath)
                 onCreateSubfolderByNameChanged(false)
                 showCreateFolderDialog = false
+            }
+        )
+    }
+
+    if (directoryToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { directoryToDelete = null },
+            title = { Text("Delete Subdirectory") },
+            text = { Text("Are you sure you want to delete '$directoryToDelete' and all its contents?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        val dirFile = File(downloadsDir, directoryToDelete!!)
+                        if (dirFile.exists()) {
+                            dirFile.deleteRecursively()
+                            if (selectedSubDir == directoryToDelete) {
+                                onSubdirectorySelected(null)
+                            }
+                            loadSubDirectories()
+                        }
+                        directoryToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { directoryToDelete = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }
