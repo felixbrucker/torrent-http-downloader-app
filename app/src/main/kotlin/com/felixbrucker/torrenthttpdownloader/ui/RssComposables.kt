@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
 import java.text.SimpleDateFormat
@@ -374,6 +375,7 @@ fun EditRssFeedDialog(
                     onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                     onNotifyOnCompletionChanged = { notifyOnCompletion = it },
                     onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
+                    suggestedSubDirectoryName = name.cleanedForUseAsPath(),
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { autoDownload = !autoDownload }) {

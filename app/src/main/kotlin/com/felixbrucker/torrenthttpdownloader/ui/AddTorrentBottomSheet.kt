@@ -1,12 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.ui
 
 import android.content.Context
-import android.os.Environment
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,9 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -34,9 +29,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.asFile
+import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.deleteIfExists
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 
@@ -107,6 +102,7 @@ fun AddTorrentBottomSheet(
                 onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                 onNotifyOnCompletionChanged = { notifyOnCompletion = it },
                 onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
+                suggestedSubDirectoryName = config.name?.cleanedForUseAsPath()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -141,108 +137,5 @@ fun AddTorrentBottomSheet(
             }
             Spacer(modifier = Modifier.height(32.dp))
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-fun AddTorrentConfigFields(
-    selectedSubDir: String?,
-    createSubfolderByName: Boolean,
-    notifyOnCompletion: Boolean,
-    onlyDownloadBiggestFile: Boolean,
-    onSubdirectorySelected: (String?) -> Unit,
-    onCreateSubfolderByNameChanged: (Boolean) -> Unit,
-    onNotifyOnCompletionChanged: (Boolean) -> Unit,
-    onOnlyDownloadBiggestFileChanged: (Boolean) -> Unit,
-) {
-    var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
-
-    val commonIgnoredRootDirectories = setOf(
-        "Adobe Acrobat",
-        "Musicolet",
-        "tmp",
-        "update",
-        "Quick Share",
-    )
-
-    LifecycleResumeEffect(Unit) {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val subDirs = downloadsDir.listFiles { file ->
-            file.isDirectory
-                    && !file.name.startsWith(".")
-                    && !commonIgnoredRootDirectories.contains(file.name)
-        }
-        val subDirsWithSubSubDirsStrings = subDirs
-            ?.flatMap { subDir ->
-                listOf<String>(subDir.name).plus(
-                    subDir
-                        .listFiles { it.isDirectory && !it.name.startsWith(".") }
-                        ?.map { "${subDir.name}/${it.name}" }
-                        ?: emptyList()
-                )
-            } ?: emptyList()
-
-        subDirectories = subDirsWithSubSubDirsStrings.sorted()
-
-        onPauseOrDispose {
-            // Nothing to do
-        }
-    }
-
-    Text(
-        text = stringResource(id = R.string.select_destination),
-        style = MaterialTheme.typography.titleMedium
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        subDirectories.forEach { dir ->
-            FilterChip(
-                selected = selectedSubDir == dir,
-                onClick = {
-                    onSubdirectorySelected(if (selectedSubDir == dir) null else dir)
-                },
-                label = { Text(dir) }
-            )
-        }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onCreateSubfolderByNameChanged(!createSubfolderByName) }
-    ) {
-        Checkbox(
-            checked = createSubfolderByName,
-            onCheckedChange = { onCreateSubfolderByNameChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.create_subfolder))
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onOnlyDownloadBiggestFileChanged(!onlyDownloadBiggestFile) }
-    ) {
-        Checkbox(
-            checked = onlyDownloadBiggestFile,
-            onCheckedChange = { onOnlyDownloadBiggestFileChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.only_download_biggest_file))
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onNotifyOnCompletionChanged(!notifyOnCompletion) }
-    ) {
-        Checkbox(
-            checked = notifyOnCompletion,
-            onCheckedChange = { onNotifyOnCompletionChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.notify_on_completion))
     }
 }

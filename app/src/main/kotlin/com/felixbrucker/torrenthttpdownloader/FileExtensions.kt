@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import android.os.Environment
 import com.github.junrar.Junrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,4 +81,35 @@ suspend fun File.tryToExtractArchiveInPlace(
     }
 
     return false
+}
+
+fun File.listSubDirectories(excludeRootDirectories: Boolean = false): List<File> {
+    val commonIgnoredRootDirectories = setOf(
+        "Adobe Acrobat",
+        "Musicolet",
+        "tmp",
+        "update",
+        "Quick Share",
+    )
+
+    return listFiles { file ->
+        file.isDirectory
+                && !file.name.startsWith(".")
+                && (!excludeRootDirectories || !commonIgnoredRootDirectories.contains(file.name))
+    }?.asList() ?: throw Exception("File is not a directory")
+}
+
+fun File.listSubdirectoriesAsRelativeStrings(excludeRootDirectories: Boolean = false, depth: Int): List<String> {
+    val rootSubDirs = listSubDirectories(excludeRootDirectories = excludeRootDirectories)
+    var currentDepthDirectories = rootSubDirs
+    val allSubDirectories = rootSubDirs.toMutableList()
+    for (currentDepth in 2..depth) {
+        val currentDepthSubDirectories = currentDepthDirectories.flatMap { it.listSubDirectories() }
+        allSubDirectories += currentDepthSubDirectories
+        currentDepthDirectories = currentDepthSubDirectories
+    }
+
+    return allSubDirectories
+        .map { it.toRelativeString(this) }
+        .sorted()
 }

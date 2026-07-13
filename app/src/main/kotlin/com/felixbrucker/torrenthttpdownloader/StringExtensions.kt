@@ -4,8 +4,18 @@ import androidx.core.net.toUri
 import java.io.File
 import java.security.MessageDigest
 
+val INVALID_CHARACTERS_FOR_PATH = listOf(
+    ":",
+    "|",
+)
+
 fun String.cleanedForUseAsPath(): String {
-    return this.replace(":", " ").replace("|", " ")
+    var result = this
+    for (invalidCharacter in INVALID_CHARACTERS_FOR_PATH) {
+        result = result.replace(invalidCharacter, " ")
+    }
+
+    return result
 }
 
 fun String.asStateText(): String {
