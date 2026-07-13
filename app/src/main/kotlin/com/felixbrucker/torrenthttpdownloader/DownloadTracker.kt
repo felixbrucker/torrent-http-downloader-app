@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.content.Context
 import androidx.core.content.edit
+import com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp.Companion.getContext
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
@@ -30,18 +31,26 @@ object DownloadTracker {
     val totalUnreadRssCount = rssFeeds.map { feeds -> feeds.sumOf { it.unreadCount } }
 
     private val gson = Gson()
-    private lateinit var appContext: Context
 
-    fun init(context: Context) {
-        appContext = context.applicationContext
-        val sharedPreferences = appContext.getSharedPreferences("downloads", Context.MODE_PRIVATE)
+    fun init() {
+        val sharedPreferences = getContext().getSharedPreferences("downloads", Context.MODE_PRIVATE)
         val json = sharedPreferences.getString("tasks", null)
         if (json != null) {
             val type = object : TypeToken<List<DownloadTask>>() {}.type
             _tasks.value = gson.fromJson(json, type)
         }
 
-        val rssJson = sharedPreferences.getString("rss_feeds", null)
+        val rssJsonLegacy = sharedPreferences.getString("rss_feeds", null)
+        if (rssJsonLegacy != null) {
+            // Migrate legacy
+            val type = object : TypeToken<List<RssFeed>>() {}.type
+            _rssFeeds.value = gson.fromJson(rssJsonLegacy, type)
+            sharedPreferences.edit { remove("rss_feeds") }
+            saveRssFeeds()
+        }
+
+        val settingsSharedPreferences = getContext().getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val rssJson = settingsSharedPreferences.getString("rss_feeds", null)
         if (rssJson != null) {
             val type = object : TypeToken<List<RssFeed>>() {}.type
             _rssFeeds.value = gson.fromJson(rssJson, type)
@@ -49,13 +58,13 @@ object DownloadTracker {
     }
 
     fun saveTasks() {
-        val sharedPreferences = appContext.getSharedPreferences("downloads", Context.MODE_PRIVATE)
+        val sharedPreferences = getContext().getSharedPreferences("downloads", Context.MODE_PRIVATE)
         val json = gson.toJson(_tasks.value)
         sharedPreferences.edit { putString("tasks", json) }
     }
 
     fun saveRssFeeds() {
-        val sharedPreferences = appContext.getSharedPreferences("downloads", Context.MODE_PRIVATE)
+        val sharedPreferences = getContext().getSharedPreferences("settings", Context.MODE_PRIVATE)
         val json = gson.toJson(_rssFeeds.value)
         sharedPreferences.edit { putString("rss_feeds", json) }
     }

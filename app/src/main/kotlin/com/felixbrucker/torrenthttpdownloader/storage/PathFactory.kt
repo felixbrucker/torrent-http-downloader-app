@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.storage
 
 import android.os.Environment
+import com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp.Companion.getContext
 import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.hash
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
@@ -14,14 +15,14 @@ class PathFactory {
 
         fun getResumeDataDirectory(): File {
             return File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "tmp/resume"
+                getContext().cacheDir,
+                "resume"
             )
         }
         fun getTemporaryTorrentFileDirectory(): File {
             return File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "tmp/torrents"
+                getContext().cacheDir,
+                "torrents"
             )
         }
         fun getScopedTemporaryDirectory(taskName: String): File {
