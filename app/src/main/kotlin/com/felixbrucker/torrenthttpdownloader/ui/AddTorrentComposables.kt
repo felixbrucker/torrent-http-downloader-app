@@ -134,7 +134,7 @@ fun AddTorrentConfigFields(
                         Text(dirInfo.relativePath)
                         if (isEditingDirectories) {
                             Text(
-                                text = "${dirInfo.itemCount} items, ${Formatter.formatBytes(dirInfo.totalSize)}",
+                                text = "${dirInfo.itemCount} item${if (dirInfo.itemCount == 1) "" else "s"}, ${Formatter.formatBytes(dirInfo.totalSize)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.secondary
                             )
