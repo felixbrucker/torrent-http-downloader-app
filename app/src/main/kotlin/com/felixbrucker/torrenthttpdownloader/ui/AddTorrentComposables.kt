@@ -41,7 +41,16 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.felixbrucker.torrenthttpdownloader.INVALID_CHARACTERS_FOR_PATH
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.listSubdirectoriesAsRelativeStrings
+import com.felixbrucker.torrenthttpdownloader.countItemsRecursively
+import com.felixbrucker.torrenthttpdownloader.totalSizeBytesRecursively
+import com.felixbrucker.torrenthttpdownloader.Formatter
 import java.io.File
+
+data class DirectoryItemInfo(
+    val relativePath: String,
+    val itemCount: Int,
+    val totalSize: Long
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -56,17 +65,25 @@ fun AddTorrentConfigFields(
     onOnlyDownloadBiggestFileChanged: (Boolean) -> Unit,
     suggestedSubDirectoryName: String? = null,
 ) {
-    var subDirectories by remember { mutableStateOf<List<String>>(emptyList()) }
+    var subDirectories by remember { mutableStateOf<List<DirectoryItemInfo>>(emptyList()) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var directoryToDelete by remember { mutableStateOf<String?>(null) }
     var isEditingDirectories by remember { mutableStateOf(false) }
 
     fun loadSubDirectories() {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        subDirectories = downloadsDir.listSubdirectoriesAsRelativeStrings(
+        val relativePaths = downloadsDir.listSubdirectoriesAsRelativeStrings(
             excludeRootDirectories = true,
             depth = 2,
         )
+        subDirectories = relativePaths.map { relativePath ->
+            val dir = File(downloadsDir, relativePath)
+            DirectoryItemInfo(
+                relativePath = relativePath,
+                itemCount = dir.countItemsRecursively(),
+                totalSize = dir.totalSizeBytesRecursively()
+            )
+        }
     }
 
     LifecycleResumeEffect(Unit) {
@@ -100,13 +117,24 @@ fun AddTorrentConfigFields(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        subDirectories.forEach { dir ->
+        subDirectories.forEach { dirInfo ->
             FilterChip(
-                selected = selectedSubDir == dir,
+                selected = selectedSubDir == dirInfo.relativePath,
                 onClick = {
-                    onSubdirectorySelected(if (selectedSubDir == dir) null else dir)
+                    onSubdirectorySelected(if (selectedSubDir == dirInfo.relativePath) null else dirInfo.relativePath)
                 },
-                label = { Text(dir) },
+                label = {
+                    Column {
+                        Text(dirInfo.relativePath)
+                        if (isEditingDirectories) {
+                            Text(
+                                text = "${dirInfo.itemCount} items, ${Formatter.formatBytes(dirInfo.totalSize)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                },
                 trailingIcon = if (isEditingDirectories) {
                     {
                         Icon(
@@ -115,7 +143,7 @@ fun AddTorrentConfigFields(
                             modifier = Modifier
                                 .size(FilterChipDefaults.IconSize)
                                 .clickable {
-                                    directoryToDelete = dir
+                                    directoryToDelete = dirInfo.relativePath
                                 }
                         )
                     }

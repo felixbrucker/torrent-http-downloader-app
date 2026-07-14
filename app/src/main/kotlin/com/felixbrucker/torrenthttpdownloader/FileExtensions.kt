@@ -113,3 +113,16 @@ fun File.listSubdirectoriesAsRelativeStrings(excludeRootDirectories: Boolean = f
         .map { it.toRelativeString(this) }
         .sorted()
 }
+
+fun File.countItemsRecursively(): Int {
+    val files = listFiles() ?: return 0
+    return files.sumOf {
+        if (it.isDirectory) it.countItemsRecursively() + 1 else 1
+    }
+}
+
+fun File.totalSizeBytesRecursively(): Long {
+    if (!isDirectory) return length()
+    val files = listFiles() ?: return 0
+    return files.sumOf { it.totalSizeBytesRecursively() }
+}
