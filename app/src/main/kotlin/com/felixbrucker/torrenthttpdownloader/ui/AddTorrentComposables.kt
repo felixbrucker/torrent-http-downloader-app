@@ -76,6 +76,12 @@ fun AddTorrentConfigFields(
             excludeRootDirectories = true,
             depth = 2,
         )
+
+        // Reset to download directory if previously selected directory does not exist anymore
+        if (selectedSubDir != null && !relativePaths.contains(selectedSubDir)) {
+            onSubdirectorySelected(null)
+        }
+
         subDirectories = relativePaths.map { relativePath ->
             val dir = File(downloadsDir, relativePath)
             DirectoryItemInfo(
