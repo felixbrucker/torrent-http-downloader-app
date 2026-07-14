@@ -1,6 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.os.Environment
+import android.content.Intent
+import android.net.Uri
+import android.webkit.MimeTypeMap
 import com.github.junrar.Junrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -125,4 +127,18 @@ fun File.totalSizeBytesRecursively(): Long {
     if (!isDirectory) return length()
     val files = listFiles() ?: return 0
     return files.sumOf { it.totalSizeBytesRecursively() }
+}
+
+fun File.makeOpenFileIntent(): Intent {
+    return Intent(Intent.ACTION_VIEW).apply {
+        val uri = Uri.parse(path)
+        val mimeType = if (isDirectory) {
+            "resource/folder"
+        } else {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        }
+        setDataAndType(uri, mimeType ?: "*/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
 }

@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.app.BackgroundServiceStartNotAllowedException
 import android.content.ContentResolver
+import android.content.Intent
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
@@ -22,7 +23,7 @@ class TorrentStateMachine(
     private val localDownloadManager: LocalDownloadManager,
     private val contentResolver: ContentResolver,
     private val onTaskCompleted: (DownloadTask) -> Unit,
-    private val onPostNotification: (String, String) -> Unit,
+    private val onPostNotification: (String, String, Intent?) -> Unit,
 ) {
     private val processingTasks = mutableSetOf<String>()
     private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
@@ -391,9 +392,12 @@ class TorrentStateMachine(
 
                 TorrentState.COMPLETED -> {
                     if (task.notifyOnCompletion) {
+                        val destination = PathFactory.getScopedDestinationDirectory(task)
+
                         onPostNotification(
                             "Download finished",
                             "${task.name} finished downloading",
+                            destination.makeOpenFileIntent()
                         )
                     }
                     DownloadTracker.removeTask(taskId)
@@ -434,7 +438,8 @@ class TorrentStateMachine(
         resetTorrent(task)
         onPostNotification(
             "Torrent has been restarted",
-            "Torrent ${task.name} encountered an error on provider and has been restarted"
+            "Torrent ${task.name} encountered an error on provider and has been restarted",
+            null
         )
     }
 

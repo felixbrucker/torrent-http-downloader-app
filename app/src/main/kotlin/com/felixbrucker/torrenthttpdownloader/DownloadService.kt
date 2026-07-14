@@ -397,15 +397,24 @@ class DownloadService : Service() {
         stopSelfIfIdle()
     }
 
-    private fun postNotification(title: String, message: String) {
+    private fun postNotification(title: String, message: String, intent: Intent? = null) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val notificationBuilder = NotificationCompat.Builder(this, GENERAL_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title)
             .setContentText(message)
+            .setAutoCancel(true)
 
-        notificationManager.notify(0, notificationBuilder.build())
+        if (intent != null) {
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            notificationBuilder.setContentIntent(pendingIntent)
+        }
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 
     override fun onBind(intent: Intent?): IBinder? {

@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import android.content.Intent
 import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
@@ -24,7 +25,7 @@ class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val sharedPreferences: SharedPreferences,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
-    private val onPostNotification: (String, String) -> Unit,
+    private val onPostNotification: (String, String, Intent?) -> Unit,
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = mutableListOf<DownloadWork>()
@@ -191,7 +192,8 @@ class LocalDownloadManager(
         updateFileState(work.taskId, downloadFile.link, LocalDownloadState.ERROR, "Download failed: $errorMessage")
         onPostNotification(
             "Torrent download encountered an error",
-            "Torrent file ${downloadFile.fileName} encountered an error while downloading: $errorMessage"
+            "Torrent file ${downloadFile.fileName} encountered an error while downloading: $errorMessage",
+            null,
         )
         scope.launch(Dispatchers.IO) {
             delay(5.seconds)
