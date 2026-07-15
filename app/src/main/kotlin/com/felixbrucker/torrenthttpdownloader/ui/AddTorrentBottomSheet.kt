@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.felixbrucker.torrenthttpdownloader.R
@@ -68,6 +71,7 @@ fun AddTorrentBottomSheet(
     var createSubfolderByName by remember { mutableStateOf(config.createSubfolderByName ?: sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var notifyOnCompletion by remember { mutableStateOf(config.notifyOnCompletion ?: sharedPreferences.getBoolean("default_notify_on_completion", false)) }
     var onlyDownloadBiggestFile by remember { mutableStateOf(config.onlyDownloadBiggestFile ?: sharedPreferences.getBoolean("default_only_download_biggest_file", false)) }
+    var name by remember { mutableStateOf(config.name ?: "") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -83,14 +87,14 @@ fun AddTorrentBottomSheet(
                 text = stringResource(id = R.string.add_torrent),
                 style = MaterialTheme.typography.headlineSmall
             )
-            if (config.name != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = config.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.name)) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
             AddTorrentConfigFields(
@@ -102,7 +106,7 @@ fun AddTorrentBottomSheet(
                 onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                 onNotifyOnCompletionChanged = { notifyOnCompletion = it },
                 onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
-                suggestedSubDirectoryName = config.name?.cleanedForUseAsPath()
+                suggestedSubDirectoryName = name.cleanedForUseAsPath()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -126,6 +130,7 @@ fun AddTorrentBottomSheet(
                         }
                     }
                     onConfirm(config.copy(
+                        name = name.takeIf { it.isNotBlank() },
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
                         notifyOnCompletion = notifyOnCompletion,

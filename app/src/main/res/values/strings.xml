@@ -6,6 +6,7 @@
     <string name="parallel_downloads_limit">Parallel Downloads Limit</string>
     <string name="action_settings">Settings</string>
     <string name="add_torrent">Add Torrent</string>
+    <string name="name">Name</string>
     <string name="select_destination">Downloads Subdirectory</string>
     <string name="create_subfolder">Create subfolder by torrent name</string>
     <string name="only_download_biggest_file">Only download biggest file</string>
