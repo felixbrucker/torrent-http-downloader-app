@@ -4,7 +4,9 @@ import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DataUsage
@@ -31,11 +34,14 @@ import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,11 +73,13 @@ import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFile
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFileState
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.asStateText
+import com.felixbrucker.torrenthttpdownloader.capitalized
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
@@ -290,7 +298,12 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                             }
                         } else {
                             task.providerTorrentInfo?.files?.forEach { file ->
-                                ProviderTorrentFileItem(file = file)
+                                ProviderTorrentFileItem(
+                                    taskId = task.id,
+                                    file = file,
+                                    supportsPriorities = provider?.supportsFilePriorities == true,
+                                    isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED
+                                )
                             }
                         }
                     }
@@ -318,10 +331,15 @@ fun StateIcon(state: TorrentState) {
 fun StatItem(
     icon: ImageVector,
     text: String,
+    modifier: Modifier = Modifier,
     iconSize: Dp = 16.dp,
-    textStyle: TextStyle = MaterialTheme.typography.bodySmall
+    textStyle: TextStyle = MaterialTheme.typography.bodySmall,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier
+    ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize))
         Text(text = text, style = textStyle)
     }
@@ -514,7 +532,15 @@ fun SubDownloadItem(task: DownloadTask, file: DownloadFile) {
 }
 
 @Composable
-fun ProviderTorrentFileItem(file: ProviderTorrentFile) {
+fun ProviderTorrentFileItem(
+    taskId: String,
+    file: ProviderTorrentFile,
+    supportsPriorities: Boolean,
+    isTorrentCompletedOnProvider: Boolean
+) {
+    val context = LocalContext.current
+    var showPriorityMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -578,6 +604,58 @@ fun ProviderTorrentFileItem(file: ProviderTorrentFile) {
                         icon = Icons.Default.DataUsage,
                         text = text
                     )
+                }
+            }
+
+            if (supportsPriorities) {
+                Box {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.alpha(if (isTorrentCompletedOnProvider) 0.5f else 1f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .clickable(enabled = !isTorrentCompletedOnProvider) {
+                                    showPriorityMenu = true
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = file.priority.name.lowercase().capitalized(),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = showPriorityMenu,
+                        onDismissRequest = { showPriorityMenu = false }
+                    ) {
+                        FilePriority.entries.forEach { priority ->
+                            DropdownMenuItem(
+                                text = { Text(priority.name.lowercase().capitalized()) },
+                                onClick = {
+                                    showPriorityMenu = false
+                                    val intent = Intent(context, DownloadService::class.java).apply {
+                                        action = DownloadService.ACTION_SET_PROVIDER_FILE_PRIORITY
+                                        putExtra(DownloadService.EXTRA_TASK_ID, taskId)
+                                        putExtra(DownloadService.EXTRA_FILE_ID, file.id)
+                                        putExtra(DownloadService.EXTRA_PRIORITY, priority.name)
+                                    }
+                                    context.startService(intent)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

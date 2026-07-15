@@ -25,6 +25,7 @@ data class ProviderTorrentFile(
     val isSelected: Boolean,
     val progress: Float?, // 0-100
     val downloadedBytes: Long?,
+    val priority: FilePriority = FilePriority.NORMAL
 ) {
     val name: String get() {
         return path.substringAfterLast('/')
@@ -36,6 +37,13 @@ data class ProviderTorrentFile(
 
         return ProviderTorrentFileState.DOWNLOADING
     }
+}
+
+enum class FilePriority {
+    IGNORE,
+    LOW,
+    NORMAL,
+    HIGH
 }
 
 enum class ProviderTorrentFileState {
@@ -65,11 +73,13 @@ interface TorrentProvider {
     val name: String
     val requiresLocalDownloads: Boolean
     val supportsPauseResume: Boolean
+    val supportsFilePriorities: Boolean
     suspend fun restoreTorrent(id: String)
     suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String
     suspend fun addMagnet(magnetUri: String, name: String): String
     suspend fun getTorrentInfo(id: String): ProviderTorrentInfo
     suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean
+    suspend fun setFilePriority(id: String, fileId: Int, priority: FilePriority)
     suspend fun deleteTorrent(id: String, deleteFiles: Boolean = false): Boolean
     suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink
     suspend fun pause(id: String)

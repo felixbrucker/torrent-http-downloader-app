@@ -12,6 +12,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
+import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
@@ -280,6 +281,13 @@ class DownloadService : Service() {
             ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> resumeAllLocalDownloads()
             ACTION_RESUME_ALL_ON_PROVIDER -> serviceScope.launch { resumeAllOnProvider() }
             ACTION_ADD_TASK -> handleAddTask(intent)
+            ACTION_SET_PROVIDER_FILE_PRIORITY -> serviceScope.launch {
+                setProviderFilePriority(
+                    intent.getStringExtra(EXTRA_TASK_ID),
+                    intent.getIntExtra(EXTRA_FILE_ID, -1),
+                    FilePriority.valueOf(intent.getStringExtra(EXTRA_PRIORITY) ?: FilePriority.NORMAL.name)
+                )
+            }
             ACTION_STOP_SERVICE -> stopSelf()
         }
 
@@ -356,6 +364,11 @@ class DownloadService : Service() {
     private suspend fun resumeAllOnProvider() {
         torrentStateMachine.resumeAllTasksOnProvider()
         updateNotification()
+    }
+
+    private suspend fun setProviderFilePriority(taskId: String?, fileId: Int, priority: FilePriority) {
+        if (taskId == null || fileId == -1) return
+        torrentStateMachine.setFilePriority(taskId, fileId, priority)
     }
 
     private fun handleAddTask(intent: Intent) {
@@ -449,8 +462,11 @@ class DownloadService : Service() {
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
         const val ACTION_RELOAD_SETTINGS = "ACTION_RELOAD_SETTINGS"
+        const val ACTION_SET_PROVIDER_FILE_PRIORITY = "ACTION_SET_PROVIDER_FILE_PRIORITY"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
+        const val EXTRA_FILE_ID = "EXTRA_FILE_ID"
+        const val EXTRA_PRIORITY = "EXTRA_PRIORITY"
         const val EXTRA_TORRENT_URI = "EXTRA_TORRENT_URI"
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"

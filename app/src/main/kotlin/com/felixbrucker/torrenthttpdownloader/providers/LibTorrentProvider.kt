@@ -44,6 +44,7 @@ class LibTorrentProvider(
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = false
     override val supportsPauseResume: Boolean = true
+    override val supportsFilePriorities: Boolean = true
 
     companion object: ServiceBuilder {
         override val NAME: String = "libtorrent"
@@ -238,6 +239,12 @@ class LibTorrentProvider(
                 isSelected = priority !== Priority.IGNORE,
                 progress = progress,
                 downloadedBytes = downloadedBytes,
+                priority = when (priority) {
+                    Priority.IGNORE -> FilePriority.IGNORE
+                    Priority.LOW -> FilePriority.LOW
+                    Priority.TOP_PRIORITY -> FilePriority.HIGH
+                    else -> FilePriority.NORMAL
+                }
             )
         }
 
@@ -274,6 +281,17 @@ class LibTorrentProvider(
         torrentHandle.prioritizeFiles(prioritiesToSet.toTypedArray())
 
         return true
+    }
+
+    override suspend fun setFilePriority(id: String, fileId: Int, priority: FilePriority) {
+        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val libTorrentPriority = when (priority) {
+            FilePriority.IGNORE -> Priority.IGNORE
+            FilePriority.LOW -> Priority.LOW
+            FilePriority.NORMAL -> Priority.DEFAULT
+            FilePriority.HIGH -> Priority.TOP_PRIORITY
+        }
+        torrentHandle.filePriority(fileId, libTorrentPriority)
     }
 
     override suspend fun deleteTorrent(id: String, deleteFiles: Boolean): Boolean {

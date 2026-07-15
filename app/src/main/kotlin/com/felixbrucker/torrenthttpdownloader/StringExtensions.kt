@@ -34,3 +34,7 @@ fun String.asFile(): File {
 
     return File(path)
 }
+
+fun String.capitalized(): String {
+    return replaceFirstChar { it.uppercase() }
+}

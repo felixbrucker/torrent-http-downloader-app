@@ -15,6 +15,7 @@ class RealDebridProvider(
     override val name: String = NAME
     override val requiresLocalDownloads: Boolean = true
     override val supportsPauseResume: Boolean = false
+    override val supportsFilePriorities: Boolean = false
 
     companion object: ServiceBuilder {
         override val NAME: String = "Real-Debrid"
@@ -95,6 +96,14 @@ class RealDebridProvider(
         val response = RetrofitClient.instance.selectFiles(auth, id, fileIds.joinToString(","))
 
         return response.isSuccessful
+    }
+
+    override suspend fun setFilePriority(
+        id: String,
+        fileId: Int,
+        priority: FilePriority
+    ) {
+        // Nothing to do
     }
 
     override suspend fun deleteTorrent(id: String, deleteFiles: Boolean): Boolean {

@@ -98,6 +98,25 @@ class TorrentStateMachine(
         }
     }
 
+    suspend fun setFilePriority(taskId: String, fileId: Int, priority: FilePriority) {
+        val task = DownloadTracker.findTask(taskId) ?: return
+        val providerId = task.providerId ?: return
+        provider.setFilePriority(providerId, fileId, priority)
+
+        DownloadTracker.updateTask(taskId) { currentTask ->
+            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
+                if (file.id == fileId) {
+                    file.copy(priority = priority, isSelected = priority != FilePriority.IGNORE)
+                } else {
+                    file
+                }
+            } ?: listOf()
+            currentTask.copy(
+                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
+            )
+        }
+    }
+
     suspend fun restartTask(taskId: String) {
         val task = DownloadTracker.findTask(taskId) ?: return
         try {
