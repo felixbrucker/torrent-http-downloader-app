@@ -346,7 +346,6 @@ fun CreateFolderDialog(
                         { Text(errorMessage!!) }
                     } else null,
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
                 )
             }
         },
