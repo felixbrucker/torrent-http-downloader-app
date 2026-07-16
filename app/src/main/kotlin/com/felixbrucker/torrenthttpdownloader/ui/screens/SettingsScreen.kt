@@ -1,6 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
+import android.app.backup.BackupManager
 import android.content.Context
+import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -40,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import com.felixbrucker.torrenthttpdownloader.Formatter.Companion.formatBytes
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
@@ -75,97 +79,122 @@ fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
                 }
             )
         }
-    ) {
+    ) { padding ->
         Column(
             modifier = Modifier
-                .padding(it)
+                .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text(text = stringResource(id = R.string.provider), modifier = Modifier.padding(bottom = 8.dp))
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded },
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
             ) {
-                OutlinedTextField(
-                    value = selectedProvider,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
+                Text(text = stringResource(id = R.string.provider), modifier = Modifier.padding(bottom = 8.dp))
+                ExposedDropdownMenuBox(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onExpandedChange = { expanded = !expanded },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    providers.forEach { provider ->
-                        DropdownMenuItem(
-                            text = { Text(provider) },
-                            onClick = {
-                                selectedProvider = provider
-                                expanded = false
-                            }
-                        )
+                    OutlinedTextField(
+                        value = selectedProvider,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        providers.forEach { provider ->
+                            DropdownMenuItem(
+                                text = { Text(provider) },
+                                onClick = {
+                                    selectedProvider = provider
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            if (selectedProvider == RealDebridProvider.NAME) {
-                TextField(
-                    value = realDebridApiToken,
-                    onValueChange = { realDebridApiToken = it },
-                    label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                TextField(
-                    value = localParallelDownloads,
-                    onValueChange = { localParallelDownloads = it },
-                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            } else if (selectedProvider == LibTorrentProvider.NAME) {
-                TextField(
-                    value = libTorrentParallelDownloads,
-                    onValueChange = { libTorrentParallelDownloads = it },
-                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { libTorrentRequireVpnConnection = !libTorrentRequireVpnConnection }
-                ) {
-                    Checkbox(
-                        checked = libTorrentRequireVpnConnection,
-                        onCheckedChange = { newValue -> libTorrentRequireVpnConnection = newValue }
+                if (selectedProvider == RealDebridProvider.NAME) {
+                    TextField(
+                        value = realDebridApiToken,
+                        onValueChange = { realDebridApiToken = it },
+                        label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    Text(text = stringResource(id = R.string.require_vpn_connection))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = localParallelDownloads,
+                        onValueChange = { localParallelDownloads = it },
+                        label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else if (selectedProvider == LibTorrentProvider.NAME) {
+                    TextField(
+                        value = libTorrentParallelDownloads,
+                        onValueChange = { libTorrentParallelDownloads = it },
+                        label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { libTorrentRequireVpnConnection = !libTorrentRequireVpnConnection }
+                    ) {
+                        Checkbox(
+                            checked = libTorrentRequireVpnConnection,
+                            onCheckedChange = { newValue -> libTorrentRequireVpnConnection = newValue }
+                        )
+                        Text(text = stringResource(id = R.string.require_vpn_connection))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = {
+                    sharedPreferences.edit {
+                        putString("provider", selectedProvider)
+                        putString("real_debrid_api_token", realDebridApiToken.trim())
+                        putInt("local_parallel_downloads", localParallelDownloads.toIntOrNull() ?: 2)
+                        putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
+                        putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
+                    }
+                    onSave()
+                    BackupManager.dataChanged(context.packageName)
+                    onBack()
+                }) {
+                    Text("Save")
+                }
             }
 
-            Button(onClick = {
-                sharedPreferences.edit {
-                    putString("provider", selectedProvider)
-                    putString("real_debrid_api_token", realDebridApiToken.trim())
-                    putInt("local_parallel_downloads", localParallelDownloads.toIntOrNull() ?: 2)
-                    putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
-                    putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
-                }
-                onSave()
-                onBack()
-            }) {
-                Text("Save")
+            val lastBackupTime = sharedPreferences.getLong("last_backup_time", 0L)
+            val lastBackupSize = sharedPreferences.getLong("last_backup_size", 0L)
+            if (lastBackupTime > 0) {
+                val timeStr = DateUtils.getRelativeTimeSpanString(
+                    lastBackupTime,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS
+                ).toString()
+                val sizeStr = formatBytes(lastBackupSize)
+                Text(
+                    text = stringResource(id = R.string.last_backup, timeStr, sizeStr),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 16.dp)
+                )
             }
         }
     }
