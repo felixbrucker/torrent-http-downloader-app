@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -28,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +48,7 @@ import com.felixbrucker.torrenthttpdownloader.listSubdirectoriesAsRelativeString
 import com.felixbrucker.torrenthttpdownloader.countItemsRecursively
 import com.felixbrucker.torrenthttpdownloader.totalSizeBytesRecursively
 import com.felixbrucker.torrenthttpdownloader.Formatter
+import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
 import java.io.File
 
 data class DirectoryItemInfo(
@@ -60,11 +63,11 @@ fun AddTorrentConfigFields(
     selectedSubDir: String?,
     createSubfolderByName: Boolean,
     notifyOnCompletion: Boolean,
-    onlyDownloadBiggestFile: Boolean,
+    fileSelectionMode: FileSelectionMode,
     onSubdirectorySelected: (String?) -> Unit,
     onCreateSubfolderByNameChanged: (Boolean) -> Unit,
     onNotifyOnCompletionChanged: (Boolean) -> Unit,
-    onOnlyDownloadBiggestFileChanged: (Boolean) -> Unit,
+    onFileSelectionModeChanged: (FileSelectionMode) -> Unit,
     suggestedSubDirectoryName: String? = null,
 ) {
     var subDirectories by remember { mutableStateOf<List<DirectoryItemInfo>>(emptyList()) }
@@ -237,6 +240,34 @@ fun AddTorrentConfigFields(
 
     Spacer(modifier = Modifier.height(16.dp))
 
+    Text(
+        text = "File Selection Mode",
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+
+    FileSelectionMode.entries.forEach { mode ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onFileSelectionModeChanged(mode) }
+        ) {
+            RadioButton(
+                selected = fileSelectionMode == mode,
+                onClick = { onFileSelectionModeChanged(mode) }
+            )
+            val text = when (mode) {
+                FileSelectionMode.ALL -> "Download all files"
+                FileSelectionMode.BIGGEST -> "Only download the biggest file"
+                FileSelectionMode.MANUAL -> "Manual selection"
+            }
+            Text(text = text)
+        }
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clickable { onCreateSubfolderByNameChanged(!createSubfolderByName) }
@@ -246,17 +277,6 @@ fun AddTorrentConfigFields(
             onCheckedChange = { onCreateSubfolderByNameChanged(it) }
         )
         Text(text = stringResource(id = R.string.create_subfolder))
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onOnlyDownloadBiggestFileChanged(!onlyDownloadBiggestFile) }
-    ) {
-        Checkbox(
-            checked = onlyDownloadBiggestFile,
-            onCheckedChange = { onOnlyDownloadBiggestFileChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.only_download_biggest_file))
     }
 
     Row(

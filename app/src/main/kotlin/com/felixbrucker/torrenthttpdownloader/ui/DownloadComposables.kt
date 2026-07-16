@@ -34,7 +34,7 @@ import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Unarchive
@@ -70,6 +70,7 @@ import com.felixbrucker.torrenthttpdownloader.Formatter
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TaskLocation
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
@@ -96,8 +97,42 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
 
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
+    val isManualSelectionMode = task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL
+
+    val taskIcon: @Composable () -> Unit = {
+        if (isManualSelectionMode && isExpanded) {
+            val allSelected = task.providerTorrentInfo?.files?.all { it.isSelected } == true
+            Icon(
+                imageVector = if (allSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                contentDescription = if (allSelected) "Deselect All" else "Select All",
+                tint = if (allSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.clickable {
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                        putExtra(DownloadService.EXTRA_SELECT_ALL, !allSelected)
+                    }
+                    context.startService(intent)
+                }
+            )
+        } else {
+            StateIcon(state = task.state)
+        }
+    }
 
     val actions: @Composable () -> Unit = {
+        if (task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL) {
+            IconButton(onClick = {
+                val intent = Intent(context, DownloadService::class.java).apply {
+                    action = DownloadService.ACTION_CONFIRM_FILE_SELECTION
+                    putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                }
+                context.startService(intent)
+            }) {
+                Icon(Icons.Default.CheckCircle, contentDescription = "Confirm selection", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+
         if (task.location == TaskLocation.PROVIDER && provider?.supportsPauseResume == true) {
             if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
                 IconButton(onClick = {
@@ -187,13 +222,13 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isNarrow) {
-                        StateIcon(state = task.state)
+                        taskIcon()
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (isNarrow) {
-                                StateIcon(state = task.state)
+                                taskIcon()
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Text(
@@ -302,7 +337,8 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                                     taskId = task.id,
                                     file = file,
                                     supportsPriorities = provider?.supportsFilePriorities == true,
-                                    isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED
+                                    isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED,
+                                    isManualSelectionMode = isManualSelectionMode
                                 )
                             }
                         }
@@ -536,7 +572,8 @@ fun ProviderTorrentFileItem(
     taskId: String,
     file: ProviderTorrentFile,
     supportsPriorities: Boolean,
-    isTorrentCompletedOnProvider: Boolean
+    isTorrentCompletedOnProvider: Boolean,
+    isManualSelectionMode: Boolean = false
 ) {
     val context = LocalContext.current
     var showPriorityMenu by remember { mutableStateOf(false) }
@@ -544,7 +581,15 @@ fun ProviderTorrentFileItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+            .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+            .clickable(enabled = isManualSelectionMode) {
+                val intent = Intent(context, DownloadService::class.java).apply {
+                    action = DownloadService.ACTION_TOGGLE_PROVIDER_FILE_SELECTION
+                    putExtra(DownloadService.EXTRA_TASK_ID, taskId)
+                    putExtra(DownloadService.EXTRA_FILE_ID, file.id)
+                }
+                context.startService(intent)
+            },
         colors = CardDefaults.cardColors(
             containerColor = if (file.isSelected) {
                 MaterialTheme.colorScheme.surfaceContainerHighest
@@ -557,11 +602,17 @@ fun ProviderTorrentFileItem(
             modifier = Modifier
                 .padding(8.dp)
                 .fillMaxWidth()
-                .alpha(if (file.isSelected) 1f else 0.6f),
+                .alpha(if (file.isSelected || isManualSelectionMode) 1f else 0.6f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (file.isSelected) {
+            if (isManualSelectionMode) {
+                Icon(
+                    imageVector = if (file.isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                    contentDescription = if (file.isSelected) "Selected" else "Not selected",
+                    tint = if (file.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+            } else if (file.isSelected) {
                 ProviderTorrentFileStateIcon(file.state)
             } else {
                 Icon(Icons.Default.Block, contentDescription = "Not selected")
@@ -607,7 +658,7 @@ fun ProviderTorrentFileItem(
                 }
             }
 
-            if (supportsPriorities) {
+            if (supportsPriorities && !isManualSelectionMode) {
                 Box {
                     Surface(
                         shape = MaterialTheme.shapes.small,

@@ -41,6 +41,12 @@ enum class TaskLocation {
     LOCAL
 }
 
+enum class FileSelectionMode {
+    ALL,
+    BIGGEST,
+    MANUAL
+}
+
 
 data class TorrentDescriptor(
     val type: TorrentType,
@@ -75,7 +81,7 @@ data class DownloadTask(
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
     val notifyOnCompletion: Boolean = false,
-    val onlyDownloadBiggestFile: Boolean = false,
+    val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
 ) {
     val isDownloadingOnProvider: Boolean get() {
         return providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING
@@ -174,7 +180,7 @@ data class RssFeed(
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
     val notifyOnCompletion: Boolean = true,
-    val onlyDownloadBiggestFile: Boolean = false,
+    val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
     val autoDownload: Boolean = false,
     val lastCheck: Long = 0,
     val items: List<RssItem> = listOf()

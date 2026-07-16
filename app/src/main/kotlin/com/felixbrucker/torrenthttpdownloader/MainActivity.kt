@@ -189,7 +189,7 @@ class MainActivity : ComponentActivity() {
                                 putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, updatedConfig.destinationSubdirectory)
                                 putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, updatedConfig.createSubfolderByName)
                                 putExtra(DownloadService.EXTRA_NOTIFY_ON_COMPLETION, updatedConfig.notifyOnCompletion)
-                                putExtra(DownloadService.EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE, updatedConfig.onlyDownloadBiggestFile)
+                                putExtra(DownloadService.EXTRA_FILE_SELECTION_MODE, updatedConfig.fileSelectionMode?.name)
                                 putExtra(DownloadService.EXTRA_TORRENT_NAME, updatedConfig.name)
                             }
                             startService(intent)

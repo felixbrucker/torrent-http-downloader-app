@@ -117,6 +117,58 @@ class TorrentStateMachine(
         }
     }
 
+    fun toggleFileSelectionLocally(taskId: String, fileId: Int) {
+        DownloadTracker.updateTask(taskId) { currentTask ->
+            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
+                if (file.id == fileId) {
+                    file.copy(isSelected = !file.isSelected)
+                } else {
+                    file
+                }
+            } ?: listOf()
+            currentTask.copy(
+                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
+            )
+        }
+    }
+
+    fun toggleAllFilesSelectionLocally(taskId: String, selectAll: Boolean) {
+        DownloadTracker.updateTask(taskId) { currentTask ->
+            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
+                file.copy(isSelected = selectAll)
+            } ?: listOf()
+            currentTask.copy(
+                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
+            )
+        }
+    }
+
+    suspend fun confirmFileSelection(taskId: String) {
+        val task = DownloadTracker.findTask(taskId) ?: return
+        if (task.state != TorrentState.SELECTING_FILES) return
+
+        val providerId = task.providerId ?: return
+        val selectedFileIds = task.providerTorrentInfo?.files?.filter { it.isSelected }?.map { it.id } ?: listOf()
+
+        try {
+            val isSuccessful = provider.selectFiles(providerId, selectedFileIds)
+            if (isSuccessful) {
+                DownloadTracker.updateTask(taskId) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
+                if (provider.supportsPauseResume) {
+                    provider.resume(task.id)
+                }
+                taskIdsToProcess.add(taskId)
+            }
+        } catch (e: Exception) {
+            DownloadTracker.updateTask(taskId) {
+                it.copy(
+                    state = TorrentState.ERROR,
+                    errorMessage = "Failed to select files: ${e.message}"
+                )
+            }
+        }
+    }
+
     suspend fun restartTask(taskId: String) {
         val task = DownloadTracker.findTask(taskId) ?: return
         try {
@@ -200,6 +252,8 @@ class TorrentStateMachine(
 
     private suspend fun processTask(taskId: String): String? {
         val task = DownloadTracker.findTask(taskId) ?: return null
+        val delayBetweenInitialProviderUpdates = if (provider.isLocalProvider) 500.milliseconds else 2.seconds
+        val delayBetweenProviderUpdates = if (provider.isLocalProvider) 1.seconds else 5.seconds
 
         try {
             when (task.state) {
@@ -239,16 +293,18 @@ class TorrentStateMachine(
                     }
 
                     if (
-                        torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION
-                        || torrentInfo.state == ProviderTorrentState.DOWNLOADING
-                        || torrentInfo.state == ProviderTorrentState.COMPLETED
+                        torrentInfo.files.isNotEmpty()
+                        && (torrentInfo.state == ProviderTorrentState.WAITING_FOR_FILE_SELECTION
+                            || torrentInfo.state == ProviderTorrentState.DOWNLOADING
+                            || torrentInfo.state == ProviderTorrentState.COMPLETED
+                        )
                     ) {
                         DownloadTracker.updateTask(task.id) {
                             it.copy(state = TorrentState.SELECTING_FILES)
                         }
                     } else {
                         // Still processing, check again later
-                        delay(2.seconds)
+                        delay(delayBetweenInitialProviderUpdates)
                     }
 
                     return task.id
@@ -256,7 +312,27 @@ class TorrentStateMachine(
 
                 TorrentState.SELECTING_FILES -> {
                     val torrentInfo = provider.getTorrentInfo(task.id)
-                    val fileIdsToSelect = if (task.onlyDownloadBiggestFile) {
+                    updateTaskWithTorrentInfo(task.id, torrentInfo)
+
+                    if (task.fileSelectionMode == FileSelectionMode.MANUAL) {
+                        // Wait for user to confirm selection, stop polling for updates and simulate
+                        // state support by setting it manually.
+                        if (provider.supportsPauseResume) {
+                            provider.pause(task.id)
+                        }
+                        DownloadTracker.updateTask(task.id) {
+                            it.copy(providerTorrentInfo = task.providerTorrentInfo?.copy(
+                                state = ProviderTorrentState.WAITING_FOR_FILE_SELECTION,
+                                status = "waiting_for_file_selection",
+                                downloadSpeed = 0,
+                                uploadSpeed = 0,
+                            ))
+                        }
+
+                        return null
+                    }
+
+                    val fileIdsToSelect = if (task.fileSelectionMode == FileSelectionMode.BIGGEST) {
                         val biggestFile = torrentInfo.files.maxBy { it.size }
 
                         listOf(biggestFile.id)
@@ -300,7 +376,7 @@ class TorrentStateMachine(
                         }
                     } else {
                         // Still downloading on provider, check again later
-                        delay(5.seconds)
+                        delay(delayBetweenProviderUpdates)
                     }
 
                     return task.id

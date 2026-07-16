@@ -288,6 +288,21 @@ class DownloadService : Service() {
                     FilePriority.valueOf(intent.getStringExtra(EXTRA_PRIORITY) ?: FilePriority.NORMAL.name)
                 )
             }
+            ACTION_TOGGLE_PROVIDER_FILE_SELECTION -> {
+                toggleProviderFileSelectionLocally(
+                    intent.getStringExtra(EXTRA_TASK_ID),
+                    intent.getIntExtra(EXTRA_FILE_ID, -1)
+                )
+            }
+            ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION -> {
+                toggleAllProviderFileSelectionLocally(
+                    intent.getStringExtra(EXTRA_TASK_ID),
+                    intent.getBooleanExtra(EXTRA_SELECT_ALL, true)
+                )
+            }
+            ACTION_CONFIRM_FILE_SELECTION -> serviceScope.launch {
+                confirmFileSelection(intent.getStringExtra(EXTRA_TASK_ID))
+            }
             ACTION_STOP_SERVICE -> stopSelf()
         }
 
@@ -371,13 +386,28 @@ class DownloadService : Service() {
         torrentStateMachine.setFilePriority(taskId, fileId, priority)
     }
 
+    private fun toggleProviderFileSelectionLocally(taskId: String?, fileId: Int) {
+        if (taskId == null || fileId == -1) return
+        torrentStateMachine.toggleFileSelectionLocally(taskId, fileId)
+    }
+
+    private fun toggleAllProviderFileSelectionLocally(taskId: String?, selectAll: Boolean) {
+        if (taskId == null) return
+        torrentStateMachine.toggleAllFilesSelectionLocally(taskId, selectAll)
+    }
+
+    private suspend fun confirmFileSelection(taskId: String?) {
+        if (taskId == null) return
+        torrentStateMachine.confirmFileSelection(taskId)
+    }
+
     private fun handleAddTask(intent: Intent) {
         val uri = intent.getStringExtra(EXTRA_TORRENT_URI) ?: return
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
         val notifyOnCompletion = intent.getBooleanExtra(EXTRA_NOTIFY_ON_COMPLETION, false)
-        val onlyDownloadBiggestFile = intent.getBooleanExtra(EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE, false)
+        val fileSelectionMode = FileSelectionMode.valueOf(intent.getStringExtra(EXTRA_FILE_SELECTION_MODE) ?: FileSelectionMode.ALL.name)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
         if (DownloadTracker.getTasks().any { it.torrent.uri == uri }) return
@@ -389,7 +419,7 @@ class DownloadService : Service() {
             destinationSubdirectory = destinationSubdirectory,
             createSubfolderByName = createSubfolderByName,
             notifyOnCompletion = notifyOnCompletion,
-            onlyDownloadBiggestFile = onlyDownloadBiggestFile,
+            fileSelectionMode = fileSelectionMode,
             state = TorrentState.ADDING_TO_PROVIDER
         )
         torrentStateMachine.addTask(task)
@@ -463,16 +493,20 @@ class DownloadService : Service() {
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
         const val ACTION_RELOAD_SETTINGS = "ACTION_RELOAD_SETTINGS"
         const val ACTION_SET_PROVIDER_FILE_PRIORITY = "ACTION_SET_PROVIDER_FILE_PRIORITY"
+        const val ACTION_TOGGLE_PROVIDER_FILE_SELECTION = "ACTION_TOGGLE_PROVIDER_FILE_SELECTION"
+        const val ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION = "ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION"
+        const val ACTION_CONFIRM_FILE_SELECTION = "ACTION_CONFIRM_FILE_SELECTION"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
         const val EXTRA_FILE_LINK = "EXTRA_FILE_LINK"
         const val EXTRA_FILE_ID = "EXTRA_FILE_ID"
+        const val EXTRA_SELECT_ALL = "EXTRA_SELECT_ALL"
         const val EXTRA_PRIORITY = "EXTRA_PRIORITY"
         const val EXTRA_TORRENT_URI = "EXTRA_TORRENT_URI"
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
         const val EXTRA_NOTIFY_ON_COMPLETION = "EXTRA_NOTIFY_ON_COMPLETION"
-        const val EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE = "EXTRA_ONLY_DOWNLOAD_BIGGEST_FILE"
+        const val EXTRA_FILE_SELECTION_MODE = "EXTRA_FILE_SELECTION_MODE"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
         const val EXTRA_DELETE_FILES = "EXTRA_DELETE_FILES"
         const val EXTRA_DELETE_TORRENT_FILE = "EXTRA_DELETE_TORRENT_FILE"

@@ -36,6 +36,7 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.asFile
 import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.deleteIfExists
+import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 
 data class AddTorrentConfig(
@@ -45,7 +46,7 @@ data class AddTorrentConfig(
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean? = null,
     val notifyOnCompletion: Boolean? = null,
-    val onlyDownloadBiggestFile: Boolean? = null,
+    val fileSelectionMode: FileSelectionMode? = null,
     val feedId: String? = null,
     val feedItemId: String? = null,
 ) {
@@ -70,7 +71,14 @@ fun AddTorrentBottomSheet(
     var selectedSubDir by remember { mutableStateOf(config.destinationSubdirectory ?: sharedPreferences.getString("default_sub_dir", null)) }
     var createSubfolderByName by remember { mutableStateOf(config.createSubfolderByName ?: sharedPreferences.getBoolean("default_create_subfolder", true)) }
     var notifyOnCompletion by remember { mutableStateOf(config.notifyOnCompletion ?: sharedPreferences.getBoolean("default_notify_on_completion", false)) }
-    var onlyDownloadBiggestFile by remember { mutableStateOf(config.onlyDownloadBiggestFile ?: sharedPreferences.getBoolean("default_only_download_biggest_file", false)) }
+    var fileSelectionMode by remember {
+        mutableStateOf(
+            config.fileSelectionMode ?: FileSelectionMode.valueOf(
+                sharedPreferences.getString("default_file_selection_mode", FileSelectionMode.ALL.name)
+                    ?: FileSelectionMode.ALL.name
+            )
+        )
+    }
     var name by remember { mutableStateOf(config.name ?: "") }
 
     ModalBottomSheet(
@@ -101,11 +109,11 @@ fun AddTorrentBottomSheet(
                 selectedSubDir = selectedSubDir,
                 createSubfolderByName = createSubfolderByName,
                 notifyOnCompletion = notifyOnCompletion,
-                onlyDownloadBiggestFile = onlyDownloadBiggestFile,
+                fileSelectionMode = fileSelectionMode,
                 onSubdirectorySelected = { selectedSubDir = it },
                 onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                 onNotifyOnCompletionChanged = { notifyOnCompletion = it },
-                onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
+                onFileSelectionModeChanged = { fileSelectionMode = it },
                 suggestedSubDirectoryName = name.cleanedForUseAsPath()
             )
 
@@ -126,7 +134,7 @@ fun AddTorrentBottomSheet(
                             putString("default_sub_dir", selectedSubDir)
                             putBoolean("default_create_subfolder", createSubfolderByName)
                             putBoolean("default_notify_on_completion", notifyOnCompletion)
-                            putBoolean("default_only_download_biggest_file", onlyDownloadBiggestFile)
+                            putString("default_file_selection_mode", fileSelectionMode.name)
                         }
                     }
                     onConfirm(config.copy(
@@ -134,7 +142,7 @@ fun AddTorrentBottomSheet(
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
                         notifyOnCompletion = notifyOnCompletion,
-                        onlyDownloadBiggestFile = onlyDownloadBiggestFile,
+                        fileSelectionMode = fileSelectionMode,
                     ))
                 }) {
                     Text(stringResource(id = R.string.add))

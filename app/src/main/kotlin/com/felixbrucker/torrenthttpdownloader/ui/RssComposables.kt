@@ -342,7 +342,7 @@ fun EditRssFeedDialog(
     var selectedSubDir by remember { mutableStateOf(feed.destinationSubdirectory) }
     var createSubfolderByName by remember { mutableStateOf(feed.createSubfolderByName) }
     var notifyOnCompletion by remember { mutableStateOf(feed.notifyOnCompletion) }
-    var onlyDownloadBiggestFile by remember { mutableStateOf(feed.onlyDownloadBiggestFile) }
+    var fileSelectionMode by remember { mutableStateOf(feed.fileSelectionMode) }
     val titleTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add_rss_feed else R.string.edit_rss_feed) }
     val confirmTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add else R.string.save) }
 
@@ -370,11 +370,11 @@ fun EditRssFeedDialog(
                     selectedSubDir = selectedSubDir,
                     createSubfolderByName = createSubfolderByName,
                     notifyOnCompletion = notifyOnCompletion,
-                    onlyDownloadBiggestFile = onlyDownloadBiggestFile,
+                    fileSelectionMode = fileSelectionMode,
                     onSubdirectorySelected = { selectedSubDir = it },
                     onCreateSubfolderByNameChanged = { createSubfolderByName = it },
                     onNotifyOnCompletionChanged = { notifyOnCompletion = it },
-                    onOnlyDownloadBiggestFileChanged = { onlyDownloadBiggestFile = it },
+                    onFileSelectionModeChanged = { fileSelectionMode = it },
                     suggestedSubDirectoryName = name.cleanedForUseAsPath(),
                 )
 
@@ -393,7 +393,7 @@ fun EditRssFeedDialog(
                         destinationSubdirectory = selectedSubDir,
                         createSubfolderByName = createSubfolderByName,
                         notifyOnCompletion = notifyOnCompletion,
-                        onlyDownloadBiggestFile = onlyDownloadBiggestFile,
+                        fileSelectionMode = fileSelectionMode,
                         autoDownload = autoDownload
                     )
                     onConfirm(newFeed)
