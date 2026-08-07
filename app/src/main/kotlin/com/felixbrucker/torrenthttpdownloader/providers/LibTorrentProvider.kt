@@ -8,7 +8,11 @@ import android.net.NetworkCapabilities.TRANSPORT_VPN
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
+import com.felixbrucker.torrenthttpdownloader.makeAddTorrentParams
+import com.felixbrucker.torrenthttpdownloader.sha1Hash
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import com.felixbrucker.torrenthttpdownloader.torrentId
+import com.felixbrucker.torrenthttpdownloader.torrentInfo
 import kotlinx.coroutines.delay
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
@@ -20,7 +24,6 @@ import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
-import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.Vectors
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
@@ -166,8 +169,12 @@ class LibTorrentProvider(
     }
 
     override suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String {
-        val info = TorrentInfo(torrentFileBytes)
+        val info = torrentFileBytes.torrentInfo()
         val torrentId = info.infoHash().toHex()
+        val torrentHandle = sessionManager.find(torrentId.sha1Hash())
+        if (torrentHandle != null) {
+            throw Exception("Torrent already added")
+        }
 
         sessionManager.download(
             info,
@@ -183,10 +190,12 @@ class LibTorrentProvider(
     }
 
     override suspend fun addMagnet(magnetUri: String, name: String): String {
-        val errorCode = error_code()
-        val addTorrentParams = libtorrent.parse_magnet_uri(magnetUri, errorCode)
-        val infoHash = addTorrentParams.getInfo_hashes()._best
-        val torrentId = infoHash.to_hex()
+        val addTorrentParams = magnetUri.makeAddTorrentParams()
+        val torrentId = addTorrentParams.torrentId()
+        val torrentHandle = sessionManager.find(torrentId.sha1Hash())
+        if (torrentHandle != null) {
+            throw Exception("Torrent already added")
+        }
 
         sessionManager.download(
             magnetUri,

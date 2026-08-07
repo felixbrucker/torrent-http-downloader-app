@@ -9,8 +9,8 @@ import java.io.File
 
 class PathFactory {
     companion object {
-        fun getResumeDataPath(id: String): File {
-            return File(getResumeDataDirectory(), id)
+        fun getResumeDataPath(providerId: String): File {
+            return File(getResumeDataDirectory(), providerId)
         }
 
         fun getResumeDataDirectory(): File {

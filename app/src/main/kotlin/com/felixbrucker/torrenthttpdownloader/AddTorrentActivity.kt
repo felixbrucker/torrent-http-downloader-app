@@ -51,6 +51,7 @@ class AddTorrentActivity : ComponentActivity() {
                         onConfirm = { updatedConfig ->
                             val intent = Intent(this, DownloadService::class.java).apply {
                                 action = DownloadService.ACTION_ADD_TASK
+                                putExtra(DownloadService.EXTRA_TORRENT_ID, updatedConfig.id)
                                 putExtra(DownloadService.EXTRA_TORRENT_URI, updatedConfig.uri)
                                 putExtra(DownloadService.EXTRA_TORRENT_TYPE, updatedConfig.type.name)
                                 putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, updatedConfig.destinationSubdirectory)
@@ -121,6 +122,7 @@ class AddTorrentActivity : ComponentActivity() {
                 try {
                     val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
                     pendingConfig = AddTorrentConfig(
+                        id = resolvedTorrent.id,
                         uri = resolvedTorrent.uri.toString(),
                         type = resolvedTorrent.type,
                         name = resolvedTorrent.name,

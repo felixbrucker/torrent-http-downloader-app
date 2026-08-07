@@ -115,13 +115,6 @@ object DownloadTracker {
         saveTasks()
     }
 
-    fun replaceTask(oldId: String, newTask: DownloadTask) {
-        _tasks.update { tasks ->
-            tasks.map { if (it.id == oldId) newTask else it }
-        }
-        saveTasks()
-    }
-
     fun updateTask(id: String, update: (DownloadTask) -> DownloadTask) {
         _tasks.update { tasks ->
             tasks.map { if (it.id == id) update(it) else it }

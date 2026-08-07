@@ -40,6 +40,7 @@ import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 
 data class AddTorrentConfig(
+    val id: String,
     val uri: String,
     val type: TorrentType,
     val name: String? = null,

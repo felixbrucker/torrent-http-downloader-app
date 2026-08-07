@@ -402,6 +402,7 @@ class DownloadService : Service() {
     }
 
     private fun handleAddTask(intent: Intent) {
+        val id = intent.getStringExtra(EXTRA_TORRENT_ID) ?: return
         val uri = intent.getStringExtra(EXTRA_TORRENT_URI) ?: return
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
         val destinationSubdirectory = intent.getStringExtra(EXTRA_DESTINATION_SUBDIRECTORY)
@@ -410,10 +411,18 @@ class DownloadService : Service() {
         val fileSelectionMode = FileSelectionMode.valueOf(intent.getStringExtra(EXTRA_FILE_SELECTION_MODE) ?: FileSelectionMode.ALL.name)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (DownloadTracker.getTasks().any { it.torrent.uri == uri }) return
+        if (DownloadTracker.getTasks().any { it.id == id }) {
+            postNotification(
+                title = "Torrent already added",
+                message = "Torrent $torrentName was not added as it is already in the list of active torrents",
+                icon = R.drawable.error_24px,
+            )
+
+            return
+        }
 
         val task = DownloadTask(
-            id = uri,
+            id = id,
             name = torrentName ?: uri,
             torrent = TorrentDescriptor(type, uri),
             destinationSubdirectory = destinationSubdirectory,
@@ -440,11 +449,16 @@ class DownloadService : Service() {
         stopSelfIfIdle()
     }
 
-    private fun postNotification(title: String, message: String, intent: Intent? = null) {
+    private fun postNotification(
+        title: String,
+        message: String,
+        intent: Intent? = null,
+        icon: Int? = null,
+    ) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val notificationBuilder = NotificationCompat.Builder(this, GENERAL_NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setSmallIcon(icon ?: android.R.drawable.ic_menu_info_details)
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)
@@ -501,6 +515,7 @@ class DownloadService : Service() {
         const val EXTRA_FILE_ID = "EXTRA_FILE_ID"
         const val EXTRA_SELECT_ALL = "EXTRA_SELECT_ALL"
         const val EXTRA_PRIORITY = "EXTRA_PRIORITY"
+        const val EXTRA_TORRENT_ID = "EXTRA_TORRENT_ID"
         const val EXTRA_TORRENT_URI = "EXTRA_TORRENT_URI"
         const val EXTRA_TORRENT_TYPE = "EXTRA_TORRENT_TYPE"
         const val EXTRA_DESTINATION_SUBDIRECTORY = "EXTRA_DESTINATION_SUBDIRECTORY"

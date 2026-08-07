@@ -25,7 +25,7 @@ class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val sharedPreferences: SharedPreferences,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
-    private val onPostNotification: (String, String, Intent?) -> Unit,
+    private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = mutableListOf<DownloadWork>()
@@ -194,6 +194,7 @@ class LocalDownloadManager(
             "Torrent download encountered an error",
             "Torrent file ${downloadFile.fileName} encountered an error while downloading: $errorMessage",
             null,
+            R.drawable.error_24px,
         )
         scope.launch(Dispatchers.IO) {
             delay(5.seconds)

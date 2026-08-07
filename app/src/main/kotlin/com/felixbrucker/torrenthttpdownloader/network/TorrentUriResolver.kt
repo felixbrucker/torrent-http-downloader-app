@@ -6,6 +6,7 @@ import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import com.felixbrucker.torrenthttpdownloader.makeTorrentId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ import java.util.concurrent.TimeUnit
 data class ResolvedTorrent(
     val type: TorrentType,
     val uri: Uri,
+    val id: String,
     val name: String?,
 )
 
@@ -46,7 +48,7 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
             }
             newUri = temporaryTorrentFile.toUri()
         }
-        val type = when (uri.scheme) {
+        val type = when (newUri.scheme) {
             "magnet" -> {
                 TorrentType.MAGNET
             } else -> {
@@ -54,11 +56,13 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
             }
         }
         val name = tryToGetNameFromUri(contentResolver, newUri.toString(), type)
+        val id = newUri.makeTorrentId(contentResolver)
 
         return ResolvedTorrent(
-            type,
-            newUri,
-            name,
+            type = type,
+            uri = newUri,
+            id = id,
+            name = name,
         )
     }
     private fun tryToGetNameFromUri(contentResolver: ContentResolver, uriString: String, type: TorrentType): String? {

@@ -70,8 +70,8 @@ data class DownloadFile(
 }
 
 data class DownloadTask(
-    val id: String, // Can be the initial magnet URI, then becomes the provider Torrent ID
-    val providerId: String? = null, // Provider Torrent ID
+    val id: String,
+    val providerId: String? = null, // Provider Torrent ID, may be same as id
     val name: String,
     val torrent: TorrentDescriptor,
     val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
@@ -162,7 +162,9 @@ data class DownloadTask(
     }
 
     fun removeResumeData() {
-        PathFactory.getResumeDataPath(id).deleteIfExists()
+        if (providerId != null) {
+            PathFactory.getResumeDataPath(providerId).deleteIfExists()
+        }
     }
 
     fun removeScopedTemporaryDirectory() {

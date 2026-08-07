@@ -1,6 +1,10 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import androidx.core.net.toUri
+import org.libtorrent4j.Sha1Hash
+import org.libtorrent4j.swig.add_torrent_params
+import org.libtorrent4j.swig.error_code
+import org.libtorrent4j.swig.libtorrent
 import java.io.File
 import java.security.MessageDigest
 
@@ -37,4 +41,18 @@ fun String.asFile(): File {
 
 fun String.capitalized(): String {
     return replaceFirstChar { it.uppercase() }
+}
+
+fun String.makeAddTorrentParams(): add_torrent_params {
+    val errorCode = error_code()
+    val addTorrentParams = libtorrent.parse_magnet_uri(this, errorCode)
+    if (errorCode.failed()) {
+        throw Exception(errorCode.message())
+    }
+
+    return addTorrentParams
+}
+
+fun String.sha1Hash(): Sha1Hash {
+    return Sha1Hash.parseHex(this)
 }
