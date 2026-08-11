@@ -63,6 +63,12 @@ enum class ProviderTorrentState {
     UNKNOWN,
 }
 
+enum class ProviderFeature {
+    PauseResume,
+    FilePriorities,
+    LocalDownloads,
+}
+
 data class UnrestrictedLink(
     val filename: String,
     val downloadUrl: String,
@@ -71,10 +77,13 @@ data class UnrestrictedLink(
 
 interface TorrentProvider {
     val name: String
-    val requiresLocalDownloads: Boolean
-    val supportsPauseResume: Boolean
-    val supportsFilePriorities: Boolean
-    val isLocalProvider: Boolean get() = !requiresLocalDownloads
+    val isLocalProvider: Boolean get() = !supports(ProviderFeature.LocalDownloads)
+    val features: Set<ProviderFeature>
+
+    fun supports(feature: ProviderFeature): Boolean {
+        return features.contains(feature)
+    }
+
     suspend fun restoreTorrent(id: String)
     suspend fun addTorrent(torrentFileBytes: ByteArray, name: String): String
     suspend fun addMagnet(magnetUri: String, name: String): String

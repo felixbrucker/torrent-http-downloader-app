@@ -45,9 +45,10 @@ class LibTorrentProvider(
     private val connectivityManager: ConnectivityManager,
 ) : TorrentProvider {
     override val name: String = NAME
-    override val requiresLocalDownloads: Boolean = false
-    override val supportsPauseResume: Boolean = true
-    override val supportsFilePriorities: Boolean = true
+    override val features: Set<ProviderFeature> = setOf(
+        ProviderFeature.PauseResume,
+        ProviderFeature.FilePriorities,
+    )
 
     companion object: ServiceBuilder {
         override val NAME: String = "libtorrent"

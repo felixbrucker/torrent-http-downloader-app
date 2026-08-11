@@ -15,6 +15,7 @@ import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
@@ -200,7 +201,7 @@ class DownloadService : Service() {
             )
             builder.addAction(android.R.drawable.ic_media_play, "Resume all", resumeAllPendingIntent)
         }
-        if (provider.supportsPauseResume) {
+        if (provider.supports(ProviderFeature.PauseResume)) {
             val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
             val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
             if (anyDownloadingOnProvider) {

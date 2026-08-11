@@ -81,6 +81,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.asStateText
 import com.felixbrucker.torrenthttpdownloader.capitalized
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
@@ -133,7 +134,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
             }
         }
 
-        if (task.location == TaskLocation.PROVIDER && provider?.supportsPauseResume == true) {
+        if (task.location == TaskLocation.PROVIDER && provider?.supports(ProviderFeature.PauseResume) == true) {
             if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
                 IconButton(onClick = {
                     val intent = Intent(context, DownloadService::class.java).apply {
@@ -336,7 +337,7 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                                 ProviderTorrentFileItem(
                                     taskId = task.id,
                                     file = file,
-                                    supportsPriorities = provider?.supportsFilePriorities == true,
+                                    supportsPriorities = provider?.supports(ProviderFeature.FilePriorities) == true,
                                     isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED,
                                     isManualSelectionMode = isManualSelectionMode
                                 )

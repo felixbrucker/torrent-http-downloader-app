@@ -57,7 +57,7 @@ class TorrentStateMachine(
     }
 
     suspend fun pauseAllTasksOnProvider() {
-        if (!provider.supportsPauseResume) return
+        if (!provider.supports(ProviderFeature.PauseResume)) return
         DownloadTracker
             .getTasks()
             .filter { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
@@ -65,7 +65,7 @@ class TorrentStateMachine(
     }
 
     suspend fun resumeAllTasksOnProvider() {
-        if (!provider.supportsPauseResume) return
+        if (!provider.supports(ProviderFeature.PauseResume)) return
         DownloadTracker
             .getTasks()
             .filter { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
@@ -154,7 +154,7 @@ class TorrentStateMachine(
             val isSuccessful = provider.selectFiles(providerId, selectedFileIds)
             if (isSuccessful) {
                 DownloadTracker.updateTask(taskId) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
-                if (provider.supportsPauseResume) {
+                if (provider.supports(ProviderFeature.PauseResume)) {
                     provider.resume(providerId)
                 }
                 taskIdsToProcess.add(taskId)
@@ -319,7 +319,7 @@ class TorrentStateMachine(
                     if (task.fileSelectionMode == FileSelectionMode.MANUAL) {
                         // Wait for user to confirm selection, stop polling for updates and simulate
                         // state support by setting it manually.
-                        if (provider.supportsPauseResume) {
+                        if (provider.supports(ProviderFeature.PauseResume)) {
                             provider.pause(task.providerId)
                         }
                         DownloadTracker.updateTask(task.id) {
@@ -389,7 +389,7 @@ class TorrentStateMachine(
                     for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
                         updateFileInfo(task, file)
                     }
-                    if (!provider.requiresLocalDownloads) {
+                    if (provider.isLocalProvider) {
                         DownloadTracker.updateTaskFiles(task.id) {
                             it.copy(
                                 unrestrictedLink = null,

@@ -13,9 +13,9 @@ class RealDebridProvider(
     private val sharedPreferences: SharedPreferences,
 ) : TorrentProvider {
     override val name: String = NAME
-    override val requiresLocalDownloads: Boolean = true
-    override val supportsPauseResume: Boolean = false
-    override val supportsFilePriorities: Boolean = false
+    override val features: Set<ProviderFeature> = setOf(
+        ProviderFeature.LocalDownloads,
+    )
 
     companion object: ServiceBuilder {
         override val NAME: String = "Real-Debrid"
