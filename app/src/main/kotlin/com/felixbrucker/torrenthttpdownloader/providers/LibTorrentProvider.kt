@@ -21,7 +21,6 @@ import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
-import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.Vectors
@@ -209,13 +208,13 @@ class LibTorrentProvider(
     }
 
     private fun setPerTorrentSettings(torrentId: String) {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(torrentId)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(torrentId.sha1Hash()) ?: throw Exception("Torrent not found")
         torrentHandle.swig().set_max_connections(sessionSettings.connectionsLimitPerTorrent)
         torrentHandle.swig().set_max_uploads(sessionSettings.uploadsLimitPerTorrent)
     }
 
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         val torrentStatus = torrentHandle.status()
         val totalBytes = torrentStatus.totalWanted()
         val downloadedBytes = torrentStatus.totalWantedDone()
@@ -280,7 +279,7 @@ class LibTorrentProvider(
     }
 
     override suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         val torrentFileInfo = torrentHandle.torrentFile() ?: throw Exception("Torrent has no file info")
         val fileStorage = torrentFileInfo.files()
         val prioritiesToSet: MutableList<Priority> = mutableListOf()
@@ -294,7 +293,7 @@ class LibTorrentProvider(
     }
 
     override suspend fun setFilePriority(id: String, fileId: Int, priority: FilePriority) {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         val libTorrentPriority = when (priority) {
             FilePriority.IGNORE -> Priority.IGNORE
             FilePriority.LOW -> Priority.LOW
@@ -305,7 +304,7 @@ class LibTorrentProvider(
     }
 
     override suspend fun deleteTorrent(id: String, deleteFiles: Boolean): Boolean {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: return true
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: return true
 
         sessionManager.remove(
             torrentHandle,
@@ -317,7 +316,7 @@ class LibTorrentProvider(
 
     override suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink {
         val filePath = link
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         val torrentFileInfo = torrentHandle.torrentFile() ?: throw Exception("Torrent file not found")
         val filesStorage = torrentFileInfo.files()
 
@@ -329,13 +328,13 @@ class LibTorrentProvider(
     }
 
     override suspend fun pause(id: String) {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         torrentHandle.unsetFlags(TorrentFlags.AUTO_MANAGED)
         torrentHandle.pause()
     }
 
     override suspend fun resume(id: String) {
-        val torrentHandle = sessionManager.find(Sha1Hash.parseHex(id)) ?: throw Exception("Torrent not found")
+        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
         torrentHandle.flags = TorrentFlags.AUTO_MANAGED
         torrentHandle.resume()
     }
