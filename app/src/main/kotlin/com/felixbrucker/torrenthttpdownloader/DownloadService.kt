@@ -9,9 +9,12 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.os.IBinder
+import android.os.RemoteCallbackList
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
+import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
@@ -30,8 +33,70 @@ class DownloadService : Service() {
     private lateinit var localDownloadManager: LocalDownloadManager
     private lateinit var torrentStateMachine: TorrentStateMachine
 
+    private val callbacks = RemoteCallbackList<ITorrentDownloadCallback>()
+    private lateinit var torrentUriResolver: TorrentUriResolver
+
+    private val binder = object : ITorrentDownloadService.Stub() {
+        override fun addTorrent(params: AddTorrentParams, callback: IAddTorrentCallback) {
+            serviceScope.launch {
+                try {
+                    val uri = params.uri ?: throw IllegalArgumentException("URI is required")
+                    val resolved = torrentUriResolver.resolve(uri.toUri())
+                    val id = resolved.id
+                    val name = params.name ?: resolved.name ?: uri
+                    val type = resolved.type
+
+                    if (DownloadTracker.getTasks().any { it.id == id }) {
+                        callback.onFailure("Torrent already added")
+                        return@launch
+                    }
+
+                    val task = DownloadTask(
+                        id = id,
+                        name = name,
+                        torrent = TorrentDescriptor(type, uri),
+                        destinationSubdirectory = params.destinationSubdirectory,
+                        createSubfolderByName = params.createSubfolderByName,
+                        notifyOnCompletion = params.notifyOnCompletion,
+                        fileSelectionMode = params.fileSelectionMode?.let { FileSelectionMode.valueOf(it) } ?: FileSelectionMode.ALL,
+                        state = TorrentState.ADDING_TO_PROVIDER
+                    )
+                    addTask(task)
+                    callback.onSuccess(id)
+                } catch (e: Exception) {
+                    callback.onFailure(e.message ?: "Unknown error")
+                }
+            }
+        }
+
+        override fun removeTorrent(
+            taskId: String,
+            deleteFiles: Boolean,
+            deleteTorrentFile: Boolean,
+            callback: IRemoveTorrentCallback
+        ) {
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    removeTask(taskId, deleteFiles, deleteTorrentFile)
+                    callback.onSuccess(taskId)
+                } catch (e: Exception) {
+                    callback.onFailure(e.message ?: "Unknown error")
+                }
+            }
+        }
+
+        override fun registerCallback(callback: ITorrentDownloadCallback) {
+            callbacks.register(callback)
+        }
+
+        override fun unregisterCallback(callback: ITorrentDownloadCallback) {
+            callbacks.unregister(callback)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        torrentUriResolver = TorrentUriResolver(contentResolver)
         Container
             .registerService("SharedPreferences", getSharedPreferences("settings", MODE_PRIVATE))
             .registerService("ConnectivityManager", getSystemService(ConnectivityManager::class.java))
@@ -67,6 +132,7 @@ class DownloadService : Service() {
         startForegroundService()
 
         startNotificationUpdates()
+        startAidlUpdates()
 
         localDownloadManager.start()
         torrentStateMachine.start()
@@ -255,6 +321,47 @@ class DownloadService : Service() {
         }
     }
 
+    private fun startAidlUpdates() {
+        serviceScope.launch {
+            val completedTasks = mutableSetOf<String>()
+            DownloadTracker.tasks.collect { tasks ->
+                val completedTasksThisEvent = mutableSetOf<String>()
+                val n = callbacks.beginBroadcast()
+                for (i in 0 until n) {
+                    val callback = callbacks.getBroadcastItem(i)
+                    for (task in tasks) {
+                        try {
+                            callback.onProgressUpdate(
+                                task.id,
+                                task.downloadedBytes,
+                                task.totalBytes,
+                                task.overallDownloadSpeed.toDouble()
+                            )
+
+                            if (task.state == TorrentState.COMPLETED && !completedTasks.contains(task.id)) {
+                                completedTasksThisEvent.add(task.id)
+                                callback.onDownloadCompleted(task.id)
+                            }
+
+                            if (task.state == TorrentState.ERROR) {
+                                callback.onDownloadFailed(task.id, task.errorMessage ?: "Unknown error")
+                            }
+                        } catch (_: Exception) {
+                            // Ignore remote exceptions
+                        }
+                    }
+                }
+                callbacks.finishBroadcast()
+
+                completedTasks.addAll(completedTasksThisEvent)
+
+                // Clean up completedTasks for removed tasks
+                val taskIds = tasks.map { it.id }.toSet()
+                completedTasks.retainAll(taskIds)
+            }
+        }
+    }
+
     private fun updateNotification() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification())
@@ -281,7 +388,7 @@ class DownloadService : Service() {
             ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
             ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> resumeAllLocalDownloads()
             ACTION_RESUME_ALL_ON_PROVIDER -> serviceScope.launch { resumeAllOnProvider() }
-            ACTION_ADD_TASK -> handleAddTask(intent)
+            ACTION_ADD_TASK -> addTaskFromIntent(intent)
             ACTION_SET_PROVIDER_FILE_PRIORITY -> serviceScope.launch {
                 setProviderFilePriority(
                     intent.getStringExtra(EXTRA_TASK_ID),
@@ -402,7 +509,7 @@ class DownloadService : Service() {
         torrentStateMachine.confirmFileSelection(taskId)
     }
 
-    private fun handleAddTask(intent: Intent) {
+    private fun addTaskFromIntent(intent: Intent) {
         val id = intent.getStringExtra(EXTRA_TORRENT_ID) ?: return
         val uri = intent.getStringExtra(EXTRA_TORRENT_URI) ?: return
         val type = TorrentType.valueOf(intent.getStringExtra(EXTRA_TORRENT_TYPE) ?: TorrentType.MAGNET.name)
@@ -432,6 +539,10 @@ class DownloadService : Service() {
             fileSelectionMode = fileSelectionMode,
             state = TorrentState.ADDING_TO_PROVIDER
         )
+        addTask(task)
+    }
+
+    private fun addTask(task: DownloadTask) {
         torrentStateMachine.addTask(task)
     }
 
@@ -475,8 +586,8 @@ class DownloadService : Service() {
         notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    override fun onBind(intent: Intent?): IBinder {
+        return binder
     }
 
     override fun onDestroy() {
