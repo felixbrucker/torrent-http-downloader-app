@@ -53,6 +53,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -61,6 +62,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
         aidl = true
     }
 }
