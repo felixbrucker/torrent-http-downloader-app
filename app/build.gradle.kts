@@ -7,10 +7,26 @@ plugins {
 android {
     signingConfigs {
         getByName("debug") {
-            storeFile = file("C:\\Users\\Felix\\.android\\main.jks")
-            storePassword = "test1234"
-            keyAlias = "main"
-            keyPassword = "test1234"
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+            storeFile = if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                file(keystorePath)
+            } else {
+                file("${rootDir}/debug.keystore")
+            }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+        create("release") {
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+            storeFile = if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                file(keystorePath)
+            } else {
+                file("${rootDir}/release.keystore")
+            }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
     namespace = "com.felixbrucker.torrenthttpdownloader"
@@ -23,9 +39,9 @@ android {
     defaultConfig {
         applicationId = "com.felixbrucker.torrenthttpdownloader"
         minSdk = 35
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -46,6 +62,15 @@ android {
     buildFeatures {
         compose = true
         aidl = true
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            @Suppress("UnstableApiUsage")
+            output.outputFileName.set("torrent-downloader-${output.versionName.get()}.apk")
+        }
     }
 }
 
