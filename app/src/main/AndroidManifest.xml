@@ -75,8 +75,12 @@
 
         <service
             android:name=".DownloadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="true"
+            android:foregroundServiceType="dataSync">
+            <intent-filter>
+                <action android:name="com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

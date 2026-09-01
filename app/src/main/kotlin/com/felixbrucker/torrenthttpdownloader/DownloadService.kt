@@ -603,6 +603,7 @@ class DownloadService : Service() {
         private const val SERVICE_NOTIFICATION_ID = 1
         private const val SERVICE_NOTIFICATION_CHANNEL_ID = "download_service"
         private const val GENERAL_NOTIFICATION_CHANNEL_ID = "general"
+        const val ACTION_BIND_AIDL = "com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_PAUSE_LOCAL_FILE_DOWNLOAD = "ACTION_PAUSE_LOCAL_FILE_DOWNLOAD"
         const val ACTION_RESUME_LOCAL_FILE_DOWNLOAD = "ACTION_RESUME_LOCAL_FILE_DOWNLOAD"
