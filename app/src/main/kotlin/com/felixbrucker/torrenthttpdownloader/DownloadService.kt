@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.os.IBinder
-import android.os.RemoteCallbackList
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.container.Container
@@ -33,7 +32,6 @@ class DownloadService : Service() {
     private lateinit var localDownloadManager: LocalDownloadManager
     private lateinit var torrentStateMachine: TorrentStateMachine
 
-    private val callbacks = RemoteCallbackList<ITorrentDownloadCallback>()
     private lateinit var torrentUriResolver: TorrentUriResolver
 
     private val binder = object : ITorrentDownloadService.Stub() {
@@ -59,6 +57,7 @@ class DownloadService : Service() {
                         createSubfolderByName = params.createSubfolderByName,
                         notifyOnCompletion = params.notifyOnCompletion,
                         fileSelectionMode = params.fileSelectionMode?.let { FileSelectionMode.valueOf(it) } ?: FileSelectionMode.ALL,
+                        onCompletionIntentUri = params.onCompletionIntentUri,
                         state = TorrentState.ADDING_TO_PROVIDER
                     )
                     addTask(task)
@@ -69,28 +68,14 @@ class DownloadService : Service() {
             }
         }
 
-        override fun removeTorrent(
-            taskId: String,
-            deleteFiles: Boolean,
-            deleteTorrentFile: Boolean,
-            callback: IRemoveTorrentCallback
-        ) {
-            serviceScope.launch(Dispatchers.IO) {
-                try {
-                    removeTask(taskId, deleteFiles, deleteTorrentFile)
-                    callback.onSuccess(taskId)
-                } catch (e: Exception) {
-                    callback.onFailure(e.message ?: "Unknown error")
-                }
+        override fun getProgress(taskId: String): TorrentProgressStats? {
+            val task = DownloadTracker.getTasks().find { it.id == taskId } ?: return null
+
+            return TorrentProgressStats().apply {
+                bytesDownloaded = task.downloadedBytes
+                totalBytes = task.totalBytes
+                downloadSpeed = task.overallDownloadSpeed.toDouble()
             }
-        }
-
-        override fun registerCallback(callback: ITorrentDownloadCallback) {
-            callbacks.register(callback)
-        }
-
-        override fun unregisterCallback(callback: ITorrentDownloadCallback) {
-            callbacks.unregister(callback)
         }
     }
 
@@ -120,7 +105,15 @@ class DownloadService : Service() {
             provider = provider,
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
-            onTaskCompleted = { _ ->
+            onTaskCompleted = { task ->
+                task.onCompletionIntentUri?.let { uri ->
+                    try {
+                        val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                        sendBroadcast(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
                 updateNotification()
                 stopSelfIfIdle()
             },
@@ -132,7 +125,6 @@ class DownloadService : Service() {
         startForegroundService()
 
         startNotificationUpdates()
-        startAidlUpdates()
 
         localDownloadManager.start()
         torrentStateMachine.start()
@@ -321,47 +313,6 @@ class DownloadService : Service() {
         }
     }
 
-    private fun startAidlUpdates() {
-        serviceScope.launch {
-            val completedTasks = mutableSetOf<String>()
-            DownloadTracker.tasks.collect { tasks ->
-                val completedTasksThisEvent = mutableSetOf<String>()
-                val n = callbacks.beginBroadcast()
-                for (i in 0 until n) {
-                    val callback = callbacks.getBroadcastItem(i)
-                    for (task in tasks) {
-                        try {
-                            callback.onProgressUpdate(
-                                task.id,
-                                task.downloadedBytes,
-                                task.totalBytes,
-                                task.overallDownloadSpeed.toDouble()
-                            )
-
-                            if (task.state == TorrentState.COMPLETED && !completedTasks.contains(task.id)) {
-                                completedTasksThisEvent.add(task.id)
-                                callback.onDownloadCompleted(task.id)
-                            }
-
-                            if (task.state == TorrentState.ERROR) {
-                                callback.onDownloadFailed(task.id, task.errorMessage ?: "Unknown error")
-                            }
-                        } catch (_: Exception) {
-                            // Ignore remote exceptions
-                        }
-                    }
-                }
-                callbacks.finishBroadcast()
-
-                completedTasks.addAll(completedTasksThisEvent)
-
-                // Clean up completedTasks for removed tasks
-                val taskIds = tasks.map { it.id }.toSet()
-                completedTasks.retainAll(taskIds)
-            }
-        }
-    }
-
     private fun updateNotification() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification())
@@ -517,6 +468,7 @@ class DownloadService : Service() {
         val createSubfolderByName = intent.getBooleanExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, true)
         val notifyOnCompletion = intent.getBooleanExtra(EXTRA_NOTIFY_ON_COMPLETION, false)
         val fileSelectionMode = FileSelectionMode.valueOf(intent.getStringExtra(EXTRA_FILE_SELECTION_MODE) ?: FileSelectionMode.ALL.name)
+        val onCompletionIntentUri = intent.getStringExtra(EXTRA_ON_COMPLETION_INTENT_URI)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
         if (DownloadTracker.getTasks().any { it.id == id }) {
@@ -537,6 +489,7 @@ class DownloadService : Service() {
             createSubfolderByName = createSubfolderByName,
             notifyOnCompletion = notifyOnCompletion,
             fileSelectionMode = fileSelectionMode,
+            onCompletionIntentUri = onCompletionIntentUri,
             state = TorrentState.ADDING_TO_PROVIDER
         )
         addTask(task)
@@ -635,6 +588,7 @@ class DownloadService : Service() {
         const val EXTRA_CREATE_SUBFOLDER_BY_NAME = "EXTRA_CREATE_SUBFOLDER_BY_NAME"
         const val EXTRA_NOTIFY_ON_COMPLETION = "EXTRA_NOTIFY_ON_COMPLETION"
         const val EXTRA_FILE_SELECTION_MODE = "EXTRA_FILE_SELECTION_MODE"
+        const val EXTRA_ON_COMPLETION_INTENT_URI = "EXTRA_ON_COMPLETION_INTENT_URI"
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
         const val EXTRA_DELETE_FILES = "EXTRA_DELETE_FILES"
         const val EXTRA_DELETE_TORRENT_FILE = "EXTRA_DELETE_TORRENT_FILE"

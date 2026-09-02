@@ -82,6 +82,7 @@ data class DownloadTask(
     val createSubfolderByName: Boolean = true,
     val notifyOnCompletion: Boolean = false,
     val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
+    val onCompletionIntentUri: String? = null,
 ) {
     val isDownloadingOnProvider: Boolean get() {
         return providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING
