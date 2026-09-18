@@ -67,15 +67,6 @@ android {
     }
 }
 
-androidComponents {
-    onVariants(selector().withBuildType("release")) { variant ->
-        variant.outputs.forEach { output ->
-            @Suppress("UnstableApiUsage")
-            output.outputFileName.set("torrent-downloader-${output.versionName.get()}.apk")
-        }
-    }
-}
-
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
