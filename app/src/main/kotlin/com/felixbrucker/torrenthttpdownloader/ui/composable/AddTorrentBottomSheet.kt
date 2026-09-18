@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader.ui
+package com.felixbrucker.torrenthttpdownloader.ui.composable
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement

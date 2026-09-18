@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -31,9 +32,7 @@ android {
     }
     namespace = "com.felixbrucker.torrenthttpdownloader"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
@@ -67,6 +66,32 @@ android {
     }
 }
 
+kover {
+    reports {
+        total {
+            verify {
+                rule {
+                    minBound(90)
+                }
+            }
+        }
+        filters {
+            excludes {
+                classes(
+                    "*.BuildConfig",
+                    "*_*",
+                    "*JsonAdapter*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.composable.*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.screens.*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.theme.*",
+                    "com.felixbrucker.torrenthttpdownloader.MainActivity*",
+                    "com.felixbrucker.torrenthttpdownloader.AddTorrentActivity*",
+                )
+            }
+        }
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
@@ -90,6 +115,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

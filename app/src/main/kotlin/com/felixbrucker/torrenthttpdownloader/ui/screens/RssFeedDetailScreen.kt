@@ -33,7 +33,7 @@ import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
-import com.felixbrucker.torrenthttpdownloader.ui.RssItemsList
+import com.felixbrucker.torrenthttpdownloader.ui.composable.RssItemsList
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

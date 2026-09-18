@@ -41,8 +41,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.ui.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.ui.AddTorrentConfig
+import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
+import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.ui.screens.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedDetailScreen
