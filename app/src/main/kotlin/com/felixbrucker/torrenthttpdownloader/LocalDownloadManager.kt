@@ -28,7 +28,7 @@ class LocalDownloadManager(
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
-    private val inProgressWork = mutableListOf<DownloadWork>()
+    private val inProgressWork = ConcurrentHashMap.newKeySet<DownloadWork>()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
 
     private val httpClient = OkHttpClient.Builder()

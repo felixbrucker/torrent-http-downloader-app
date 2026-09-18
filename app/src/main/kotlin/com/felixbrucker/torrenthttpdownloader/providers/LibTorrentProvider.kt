@@ -36,6 +36,7 @@ import org.libtorrent4j.swig.torrent_flags_t
 import org.libtorrent4j.swig.torrent_handle
 import java.io.File
 import java.util.Random
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
 
@@ -73,7 +74,7 @@ class LibTorrentProvider(
             }
         }
     }
-    private val lastResumeDataSavedAt = mutableMapOf<String, Long>()
+    private val lastResumeDataSavedAt = ConcurrentHashMap<String, Long>()
     private val minimumTimeBetweenResumeDataSavesInMs = 10_000L
     private val libTorrentListener = object : AlertListener {
         override fun types(): IntArray {

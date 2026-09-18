@@ -3,6 +3,7 @@ package com.felixbrucker.torrenthttpdownloader
 import android.app.BackgroundServiceStartNotAllowedException
 import android.content.ContentResolver
 import android.content.Intent
+import androidx.annotation.VisibleForTesting
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededException
@@ -12,6 +13,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.*
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import kotlinx.coroutines.*
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -25,7 +27,7 @@ class TorrentStateMachine(
     private val onTaskCompleted: (DownloadTask) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
-    private val processingTasks = mutableSetOf<String>()
+    private val processingTasks = ConcurrentHashMap.newKeySet<String>()
     private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
 
     fun start() {
@@ -238,10 +240,10 @@ class TorrentStateMachine(
         DownloadTracker.getTasks().forEach { task -> taskIdsToProcess.add(task.id) }
     }
 
-    private suspend fun processTaskSafely(taskId: String?): String? {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal suspend fun processTaskSafely(taskId: String?): String? {
         if (taskId == null) return null
-        if (processingTasks.contains(taskId)) return null
-        processingTasks.add(taskId)
+        if (!processingTasks.add(taskId)) return null
         var newId: String?
         try {
             newId = processTask(taskId)
