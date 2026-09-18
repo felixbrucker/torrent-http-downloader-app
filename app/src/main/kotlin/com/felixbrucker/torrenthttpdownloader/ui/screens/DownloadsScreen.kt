@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -251,8 +251,7 @@ fun DownloadsScreen(
                     },
                 state = lazyListState
             ) {
-                items(tasks, key = { task -> task.id }) { task ->
-                    val index = tasks.indexOf(task)
+                itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
                     val isDragging = index == draggedItemIndex
 
                     Box(
