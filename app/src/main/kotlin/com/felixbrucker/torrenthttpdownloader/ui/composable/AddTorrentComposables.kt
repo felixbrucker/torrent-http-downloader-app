@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader.ui
+package com.felixbrucker.torrenthttpdownloader.ui.composable
 
 import android.os.Environment
 import androidx.compose.foundation.clickable

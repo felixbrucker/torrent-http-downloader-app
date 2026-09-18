@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader.ui
+package com.felixbrucker.torrenthttpdownloader.ui.composable
 
 import android.content.Intent
 import androidx.compose.animation.animateContentSize

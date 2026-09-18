@@ -40,8 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
-import com.felixbrucker.torrenthttpdownloader.ui.EditRssFeedDialog
-import com.felixbrucker.torrenthttpdownloader.ui.RssFeedItem
+import com.felixbrucker.torrenthttpdownloader.ui.composable.EditRssFeedDialog
+import com.felixbrucker.torrenthttpdownloader.ui.composable.RssFeedItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

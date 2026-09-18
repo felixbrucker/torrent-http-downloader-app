@@ -25,6 +25,7 @@ mockk = "1.14.11"
 kotlinxCoroutinesTest = "1.11.0"
 workRuntimeKtx = "2.11.2"
 navigation3 = "1.1.7"
+kover = "0.9.9"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -58,3 +59,4 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "compose" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinSerialization" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

@@ -48,9 +48,9 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.felixbrucker.torrenthttpdownloader.ui.DownloadItem
+import com.felixbrucker.torrenthttpdownloader.ui.composable.DownloadItem
 import kotlinx.coroutines.launch
-import com.felixbrucker.torrenthttpdownloader.ui.DownloadStatsBar
+import com.felixbrucker.torrenthttpdownloader.ui.composable.DownloadStatsBar
 import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.NavRoute

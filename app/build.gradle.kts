@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -62,6 +63,32 @@ android {
         compose = true
         buildConfig = true
         aidl = true
+    }
+}
+
+kover {
+    reports {
+        total {
+            verify {
+                rule {
+                    minBound(90)
+                }
+            }
+        }
+        filters {
+            excludes {
+                classes(
+                    "*.BuildConfig",
+                    "*_*",
+                    "*JsonAdapter*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.composable.*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.screens.*",
+                    "com.felixbrucker.torrenthttpdownloader.ui.theme.*",
+                    "com.felixbrucker.torrenthttpdownloader.MainActivity*",
+                    "com.felixbrucker.torrenthttpdownloader.AddTorrentActivity*",
+                )
+            }
+        }
     }
 }
 
