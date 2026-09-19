@@ -107,6 +107,11 @@ class RssParser(private val client: OkHttpClient) {
     }
 
     private fun stripHtml(html: String): String {
-        return html.replace(Regex("<[^>]*>"), "")
+        return html.replace(HTML_REGEX, "")
+    }
+
+    companion object {
+        // Cache compiled regex pattern to avoid re-compiling for every HTML description
+        private val HTML_REGEX = Regex("<[^>]*>")
     }
 }
