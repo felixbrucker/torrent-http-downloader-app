@@ -10,7 +10,7 @@ class Formatter {
         // Cache constants to avoid object allocations and exponentiation in UI progress rendering
         private val UNITS = arrayOf("B", "KB", "MB", "GB", "TB")
         private val LOG10_1024 = log10(1024.0)
-        private val POWERS_OF_1024 = doubleArrayOf(1.0, 1024.0, 1048576.0, 1073741824.0, 1099511627776.0)
+        private val POWERS_OF_1024 = DoubleArray(UNITS.size) { 1024.0.pow(it) }
 
         fun formatSpeed(bytesPerSecond: Long): String {
             return "${formatBytes(bytesPerSecond)}/s"
