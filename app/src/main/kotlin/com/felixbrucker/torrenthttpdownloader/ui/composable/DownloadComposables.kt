@@ -93,8 +93,8 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
     var isExpanded by remember { mutableStateOf(false) }
     val isLocal = task.location == TaskLocation.LOCAL
-    val unfinishedLocalDownloads = task.files.filter { it.state != LocalDownloadState.COMPLETED }
-    val isExpandable = (isLocal && unfinishedLocalDownloads.isNotEmpty()) || (!isLocal && task.providerTorrentInfo?.files?.isNotEmpty() == true)
+    val hasUnfinishedLocalDownloads = isLocal && task.files.any { it.state != LocalDownloadState.COMPLETED }
+    val isExpandable = hasUnfinishedLocalDownloads || (!isLocal && task.providerTorrentInfo?.files?.isNotEmpty() == true)
 
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
@@ -329,8 +329,10 @@ fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
                 if (isExpandable && isExpanded) {
                     Column(modifier = Modifier.padding(top = 8.dp)) {
                         if (isLocal) {
-                            unfinishedLocalDownloads.forEach { file ->
-                                SubDownloadItem(task = task, file = file)
+                            task.files.forEach { file ->
+                                if (file.state != LocalDownloadState.COMPLETED) {
+                                    SubDownloadItem(task = task, file = file)
+                                }
                             }
                         } else {
                             task.providerTorrentInfo?.files?.forEach { file ->
@@ -384,14 +386,27 @@ fun StatItem(
 
 @Composable
 fun DownloadStatsBar(tasks: List<DownloadTask>) {
-    val pendingTasks = tasks.filter { it.state != TorrentState.COMPLETED }
-    val runningTasks = pendingTasks.filter {
-        it.state != TorrentState.ERROR && (it.isDownloadingOnProvider || it.isDownloadingLocally)
+    // Single pass calculation to avoid collection allocations and multiple iterations
+    var pendingTasksCount = 0
+    var runningTasksCount = 0
+    var totalDownloadSpeed = 0L
+    var totalUploadSpeed = 0L
+    var totalSize = 0L
+    var totalDownloaded = 0L
+
+    for (task in tasks) {
+        if (task.state != TorrentState.COMPLETED) {
+            pendingTasksCount++
+            if (task.state != TorrentState.ERROR && (task.isDownloadingOnProvider || task.isDownloadingLocally)) {
+                runningTasksCount++
+            }
+        }
+        totalDownloadSpeed += task.overallDownloadSpeed
+        totalUploadSpeed += task.providerUploadSpeed
+        totalSize += task.totalBytes
+        totalDownloaded += task.downloadedBytes
     }
-    val totalDownloadSpeed = tasks.sumOf { it.overallDownloadSpeed }
-    val totalUploadSpeed = tasks.sumOf { it.providerUploadSpeed }
-    val totalSize = tasks.sumOf { it.totalBytes }
-    val totalDownloaded = tasks.sumOf { it.downloadedBytes }
+
     val remainingBytes = totalSize - totalDownloaded
     val etaSeconds = if (totalDownloadSpeed > 0) remainingBytes / totalDownloadSpeed else 0L
 
@@ -431,7 +446,7 @@ fun DownloadStatsBar(tasks: List<DownloadTask>) {
             // Progress/Tasks
             Column(verticalArrangement = Arrangement.Center) {
                 Text(
-                    text = "${runningTasks.size} / ${pendingTasks.size} tasks",
+                    text = "$runningTasksCount / $pendingTasksCount tasks",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

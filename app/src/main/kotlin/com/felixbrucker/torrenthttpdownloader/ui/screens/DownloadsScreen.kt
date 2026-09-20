@@ -112,10 +112,30 @@ fun DownloadsScreen(
         }
     }
 
-    val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
-    val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
-    val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
-    val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
+    val (anyDownloading, anyPaused, anyDownloadingOnProvider, anyPausedOnProvider) = remember(tasks) {
+        var downloading = false
+        var paused = false
+        var downloadingOnProvider = false
+        var pausedOnProvider = false
+
+        for (task in tasks) {
+            if (!downloading || !paused) {
+                for (file in task.files) {
+                    if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
+                        downloading = true
+                    } else if (file.state == LocalDownloadState.PAUSED) {
+                        paused = true
+                    }
+                }
+            }
+            if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
+                downloadingOnProvider = true
+            } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
+                pausedOnProvider = true
+            }
+        }
+        TaskStateFlags(downloading, paused, downloadingOnProvider, pausedOnProvider)
+    }
 
     fun removeTask(
         taskId: String,
@@ -332,3 +352,10 @@ fun DownloadsScreen(
         }
     }
 }
+
+private data class TaskStateFlags(
+    val anyDownloading: Boolean,
+    val anyPaused: Boolean,
+    val anyDownloadingOnProvider: Boolean,
+    val anyPausedOnProvider: Boolean
+)
