@@ -197,7 +197,9 @@ fun RssItemsList(feed: RssFeed, onItemClick: (RssItem) -> Unit) {
 
 @Composable
 fun RssItemRow(item: RssItem, onClick: () -> Unit) {
-    val dateFormat = remember { SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()) }
+    val formattedDate = remember(item.pubDate) {
+        item.pubDate?.let { SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(it)) }
+    }
     val contentAlpha = if (item.isRead) 0.6f else 1f
 
     Card(
@@ -256,7 +258,7 @@ fun RssItemRow(item: RssItem, onClick: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                         }
-                        item.pubDate?.let {
+                        if (formattedDate != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Icons.Default.Schedule,
@@ -266,7 +268,7 @@ fun RssItemRow(item: RssItem, onClick: () -> Unit) {
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = dateFormat.format(Date(it)),
+                                    text = formattedDate,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.7f)
                                 )
