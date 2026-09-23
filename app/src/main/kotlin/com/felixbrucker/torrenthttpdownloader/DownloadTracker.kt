@@ -76,18 +76,15 @@ object DownloadTracker {
     }
 
     fun hasTasksWhichNeedProcessing(): Boolean {
-        if (_tasks.value.isEmpty()) {
-            return false
-        }
-
-        return _tasks.value.all { task ->
+        // Early exit on first active task instead of iterating all tasks
+        return _tasks.value.any { task ->
             if (task.state != TorrentState.DOWNLOADING_LOCALLY) {
-                return true
-            }
-
-            return task.files.any {
-                it.state == LocalDownloadState.PENDING
-                || it.state == LocalDownloadState.DOWNLOADING
+                true
+            } else {
+                task.files.any {
+                    it.state == LocalDownloadState.PENDING
+                    || it.state == LocalDownloadState.DOWNLOADING
+                }
             }
         }
     }
