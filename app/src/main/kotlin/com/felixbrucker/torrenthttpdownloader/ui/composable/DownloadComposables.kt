@@ -87,18 +87,38 @@ import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
 import kotlin.math.roundToInt
 
+private data class DownloadItemTaskFlags(
+    val isExpandable: Boolean,
+    val isDownloading: Boolean,
+    val isPaused: Boolean,
+    val isManualSelectionMode: Boolean,
+)
+
+private data class DownloadStatsData(
+    val pendingTasksCount: Int,
+    val runningTasksCount: Int,
+    val totalDownloadSpeed: Long,
+    val totalUploadSpeed: Long,
+    val totalSize: Long,
+    val totalDownloaded: Long,
+    val etaSeconds: Long,
+)
+
 @Composable
 fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
     val context = LocalContext.current
-    val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
+    val provider = remember { Container.getOptionalService<TorrentProvider>("TorrentProvider") }
     var isExpanded by remember { mutableStateOf(false) }
     val isLocal = task.location == TaskLocation.LOCAL
-    val hasUnfinishedLocalDownloads = isLocal && task.files.any { it.state != LocalDownloadState.COMPLETED }
-    val isExpandable = hasUnfinishedLocalDownloads || (!isLocal && task.providerTorrentInfo?.files?.isNotEmpty() == true)
 
-    val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
-    val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
-    val isManualSelectionMode = task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL
+    val (isExpandable, isDownloading, isPaused, isManualSelectionMode) = remember(task) {
+        val hasUnfinishedLocalDownloads = isLocal && task.files.any { it.state != LocalDownloadState.COMPLETED }
+        val expandable = hasUnfinishedLocalDownloads || (!isLocal && task.providerTorrentInfo?.files?.isNotEmpty() == true)
+        val downloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
+        val paused = task.files.any { it.state == LocalDownloadState.PAUSED }
+        val manualSelection = task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL
+        DownloadItemTaskFlags(expandable, downloading, paused, manualSelection)
+    }
 
     val taskIcon: @Composable () -> Unit = {
         if (isManualSelectionMode && isExpanded) {
@@ -386,29 +406,32 @@ fun StatItem(
 
 @Composable
 fun DownloadStatsBar(tasks: List<DownloadTask>) {
-    // Single pass calculation to avoid collection allocations and multiple iterations
-    var pendingTasksCount = 0
-    var runningTasksCount = 0
-    var totalDownloadSpeed = 0L
-    var totalUploadSpeed = 0L
-    var totalSize = 0L
-    var totalDownloaded = 0L
+    val (pendingTasksCount, runningTasksCount, totalDownloadSpeed, totalUploadSpeed, totalSize, totalDownloaded, etaSeconds) = remember(tasks) {
+        var pending = 0
+        var running = 0
+        var dlSpeed = 0L
+        var ulSpeed = 0L
+        var total = 0L
+        var downloaded = 0L
 
-    for (task in tasks) {
-        if (task.state != TorrentState.COMPLETED) {
-            pendingTasksCount++
-            if (task.state != TorrentState.ERROR && (task.isDownloadingOnProvider || task.isDownloadingLocally)) {
-                runningTasksCount++
+        for (task in tasks) {
+            if (task.state != TorrentState.COMPLETED) {
+                pending++
+                if (task.state != TorrentState.ERROR && (task.isDownloadingOnProvider || task.isDownloadingLocally)) {
+                    running++
+                }
             }
+            dlSpeed += task.overallDownloadSpeed
+            ulSpeed += task.providerUploadSpeed
+            total += task.totalBytes
+            downloaded += task.downloadedBytes
         }
-        totalDownloadSpeed += task.overallDownloadSpeed
-        totalUploadSpeed += task.providerUploadSpeed
-        totalSize += task.totalBytes
-        totalDownloaded += task.downloadedBytes
-    }
 
-    val remainingBytes = totalSize - totalDownloaded
-    val etaSeconds = if (totalDownloadSpeed > 0) remainingBytes / totalDownloadSpeed else 0L
+        val remainingBytes = total - downloaded
+        val eta = if (dlSpeed > 0) remainingBytes / dlSpeed else 0L
+
+        DownloadStatsData(pending, running, dlSpeed, ulSpeed, total, downloaded, eta)
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
