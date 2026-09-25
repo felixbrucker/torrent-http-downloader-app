@@ -16,9 +16,14 @@ import com.felixbrucker.torrenthttpdownloader.data.database.TorrentDescriptorEnt
 import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.data.repository.RssRepository
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
+import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.TorrentDescriptor
+import com.felixbrucker.torrenthttpdownloader.models.TorrentState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
+import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,13 +60,13 @@ class DatabaseRepositoryTest {
             id = "t1",
             providerId = "p1",
             name = "Task 1",
-            torrent = TorrentDescriptorEntity("MAGNET", "magnet:?xt=123"),
-            state = "DOWNLOADING_LOCALLY",
+            torrent = TorrentDescriptorEntity(TorrentType.MAGNET, "magnet:?xt=123"),
+            state = TorrentState.DOWNLOADING_LOCALLY,
             errorMessage = null,
             destinationSubdirectory = null,
             createSubfolderByName = true,
             notifyOnCompletion = true,
-            fileSelectionMode = "ALL",
+            fileSelectionMode = FileSelectionMode.ALL,
             onCompletionIntentUri = null
         )
         val fileEntity = DownloadFileEntity(
@@ -69,7 +74,7 @@ class DatabaseRepositoryTest {
             taskId = "t1",
             link = "http://link.com",
             unrestrictedLink = null,
-            state = "DOWNLOADING",
+            state = LocalDownloadState.DOWNLOADING,
             stateDescription = null,
             progress = 50,
             filePath = "/path",
@@ -81,7 +86,7 @@ class DatabaseRepositoryTest {
             id = "p1",
             taskId = "t1",
             name = "Task 1",
-            state = "DOWNLOADING",
+            state = ProviderTorrentState.DOWNLOADING,
             status = "ok",
             progress = 50.0f,
             totalSizeInBytes = 200,
@@ -102,7 +107,7 @@ class DatabaseRepositoryTest {
             isSelected = true,
             progress = 50.0f,
             downloadedBytes = 100,
-            priority = "NORMAL"
+            priority = FilePriority.NORMAL
         )
         val providerLinkEntity = ProviderTorrentLinkEntity(
             autoId = 1L,
@@ -153,8 +158,16 @@ class DatabaseRepositoryTest {
         downloadRepository.saveTask(task)
         downloadRepository.deleteTask("t2")
 
-        coVerify { downloadDao.upsertTask(task) }
         coVerify { downloadDao.deleteTaskById("t2") }
+    }
+
+    @Test
+    fun testDownloadRepositoryTargetedUpdates() = runTest {
+        downloadRepository.updateTaskState("t1", TorrentState.COMPLETED, null)
+        downloadRepository.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 100, 0, 1000)
+
+        coVerify { downloadDao.updateTaskState("t1", TorrentState.COMPLETED, null) }
+        coVerify { downloadDao.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 100, 0, 1000) }
     }
 
     @Test
@@ -166,7 +179,7 @@ class DatabaseRepositoryTest {
             destinationSubdirectory = null,
             createSubfolderByName = true,
             notifyOnCompletion = true,
-            fileSelectionMode = "ALL",
+            fileSelectionMode = FileSelectionMode.ALL,
             autoDownload = false,
             lastCheck = 0L
         )
@@ -211,7 +224,13 @@ class DatabaseRepositoryTest {
         rssRepository.saveFeed(feed)
         rssRepository.deleteFeed("f2")
 
-        coVerify { rssFeedDao.upsertFeed(feed) }
         coVerify { rssFeedDao.deleteFeedById("f2") }
+    }
+
+    @Test
+    fun testRssRepositoryTargetedUpdateItemState() = runTest {
+        rssRepository.updateItemState("item1", isRead = true, isDownloaded = true)
+
+        coVerify { rssFeedDao.updateItemState("item1", isRead = true, isDownloaded = true) }
     }
 }

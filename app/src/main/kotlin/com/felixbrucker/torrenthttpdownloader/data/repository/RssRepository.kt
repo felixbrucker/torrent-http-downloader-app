@@ -1,6 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader.data.repository
 
 import com.felixbrucker.torrenthttpdownloader.data.database.RssFeedDao
+import com.felixbrucker.torrenthttpdownloader.data.database.RssFeedEntity
+import com.felixbrucker.torrenthttpdownloader.data.database.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,13 +24,45 @@ class RssRepository @Inject constructor(
     }
 
     suspend fun saveFeed(feed: RssFeed) {
-        rssFeedDao.upsertFeed(feed)
+        val feedEntity = RssFeedEntity(
+            id = feed.id,
+            name = feed.name,
+            url = feed.url,
+            destinationSubdirectory = feed.destinationSubdirectory,
+            createSubfolderByName = feed.createSubfolderByName,
+            notifyOnCompletion = feed.notifyOnCompletion,
+            fileSelectionMode = feed.fileSelectionMode,
+            autoDownload = feed.autoDownload,
+            lastCheck = feed.lastCheck
+        )
+        rssFeedDao.insertFeed(feedEntity)
+
+        rssFeedDao.deleteItemsForFeed(feed.id)
+        val itemEntities = feed.items.map { item ->
+            RssItemEntity(
+                id = item.id,
+                feedId = feed.id,
+                title = item.title,
+                link = item.link,
+                description = item.description,
+                pubDate = item.pubDate,
+                isRead = item.isRead,
+                isDownloaded = item.isDownloaded
+            )
+        }
+        if (itemEntities.isNotEmpty()) {
+            rssFeedDao.insertItems(itemEntities)
+        }
     }
 
     suspend fun saveFeeds(feeds: List<RssFeed>) {
         for (feed in feeds) {
-            rssFeedDao.upsertFeed(feed)
+            saveFeed(feed)
         }
+    }
+
+    suspend fun updateItemState(id: String, isRead: Boolean, isDownloaded: Boolean) {
+        rssFeedDao.updateItemState(id, isRead, isDownloaded)
     }
 
     suspend fun deleteFeed(id: String) {

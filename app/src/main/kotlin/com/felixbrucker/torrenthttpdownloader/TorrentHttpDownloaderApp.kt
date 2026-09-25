@@ -4,9 +4,11 @@ import android.app.Application
 import android.content.Context
 import com.felixbrucker.torrenthttpdownloader.data.logging.AppLogTree
 import com.felixbrucker.torrenthttpdownloader.data.logging.LogRepository
+import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import java.lang.ref.WeakReference
 
+@HiltAndroidApp
 class TorrentHttpDownloaderApp : Application() {
     companion object {
         private var contextRef: WeakReference<Context> = WeakReference(null)

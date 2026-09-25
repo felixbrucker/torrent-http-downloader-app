@@ -21,7 +21,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 
 data class TorrentDescriptorEntity(
-    val type: String,
+    val type: TorrentType,
     val uri: String
 )
 
@@ -31,12 +31,12 @@ data class DownloadTaskEntity(
     val providerId: String?,
     val name: String,
     @Embedded(prefix = "torrent_") val torrent: TorrentDescriptorEntity,
-    val state: String,
+    val state: TorrentState,
     val errorMessage: String?,
     val destinationSubdirectory: String?,
     val createSubfolderByName: Boolean,
     val notifyOnCompletion: Boolean,
-    val fileSelectionMode: String,
+    val fileSelectionMode: FileSelectionMode,
     val onCompletionIntentUri: String?
 )
 
@@ -56,7 +56,7 @@ data class ProviderTorrentInfoEntity(
     @PrimaryKey val id: String,
     val taskId: String,
     val name: String,
-    val state: String,
+    val state: ProviderTorrentState,
     val status: String,
     val progress: Float,
     val totalSizeInBytes: Long,
@@ -90,7 +90,7 @@ data class ProviderTorrentFileEntity(
     val isSelected: Boolean,
     val progress: Float?,
     val downloadedBytes: Long?,
-    val priority: String
+    val priority: FilePriority
 )
 
 @Entity(
@@ -128,7 +128,7 @@ data class DownloadFileEntity(
     val taskId: String,
     val link: String,
     val unrestrictedLink: String?,
-    val state: String,
+    val state: LocalDownloadState,
     val stateDescription: String?,
     val progress: Int,
     val filePath: String?,
@@ -165,7 +165,7 @@ data class DownloadTaskWithDetails(
             ProviderTorrentInfo(
                 id = info.id,
                 name = info.name,
-                state = try { ProviderTorrentState.valueOf(info.state) } catch (_: Exception) { ProviderTorrentState.UNKNOWN },
+                state = info.state,
                 status = info.status,
                 progress = info.progress,
                 totalSizeInBytes = info.totalSizeInBytes,
@@ -185,7 +185,7 @@ data class DownloadTaskWithDetails(
                         isSelected = file.isSelected,
                         progress = file.progress,
                         downloadedBytes = file.downloadedBytes,
-                        priority = try { FilePriority.valueOf(file.priority) } catch (_: Exception) { FilePriority.NORMAL }
+                        priority = file.priority
                     )
                 }
             )
@@ -196,16 +196,16 @@ data class DownloadTaskWithDetails(
             providerId = task.providerId,
             name = task.name,
             torrent = TorrentDescriptor(
-                type = try { TorrentType.valueOf(task.torrent.type) } catch (_: Exception) { TorrentType.MAGNET },
+                type = task.torrent.type,
                 uri = task.torrent.uri
             ),
-            state = try { TorrentState.valueOf(task.state) } catch (_: Exception) { TorrentState.ERROR },
+            state = task.state,
             providerTorrentInfo = providerTorrentInfoDomain,
             files = files.map { file ->
                 DownloadFile(
                     link = file.link,
                     unrestrictedLink = file.unrestrictedLink,
-                    state = try { LocalDownloadState.valueOf(file.state) } catch (_: Exception) { LocalDownloadState.PENDING },
+                    state = file.state,
                     stateDescription = file.stateDescription,
                     progress = file.progress,
                     filePath = file.filePath,
@@ -218,7 +218,7 @@ data class DownloadTaskWithDetails(
             destinationSubdirectory = task.destinationSubdirectory,
             createSubfolderByName = task.createSubfolderByName,
             notifyOnCompletion = task.notifyOnCompletion,
-            fileSelectionMode = try { FileSelectionMode.valueOf(task.fileSelectionMode) } catch (_: Exception) { FileSelectionMode.ALL },
+            fileSelectionMode = task.fileSelectionMode,
             onCompletionIntentUri = task.onCompletionIntentUri
         )
     }
@@ -232,7 +232,7 @@ data class RssFeedEntity(
     val destinationSubdirectory: String?,
     val createSubfolderByName: Boolean,
     val notifyOnCompletion: Boolean,
-    val fileSelectionMode: String,
+    val fileSelectionMode: FileSelectionMode,
     val autoDownload: Boolean,
     val lastCheck: Long
 )
@@ -273,7 +273,7 @@ data class RssFeedWithItems(
             destinationSubdirectory = feed.destinationSubdirectory,
             createSubfolderByName = feed.createSubfolderByName,
             notifyOnCompletion = feed.notifyOnCompletion,
-            fileSelectionMode = try { FileSelectionMode.valueOf(feed.fileSelectionMode) } catch (_: Exception) { FileSelectionMode.ALL },
+            fileSelectionMode = feed.fileSelectionMode,
             autoDownload = feed.autoDownload,
             lastCheck = feed.lastCheck,
             items = items.map { item ->
