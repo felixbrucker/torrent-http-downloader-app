@@ -25,6 +25,7 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
                 sharedPreferencesName = "settings",
                 keysToMigrate = setOf(
                     "provider",
+                    "real_debrid_api_token",
                     "real_debrid_api_key",
                     "default_destination_subdirectory",
                     "rss_check_interval",
@@ -57,6 +58,7 @@ class AppSettingsRepository @Inject constructor(
 
     companion object {
         private val KEY_PROVIDER = stringPreferencesKey("provider")
+        private val KEY_REAL_DEBRID_API_TOKEN = stringPreferencesKey("real_debrid_api_token")
         private val KEY_REAL_DEBRID_API_KEY = stringPreferencesKey("real_debrid_api_key")
         private val KEY_DEFAULT_DESTINATION_SUBDIRECTORY = stringPreferencesKey("default_destination_subdirectory")
         private val KEY_RSS_CHECK_INTERVAL = intPreferencesKey("rss_check_interval")
@@ -76,7 +78,7 @@ class AppSettingsRepository @Inject constructor(
 
         AppSettingsPreferences(
             selectedProvider = preferences[KEY_PROVIDER] ?: "real_debrid",
-            realDebridApiKey = preferences[KEY_REAL_DEBRID_API_KEY] ?: "",
+            realDebridApiKey = preferences[KEY_REAL_DEBRID_API_TOKEN] ?: preferences[KEY_REAL_DEBRID_API_KEY] ?: "",
             defaultDestinationSubdirectory = preferences[KEY_DEFAULT_DESTINATION_SUBDIRECTORY] ?: "",
             rssCheckIntervalHours = preferences[KEY_RSS_CHECK_INTERVAL] ?: 1,
             notifyOnCompletion = preferences[KEY_NOTIFY_ON_COMPLETION] ?: true,

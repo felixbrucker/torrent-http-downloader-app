@@ -16,4 +16,7 @@ sealed interface NavRoute : NavKey {
 
     @Serializable
     data object Settings : NavRoute
+
+    @Serializable
+    data object LogViewer : NavRoute
 }

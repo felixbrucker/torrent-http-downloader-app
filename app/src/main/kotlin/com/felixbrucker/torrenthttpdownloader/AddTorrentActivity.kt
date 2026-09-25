@@ -21,12 +21,15 @@ import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
+@AndroidEntryPoint
 class AddTorrentActivity : ComponentActivity() {
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -120,7 +123,7 @@ class AddTorrentActivity : ComponentActivity() {
             serviceScope.launch {
                 isResolvingTorrent = true
                 try {
-                    val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
+                    val resolvedTorrent = TorrentUriResolver(this@AddTorrentActivity, OkHttpClient()).resolve(data)
                     pendingConfig = AddTorrentConfig(
                         id = resolvedTorrent.id,
                         uri = resolvedTorrent.uri.toString(),

@@ -1,19 +1,26 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
-import android.content.SharedPreferences
-import com.felixbrucker.torrenthttpdownloader.container.Container
+import com.felixbrucker.torrenthttpdownloader.data.preferences.AppSettingsRepository
+import kotlinx.coroutines.flow.first
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ProviderFactory {
-    companion object {
-        fun getProvider(): TorrentProvider {
-            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-            val providerName = sharedPreferences.getString("provider", RealDebridProvider.NAME)
-
-            return when (providerName) {
-                LibTorrentProvider.NAME -> Container.getService(LibTorrentProvider.NAME)
-                RealDebridProvider.NAME -> Container.getService(RealDebridProvider.NAME)
-                else -> { throw Exception("Unknown provider: $providerName") }
-            }
+@Singleton
+class ProviderFactory @Inject constructor(
+    private val realDebridProvider: RealDebridProvider,
+    private val libTorrentProvider: LibTorrentProvider,
+    private val appSettingsRepository: AppSettingsRepository
+) {
+    fun getProvider(name: String): TorrentProvider {
+        return when (name.lowercase()) {
+            "real-debrid", "real_debrid" -> realDebridProvider
+            "libtorrent" -> libTorrentProvider
+            else -> realDebridProvider
         }
+    }
+
+    suspend fun getSelectedProvider(): TorrentProvider {
+        val prefs = appSettingsRepository.preferencesFlow.first()
+        return getProvider(prefs.selectedProvider)
     }
 }

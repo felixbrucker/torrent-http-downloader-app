@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.content.ContentResolver
+import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
@@ -19,6 +20,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class TorrentStateMachineStressTest {
     private val provider = mockk<TorrentProvider>()
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)
+    private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
     private val contentResolver = mockk<ContentResolver>()
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
@@ -31,11 +33,11 @@ class TorrentStateMachineStressTest {
             scope = testScope,
             provider = provider,
             localDownloadManager = localDownloadManager,
+            downloadRepository = downloadRepository,
             contentResolver = contentResolver,
             onTaskCompleted = {},
             onPostNotification = { _, _, _, _ -> }
         )
-        mockkObject(DownloadTracker)
     }
 
     @After
@@ -54,15 +56,14 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id"
         )
 
-        every { DownloadTracker.findTask(taskId) } returns task
-        every { DownloadTracker.updateTask(any(), any()) } just runs
+        coEvery { downloadRepository.getTaskById(taskId) } returns task
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)
 
         coEvery { provider.getTorrentInfo(any()) } coAnswers {
             callCount.incrementAndGet()
-            delay(100.milliseconds) // Simulate work
+            delay(100.milliseconds)
             ProviderTorrentInfo(
                 id = "provider-id",
                 name = "Test Task",
@@ -82,7 +83,6 @@ class TorrentStateMachineStressTest {
             )
         }
 
-        // Launch multiple coroutines trying to process the same task simultaneously
         val jobs = List(10) {
             async(Dispatchers.Default) {
                 stateMachine.processTaskSafely(taskId)
@@ -113,9 +113,8 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id-2"
         )
 
-        every { DownloadTracker.findTask(taskId1) } returns task1
-        every { DownloadTracker.findTask(taskId2) } returns task2
-        every { DownloadTracker.updateTask(any(), any()) } just runs
+        coEvery { downloadRepository.getTaskById(taskId1) } returns task1
+        coEvery { downloadRepository.getTaskById(taskId2) } returns task2
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)

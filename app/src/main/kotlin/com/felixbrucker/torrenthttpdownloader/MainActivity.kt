@@ -41,10 +41,13 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
+import dagger.hilt.android.AndroidEntryPoint
+import okhttp3.OkHttpClient
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.ui.screens.DownloadsScreen
+import com.felixbrucker.torrenthttpdownloader.ui.screens.LogViewerScreen
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.ui.screens.SettingsScreen
 import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
@@ -55,6 +58,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -138,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                     serviceScope.launch {
                                         isResolvingTorrent = true
                                         try {
-                                            val resolvedTorrent = TorrentUriResolver(context.contentResolver).resolve(item.link.toUri())
+                                            val resolvedTorrent = TorrentUriResolver(context, OkHttpClient()).resolve(item.link.toUri())
                                             pendingConfig = AddTorrentConfig(
                                                 id = resolvedTorrent.id,
                                                 uri = resolvedTorrent.uri.toString(),
@@ -160,12 +164,12 @@ class MainActivity : ComponentActivity() {
                     entry<NavRoute.Settings> {
                         SettingsScreen(
                             onBack = { navigator.goBack() },
-                            onSave = {
-                                val intent = Intent(context, DownloadService::class.java).apply {
-                                    action = DownloadService.ACTION_RELOAD_SETTINGS
-                                }
-                                startService(intent)
-                            }
+                            onNavigateToLogs = { navigator.navigate(NavRoute.LogViewer) }
+                        )
+                    }
+                    entry<NavRoute.LogViewer> {
+                        LogViewerScreen(
+                            onBack = { navigator.goBack() }
                         )
                     }
                 }

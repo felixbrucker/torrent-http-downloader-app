@@ -1,18 +1,17 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
-import android.content.SharedPreferences
+import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
-import com.felixbrucker.torrenthttpdownloader.container.Container
-import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.makeAddTorrentParams
 import com.felixbrucker.torrenthttpdownloader.sha1Hash
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.felixbrucker.torrenthttpdownloader.torrentId
 import com.felixbrucker.torrenthttpdownloader.torrentInfo
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
@@ -37,36 +36,33 @@ import org.libtorrent4j.swig.torrent_handle
 import java.io.File
 import java.util.Random
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
 
-
-class LibTorrentProvider(
-    private val sharedPreferences: SharedPreferences,
-    private val connectivityManager: ConnectivityManager,
+@Singleton
+class LibTorrentProvider @Inject constructor(
+    @param:ApplicationContext private val context: Context
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
         ProviderFeature.PauseResume,
-        ProviderFeature.FilePriorities,
+        ProviderFeature.FilePriorities
     )
 
-    companion object: ServiceBuilder {
-        override val NAME: String = "libtorrent"
-
-        override fun build(): LibTorrentProvider {
-            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-            val connectivityManager = Container.getService<ConnectivityManager>("ConnectivityManager")
-
-            return LibTorrentProvider(sharedPreferences, connectivityManager)
-        }
+    companion object {
+        const val NAME: String = "libtorrent"
     }
+
+    private val connectivityManager: ConnectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     private val sessionManager = SessionManager()
     private val sessionSettings = SessionSettings()
 
-    private var requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+    private var requireVpnConnection = false
     private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onCapabilitiesChanged(network : Network, networkCapabilities : NetworkCapabilities) {
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
             if (sessionManager.isPaused && isAllowedToRun(networkCapabilities)) {
                 sessionManager.resume()
             } else if (!sessionManager.isPaused && !isAllowedToRun(networkCapabilities)) {
@@ -83,7 +79,7 @@ class LibTorrentProvider(
                 AlertType.PIECE_FINISHED.swig(),
                 AlertType.METADATA_RECEIVED.swig(),
                 AlertType.TORRENT_PAUSED.swig(),
-                AlertType.ADD_TORRENT.swig(),
+                AlertType.ADD_TORRENT.swig()
             )
         }
 
@@ -125,7 +121,6 @@ class LibTorrentProvider(
             sessionSettings.portRangeFirst = range.first
             sessionSettings.portRangeSecond = range.second
         }
-        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
 
         val params = loadSessionParams()
         params.settings = settingsToSettingsPack(sessionSettings)
@@ -161,8 +156,6 @@ class LibTorrentProvider(
         val p = libtorrent.read_resume_data(n, ec)
         require(ec.value() == 0) { "Unable to read the resume data: " + ec.message() }
 
-        // Disable force saving resume data on add, the flag will revert to true once new data is
-        // downloaded automatically.
         p.flags = p.getFlags().and_(TorrentFlags.NEED_SAVE_RESUME.inv())
 
         sessionManager.swig().async_add_torrent(p)
@@ -183,7 +176,7 @@ class LibTorrentProvider(
             null,
             null,
             null,
-            makeDefaultTorrentFlags(),
+            makeDefaultTorrentFlags()
         )
         setPerTorrentSettings(torrentId)
 
@@ -201,7 +194,7 @@ class LibTorrentProvider(
         sessionManager.download(
             magnetUri,
             PathFactory.getScopedTemporaryDirectory(name),
-            makeDefaultTorrentFlags(),
+            makeDefaultTorrentFlags()
         )
         setPerTorrentSettings(torrentId)
 
@@ -275,7 +268,7 @@ class LibTorrentProvider(
             links = files
                 .filter { it.isSelected }
                 .map { it.path },
-            files = files,
+            files = files
         )
     }
 
@@ -341,13 +334,10 @@ class LibTorrentProvider(
     }
 
     override fun reloadSettings() {
-        requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
-        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
         sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
     }
 
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
-        // relative paths in the torrent
         val files: MutableList<Pair<String, Long>> = mutableListOf()
         for (i in 0..<storage.numFiles()) {
             files.add(storage.filePath(i) to storage.fileSize(i))
@@ -467,13 +457,10 @@ class LibTorrentProvider(
     private fun getIface(inetAddress: String, portRangeFirst: Int): String {
         var iface: String?
         if (inetAddress == SessionSettings.DEFAULT_INETADDRESS) {
-            iface = $$"0.0.0.0:%1$d,[::]:%1$d"
+            iface = "0.0.0.0:%1\$d,[::]:%1\$d"
         } else {
-            /* IPv6 test */
-            if (inetAddress.contains(":")) iface = "[$inetAddress]"
-            else iface = inetAddress
-
-            iface = $$"$$iface:%1$d"
+            iface = if (inetAddress.contains(":")) "[$inetAddress]" else inetAddress
+            iface = "$iface:%1\$d"
         }
 
         return String.format(iface, portRangeFirst)
@@ -490,12 +477,10 @@ class LibTorrentProvider(
         modeOutcoming: SessionSettings.EncryptMode,
         modeIncoming: SessionSettings.EncryptMode
     ): Int {
-        if (modeOutcoming === SessionSettings.EncryptMode.FORCED
-            || modeIncoming === SessionSettings.EncryptMode.FORCED
-        ) {
-            return settings_pack.enc_level.pe_rc4.swigValue()
+        return if (modeOutcoming === SessionSettings.EncryptMode.FORCED || modeIncoming === SessionSettings.EncryptMode.FORCED) {
+            settings_pack.enc_level.pe_rc4.swigValue()
         } else {
-            return settings_pack.enc_level.pe_both.swigValue()
+            settings_pack.enc_level.pe_both.swigValue()
         }
     }
 }
@@ -557,9 +542,6 @@ class SessionSettings {
         const val DEFAULT_VALIDATE_HTTPS_TRACKERS: Boolean = true
 
         val randomRangePort: Pair<Int, Int>
-            /*
-            * Get the first port in range [37000, 57000] and the second `first` + 10
-            */
             get() {
                 val port = DEFAULT_PORT_RANGE_FIRST + Random().nextInt(
                     DEFAULT_PORT_RANGE_SECOND - 10 - DEFAULT_PORT_RANGE_FIRST

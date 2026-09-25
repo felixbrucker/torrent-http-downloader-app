@@ -1,20 +1,22 @@
 package com.felixbrucker.torrenthttpdownloader.network
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.felixbrucker.torrenthttpdownloader.makeTorrentId
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.net.URLDecoder
-import java.util.concurrent.TimeUnit
-
+import javax.inject.Inject
+import javax.inject.Singleton
 
 data class ResolvedTorrent(
     val type: TorrentType,
@@ -23,11 +25,12 @@ data class ResolvedTorrent(
     val name: String?,
 )
 
-class TorrentUriResolver(private val contentResolver: ContentResolver) {
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+@Singleton
+class TorrentUriResolver @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val httpClient: OkHttpClient
+) {
+    private val contentResolver: ContentResolver get() = context.contentResolver
 
     suspend fun resolve(uri: Uri): ResolvedTorrent {
         var newUri: Uri = uri
@@ -65,6 +68,7 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
             name = name,
         )
     }
+
     private fun tryToGetNameFromUri(contentResolver: ContentResolver, uriString: String, type: TorrentType): String? {
         if (type == TorrentType.MAGNET) {
             return getNameFromMagnetLink(uriString)
@@ -78,7 +82,6 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
         val displayName = params.find { it.startsWith("dn=") }?.substringAfter("dn=")
         val name = params.find { it.startsWith("name=") }?.substringAfter("name=")
 
-        // URL Decode the name as it is often encoded
         return (displayName ?: name)?.let { URLDecoder.decode(it, "UTF-8") }
     }
 

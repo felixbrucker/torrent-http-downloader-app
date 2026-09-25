@@ -1,10 +1,22 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import com.felixbrucker.torrenthttpdownloader.data.preferences.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.BufferedSink
@@ -14,36 +26,39 @@ import okio.sink
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.*
-import java.util.concurrent.CancellationException
-import java.util.concurrent.TimeUnit
 
 data class DownloadWork(val taskId: String, val file: DownloadFile)
 
-class LocalDownloadManager(
-    private val scope: CoroutineScope,
-    private val sharedPreferences: SharedPreferences,
-    private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
-    private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
+@Singleton
+class LocalDownloadManager @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val downloadRepository: DownloadRepository,
+    private val appSettingsRepository: AppSettingsRepository,
+    private val httpClient: OkHttpClient
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = ConcurrentHashMap.newKeySet<DownloadWork>()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
+    private var scope: CoroutineScope? = null
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    var onLinkExpired: (suspend (DownloadTask, DownloadFile) -> Unit)? = null
+    var onPostNotification: ((String, String, Intent?, Int?) -> Unit)? = null
 
-    fun start() {
-        val parallelDownloads = sharedPreferences.getInt("local_parallel_downloads", 2)
-        repeat(parallelDownloads) {
-            launchWorker()
+    fun start(externalScope: CoroutineScope) {
+        scope = externalScope
+        externalScope.launch(Dispatchers.IO) {
+            val parallelDownloads = 2
+            repeat(parallelDownloads) {
+                launchWorker(externalScope)
+            }
         }
     }
 
-    private fun launchWorker() = scope.launch(Dispatchers.IO) {
+    private fun launchWorker(coroutineScope: CoroutineScope) = coroutineScope.launch(Dispatchers.IO) {
         while (isActive) {
             val work = downloadQueue.poll()
             if (work == null) {
@@ -52,31 +67,28 @@ class LocalDownloadManager(
             }
             inProgressWork.add(work)
             try {
-                processDownload(work)
+                processDownload(work, coroutineScope)
             } finally {
                 inProgressWork.remove(work)
             }
         }
     }
 
-    private suspend fun processDownload(work: DownloadWork) {
+    private suspend fun processDownload(work: DownloadWork, coroutineScope: CoroutineScope) {
         var file = work.file
-        // Should not happen, we enqueued an already completed file
         if (file.state == LocalDownloadState.COMPLETED) {
             return
         }
 
         try {
-            // Support regenerating the link if the existing one expires (
-            // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
-                val task = DownloadTracker.findTask(work.taskId) ?: return
-                onLinkExpired(task, file)
-                file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+                val task = downloadRepository.getTaskById(work.taskId) ?: return
+                onLinkExpired?.invoke(task, file)
+                file = downloadRepository.getTaskById(work.taskId)?.files?.find { it.link == file.link } ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
 
-            val job = scope.launch(Dispatchers.IO) {
+            val job = coroutineScope.launch(Dispatchers.IO) {
                 performDownload(work, downloadUrl, file)
             }
             activeDownloads[file.link] = job
@@ -100,7 +112,6 @@ class LocalDownloadManager(
         val filePath = downloadFile.filePath ?: return
         val destFile = File(filePath)
 
-        // Ensure we can create the file
         destFile.parentFile?.createDirectoryRecursivelyIfNotExists()
 
         val existingBytes = if (destFile.exists()) destFile.length() else 0L
@@ -117,8 +128,7 @@ class LocalDownloadManager(
         try {
             val call = httpClient.newCall(request)
 
-            // Link coroutine cancellation to OkHttp call cancellation
-            val currentJob = currentCoroutineContext()[Job]
+            val currentJob = coroutineContext[Job]
             currentJob?.invokeOnCompletion {
                 call.cancel()
             }
@@ -131,19 +141,20 @@ class LocalDownloadManager(
                     }
 
                     val body = response.body
-                    val contentLength = body.contentLength()
+                    val contentLength = body?.contentLength() ?: 0L
                     val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
-                    DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                        file.copy(
-                            state = LocalDownloadState.DOWNLOADING,
-                            totalBytes = totalBytes,
-                            downloadedBytes = existingBytes
-                        )
-                    }
+                    downloadRepository.updateFileProgress(
+                        taskId = taskId,
+                        link = downloadFile.link,
+                        state = LocalDownloadState.DOWNLOADING,
+                        progress = 0,
+                        speed = 0,
+                        downloadedBytes = existingBytes
+                    )
 
                     val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
-                    val source: BufferedSource = body.source()
+                    val source: BufferedSource = body!!.source()
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
                     var totalDownloaded = existingBytes
@@ -164,15 +175,14 @@ class LocalDownloadManager(
                                 val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
                                 val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
 
-                                DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                                    file.copy(
-                                        progress = progress,
-                                        downloadedBytes = totalDownloaded,
-                                        speed = speed,
-                                        lastTimestamp = now,
-                                        lastBytes = totalDownloaded
-                                    )
-                                }
+                                downloadRepository.updateFileProgress(
+                                    taskId = taskId,
+                                    link = downloadFile.link,
+                                    state = LocalDownloadState.DOWNLOADING,
+                                    progress = progress,
+                                    speed = speed,
+                                    downloadedBytes = totalDownloaded
+                                )
                                 lastUpdate = now
                                 bytesSinceLastUpdate = 0
                             }
@@ -190,21 +200,33 @@ class LocalDownloadManager(
 
     private fun handleFailedLocalDownload(work: DownloadWork, downloadFile: DownloadFile, errorMessage: String) {
         updateFileState(work.taskId, downloadFile.link, LocalDownloadState.ERROR, "Download failed: $errorMessage")
-        onPostNotification(
+        onPostNotification?.invoke(
             "Torrent download encountered an error",
             "Torrent file ${downloadFile.fileName} encountered an error while downloading: $errorMessage",
             null,
-            R.drawable.error_24px,
+            R.drawable.error_24px
         )
-        scope.launch(Dispatchers.IO) {
+        scope?.launch(Dispatchers.IO) {
             delay(5.seconds)
             enqueueDownload(work.copy(file = downloadFile))
         }
     }
 
     private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        DownloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(state = state, stateDescription = error, speed = 0)
+        scope?.launch(Dispatchers.IO) {
+            val task = downloadRepository.getTaskById(taskId)
+            val file = task?.files?.find { it.link == fileLink }
+            val downloadedBytes = file?.downloadedBytes ?: 0L
+            val totalBytes = file?.totalBytes ?: 0L
+            val progress = if (state == LocalDownloadState.COMPLETED) 100 else (file?.progress ?: 0)
+            downloadRepository.updateFileProgress(
+                taskId = taskId,
+                link = fileLink,
+                state = state,
+                progress = progress,
+                speed = 0,
+                downloadedBytes = if (state == LocalDownloadState.COMPLETED && totalBytes > 0) totalBytes else downloadedBytes
+            )
         }
     }
 
@@ -228,51 +250,57 @@ class LocalDownloadManager(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
-        val file = task.files.find { it.link == fileLink } ?: return
-        enqueueDownload(DownloadWork(taskId, file))
+        scope?.launch(Dispatchers.IO) {
+            val task = downloadRepository.getTaskById(taskId) ?: return@launch
+            val file = task.files.find { it.link == fileLink } ?: return@launch
+            enqueueDownload(DownloadWork(taskId, file))
+        }
     }
 
     fun pauseTask(taskId: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
-        task.files.forEach { file ->
-            if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
-                pauseFile(taskId, file.link)
+        scope?.launch(Dispatchers.IO) {
+            val task = downloadRepository.getTaskById(taskId) ?: return@launch
+            task.files.forEach { file ->
+                if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
+                    pauseFile(taskId, file.link)
+                }
             }
         }
     }
 
     fun resumeTask(taskId: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
-        task.files.forEach { file ->
-            if (file.state == LocalDownloadState.PAUSED) {
-                resumeFile(taskId, file.link)
+        scope?.launch(Dispatchers.IO) {
+            val task = downloadRepository.getTaskById(taskId) ?: return@launch
+            task.files.forEach { file ->
+                if (file.state == LocalDownloadState.PAUSED) {
+                    resumeFile(taskId, file.link)
+                }
             }
         }
     }
 
     fun pauseAll() {
-        DownloadTracker.getTasks().forEach { task ->
-            pauseTask(task.id)
+        scope?.launch(Dispatchers.IO) {
+            downloadRepository.tasksFlow.first().forEach { task ->
+                pauseTask(task.id)
+            }
         }
     }
 
     fun resumeAll() {
-        DownloadTracker.getTasks().forEach { task ->
-            resumeTask(task.id)
+        scope?.launch(Dispatchers.IO) {
+            downloadRepository.tasksFlow.first().forEach { task ->
+                resumeTask(task.id)
+            }
         }
     }
 
     fun removeTaskFromQueues(task: DownloadTask) {
-        // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == task.id }
-
-        // Cancel active downloads
         for (file in task.files) {
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)
         }
-
     }
 
     fun stop() {

@@ -37,11 +37,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.felixbrucker.torrenthttpdownloader.DownloadTracker
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.ui.composable.EditRssFeedDialog
 import com.felixbrucker.torrenthttpdownloader.ui.composable.RssFeedItem
+import com.felixbrucker.torrenthttpdownloader.ui.viewmodel.RssFeedsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,113 +51,145 @@ fun RssFeedsScreen(
     syncFeed: (RssFeed) -> Unit,
     syncFeeds: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
+    viewModel: RssFeedsViewModel = hiltViewModel()
 ) {
-    val feeds by DownloadTracker.rssFeeds.collectAsState()
-    val isSyncingAll by DownloadTracker.isSyncingAll.collectAsState()
-    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
-
-    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 360f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
+    val feeds by viewModel.feeds.collectAsState()
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.rss_feeds)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = syncFeeds) {
-                        Icon(
-                            Icons.Default.Sync,
-                            contentDescription = "Sync Feeds",
-                            modifier = if (isSyncingAll) Modifier.rotate(rotation) else Modifier
-                        )
-                    }
-                    IconButton(onClick = { showAddFeedDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Feed")
-                    }
-                }
+            RssFeedsTopBar(
+                onBack = onBack,
+                onSyncFeeds = syncFeeds,
+                onAddFeedClick = { showAddFeedDialog = true }
             )
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isSyncingAll,
+            isRefreshing = false,
             onRefresh = syncFeeds,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
             if (feeds.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(stringResource(R.string.no_rss_feeds))
-                }
+                EmptyRssFeedsView()
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(feeds, key = { it.id }) { feed ->
-                        RssFeedItem(
-                            feed = feed,
-                            onClick = { onNavigateToDetail(feed.id) },
-                            onDelete = { DownloadTracker.removeRssFeed(feed.id) },
-                            syncFeed = { syncFeed(feed) },
-                            editFeed = { editFeedConfig = feed },
-                            isSyncing = syncingFeedIds.contains(feed.id)
-                        )
-                    }
-                }
+                RssFeedList(
+                    feeds = feeds,
+                    onNavigateToDetail = onNavigateToDetail,
+                    onDelete = { viewModel.removeFeed(it) },
+                    onSync = syncFeed,
+                    onEdit = { editFeedConfig = it }
+                )
             }
         }
 
         if (showAddFeedDialog) {
-            EditRssFeedDialog(
+            AddRssFeedDialog(
                 onDismiss = { showAddFeedDialog = false },
-                onConfirm = { newFeed ->
-                    DownloadTracker.addRssFeed(newFeed)
+                onConfirm = { feed ->
+                    viewModel.addFeed(feed)
                     showAddFeedDialog = false
-                    syncFeed(newFeed)
+                    syncFeed(feed)
                 }
             )
         }
 
-        editFeedConfig?.let { editingFeed ->
-            EditRssFeedDialog(
-                feed = editingFeed,
+        editFeedConfig?.let { feed ->
+            EditRssFeedDialogWrapper(
+                feed = feed,
                 onDismiss = { editFeedConfig = null },
-                onConfirm = { newFeed ->
-                    DownloadTracker.updateRssFeed(newFeed.id) { feed ->
-                        val isResetState = feed.url != newFeed.url
-
-                        newFeed.copy(
-                            lastCheck = if (isResetState) 0 else newFeed.lastCheck,
-                            items = if (isResetState) listOf() else newFeed.items,
-                        )
-                    }
-                    syncFeed(newFeed)
+                onConfirm = { updatedFeed ->
+                    viewModel.addFeed(updatedFeed)
+                    syncFeed(updatedFeed)
                     editFeedConfig = null
                 }
             )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RssFeedsTopBar(
+    onBack: () -> Unit,
+    onSyncFeeds: () -> Unit,
+    onAddFeedClick: () -> Unit
+) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.rss_feeds)) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            IconButton(onClick = onSyncFeeds) {
+                Icon(Icons.Default.Sync, contentDescription = "Sync Feeds")
+            }
+            IconButton(onClick = onAddFeedClick) {
+                Icon(Icons.Default.Add, contentDescription = "Add Feed")
+            }
+        }
+    )
+}
+
+@Composable
+private fun EmptyRssFeedsView() {
+    Box(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(stringResource(R.string.no_rss_feeds))
+    }
+}
+
+@Composable
+private fun RssFeedList(
+    feeds: List<RssFeed>,
+    onNavigateToDetail: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onSync: (RssFeed) -> Unit,
+    onEdit: (RssFeed) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(feeds, key = { it.id }) { feed ->
+            RssFeedItem(
+                feed = feed,
+                onClick = { onNavigateToDetail(feed.id) },
+                onDelete = { onDelete(feed.id) },
+                syncFeed = { onSync(feed) },
+                editFeed = { onEdit(feed) },
+                isSyncing = false
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddRssFeedDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (RssFeed) -> Unit
+) {
+    EditRssFeedDialog(
+        onDismiss = onDismiss,
+        onConfirm = onConfirm
+    )
+}
+
+@Composable
+private fun EditRssFeedDialogWrapper(
+    feed: RssFeed,
+    onDismiss: () -> Unit,
+    onConfirm: (RssFeed) -> Unit
+) {
+    EditRssFeedDialog(
+        feed = feed,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm
+    )
 }
