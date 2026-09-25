@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kover)
+    alias(libs.plugins.google.devtools.ksp)
+    alias(libs.plugins.hilt.android)
 }
 
 android {
@@ -66,6 +68,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 kover {
     reports {
         total {
@@ -86,6 +92,11 @@ kover {
                     "com.felixbrucker.torrenthttpdownloader.ui.theme.*",
                     "com.felixbrucker.torrenthttpdownloader.MainActivity*",
                     "com.felixbrucker.torrenthttpdownloader.AddTorrentActivity*",
+                    "*Factory*",
+                    "*MembersInjector*",
+                    "*HiltModules*",
+                    "*GeneratedInjector*",
+                    "*Hilt_*",
                 )
             }
         }
@@ -113,6 +124,16 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
+    "ksp"(libs.androidx.room.compiler)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.androidx.hilt.navigation.compose)
+    "ksp"(libs.hilt.compiler)
+    "ksp"(libs.androidx.hilt.compiler)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

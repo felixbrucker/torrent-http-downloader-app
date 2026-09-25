@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.app.Application
 import android.content.Context
+import timber.log.Timber
 import java.lang.ref.WeakReference
 
 class TorrentHttpDownloaderApp : Application() {
@@ -16,6 +17,9 @@ class TorrentHttpDownloaderApp : Application() {
     override fun onCreate() {
         super.onCreate()
         contextRef = WeakReference(applicationContext)
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
         DownloadTracker.init()
     }
 }
