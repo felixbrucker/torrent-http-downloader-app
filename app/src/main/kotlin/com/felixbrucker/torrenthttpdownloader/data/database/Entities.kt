@@ -47,7 +47,8 @@ data class DownloadTaskEntity(
             entity = DownloadTaskEntity::class,
             parentColumns = ["id"],
             childColumns = ["taskId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE
         )
     ],
     indices = [Index("taskId")]
@@ -76,7 +77,8 @@ data class ProviderTorrentInfoEntity(
             entity = ProviderTorrentInfoEntity::class,
             parentColumns = ["id"],
             childColumns = ["providerInfoId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE
         )
     ],
     indices = [Index("providerInfoId")]
@@ -100,7 +102,8 @@ data class ProviderTorrentFileEntity(
             entity = ProviderTorrentInfoEntity::class,
             parentColumns = ["id"],
             childColumns = ["providerInfoId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE
         )
     ],
     indices = [Index("providerInfoId")]
@@ -118,7 +121,8 @@ data class ProviderTorrentLinkEntity(
             entity = DownloadTaskEntity::class,
             parentColumns = ["id"],
             childColumns = ["taskId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE
         )
     ],
     indices = [Index("taskId")]
@@ -244,7 +248,8 @@ data class RssFeedEntity(
             entity = RssFeedEntity::class,
             parentColumns = ["id"],
             childColumns = ["feedId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE
         )
     ],
     indices = [Index("feedId")]

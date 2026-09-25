@@ -148,14 +148,14 @@ class DatabaseRepositoryTest {
     }
 
     @Test
-    fun testDownloadRepositorySaveAndDeleteTask() = runTest {
+    fun testDownloadRepositoryInsertAndDeleteTask() = runTest {
         val task = DownloadTask(
             id = "t2",
             name = "Task 2",
             torrent = TorrentDescriptor(type = TorrentType.MAGNET, uri = "magnet:?xt=456")
         )
 
-        downloadRepository.saveTask(task)
+        downloadRepository.insertTask(task)
         downloadRepository.deleteTask("t2")
 
         coVerify { downloadDao.deleteTaskById("t2") }
@@ -218,19 +218,21 @@ class DatabaseRepositoryTest {
     }
 
     @Test
-    fun testRssRepositorySaveAndDeleteFeed() = runTest {
+    fun testRssRepositoryInsertAndDeleteFeed() = runTest {
         val feed = RssFeed(id = "f2", name = "Feed 2", url = "http://f2.com")
 
-        rssRepository.saveFeed(feed)
+        rssRepository.insertFeed(feed)
         rssRepository.deleteFeed("f2")
 
         coVerify { rssFeedDao.deleteFeedById("f2") }
     }
 
     @Test
-    fun testRssRepositoryTargetedUpdateItemState() = runTest {
+    fun testRssRepositoryTargetedUpdates() = runTest {
         rssRepository.updateItemState("item1", isRead = true, isDownloaded = true)
+        rssRepository.updateFeedLastCheck("feed1", 123456L)
 
         coVerify { rssFeedDao.updateItemState("item1", isRead = true, isDownloaded = true) }
+        coVerify { rssFeedDao.updateFeedLastCheck("feed1", 123456L) }
     }
 }

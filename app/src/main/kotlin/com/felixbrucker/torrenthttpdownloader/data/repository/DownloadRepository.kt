@@ -10,6 +10,7 @@ import com.felixbrucker.torrenthttpdownloader.data.database.TorrentDescriptorEnt
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentState
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -29,7 +30,7 @@ class DownloadRepository @Inject constructor(
         return details.toDomainModel()
     }
 
-    suspend fun saveTask(task: DownloadTask) {
+    suspend fun insertTask(task: DownloadTask) {
         val taskEntity = DownloadTaskEntity(
             id = task.id,
             providerId = task.providerId,
@@ -48,7 +49,6 @@ class DownloadRepository @Inject constructor(
         )
         downloadDao.insertTask(taskEntity)
 
-        downloadDao.deleteFilesForTask(task.id)
         val fileEntities = task.files.map { file ->
             DownloadFileEntity(
                 taskId = task.id,
@@ -67,7 +67,6 @@ class DownloadRepository @Inject constructor(
             downloadDao.insertFiles(fileEntities)
         }
 
-        downloadDao.deleteProviderInfoForTask(task.id)
         val info = task.providerTorrentInfo
         if (info != null) {
             val infoEntity = ProviderTorrentInfoEntity(
@@ -88,7 +87,6 @@ class DownloadRepository @Inject constructor(
             )
             downloadDao.insertProviderInfo(infoEntity)
 
-            downloadDao.deleteProviderFiles(info.id)
             val pFileEntities = info.files.map { file ->
                 ProviderTorrentFileEntity(
                     providerInfoId = info.id,
@@ -105,7 +103,6 @@ class DownloadRepository @Inject constructor(
                 downloadDao.insertProviderFiles(pFileEntities)
             }
 
-            downloadDao.deleteProviderLinks(info.id)
             val pLinkEntities = info.links.map { link ->
                 ProviderTorrentLinkEntity(
                     providerInfoId = info.id,
@@ -118,14 +115,28 @@ class DownloadRepository @Inject constructor(
         }
     }
 
-    suspend fun saveTasks(tasks: List<DownloadTask>) {
-        for (task in tasks) {
-            saveTask(task)
-        }
-    }
-
     suspend fun updateTaskState(id: String, state: TorrentState, errorMessage: String? = null) {
         downloadDao.updateTaskState(id, state, errorMessage)
+    }
+
+    suspend fun updateProviderInfo(taskId: String, info: ProviderTorrentInfo) {
+        val infoEntity = ProviderTorrentInfoEntity(
+            id = info.id,
+            taskId = taskId,
+            name = info.name,
+            state = info.state,
+            status = info.status,
+            progress = info.progress,
+            totalSizeInBytes = info.totalSizeInBytes,
+            downloadedBytes = info.downloadedBytes,
+            downloadSpeed = info.downloadSpeed,
+            uploadSpeed = info.uploadSpeed,
+            seeders = info.seeders,
+            leechers = info.leechers,
+            peers = info.peers,
+            totalPeers = info.totalPeers
+        )
+        downloadDao.updateProviderInfo(infoEntity)
     }
 
     suspend fun updateFileProgress(

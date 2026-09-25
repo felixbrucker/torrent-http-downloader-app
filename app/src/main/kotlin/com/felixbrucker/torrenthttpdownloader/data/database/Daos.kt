@@ -89,6 +89,9 @@ interface RssFeedDao {
     @Update
     suspend fun updateFeed(feed: RssFeedEntity)
 
+    @Query("UPDATE rss_feeds SET lastCheck = :lastCheck WHERE id = :id")
+    suspend fun updateFeedLastCheck(id: String, lastCheck: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItems(items: List<RssItemEntity>)
 

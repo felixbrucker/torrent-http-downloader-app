@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "f513a98ca3b01ebf48bbcfacb0857b07",
+    "identityHash": "ff30d7918d62991ef09c7981307488e0",
     "entities": [
       {
         "tableName": "download_tasks",
@@ -86,7 +86,7 @@
       },
       {
         "tableName": "provider_torrent_info",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `taskId` TEXT NOT NULL, `name` TEXT NOT NULL, `state` TEXT NOT NULL, `status` TEXT NOT NULL, `progress` REAL NOT NULL, `totalSizeInBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, `downloadSpeed` INTEGER NOT NULL, `uploadSpeed` INTEGER NOT NULL, `seeders` INTEGER, `leechers` INTEGER, `peers` INTEGER, `totalPeers` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `taskId` TEXT NOT NULL, `name` TEXT NOT NULL, `state` TEXT NOT NULL, `status` TEXT NOT NULL, `progress` REAL NOT NULL, `totalSizeInBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, `downloadSpeed` INTEGER NOT NULL, `uploadSpeed` INTEGER NOT NULL, `seeders` INTEGER, `leechers` INTEGER, `peers` INTEGER, `totalPeers` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -190,7 +190,7 @@
           {
             "table": "download_tasks",
             "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
+            "onUpdate": "CASCADE",
             "columns": [
               "taskId"
             ],
@@ -202,7 +202,7 @@
       },
       {
         "tableName": "provider_torrent_files",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `providerInfoId` TEXT NOT NULL, `fileId` INTEGER NOT NULL, `path` TEXT NOT NULL, `size` INTEGER NOT NULL, `isSelected` INTEGER NOT NULL, `progress` REAL, `downloadedBytes` INTEGER, `priority` TEXT NOT NULL, FOREIGN KEY(`providerInfoId`) REFERENCES `provider_torrent_info`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `providerInfoId` TEXT NOT NULL, `fileId` INTEGER NOT NULL, `path` TEXT NOT NULL, `size` INTEGER NOT NULL, `isSelected` INTEGER NOT NULL, `progress` REAL, `downloadedBytes` INTEGER, `priority` TEXT NOT NULL, FOREIGN KEY(`providerInfoId`) REFERENCES `provider_torrent_info`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "autoId",
@@ -278,7 +278,7 @@
           {
             "table": "provider_torrent_info",
             "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
+            "onUpdate": "CASCADE",
             "columns": [
               "providerInfoId"
             ],
@@ -290,7 +290,7 @@
       },
       {
         "tableName": "provider_torrent_links",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `providerInfoId` TEXT NOT NULL, `link` TEXT NOT NULL, FOREIGN KEY(`providerInfoId`) REFERENCES `provider_torrent_info`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `providerInfoId` TEXT NOT NULL, `link` TEXT NOT NULL, FOREIGN KEY(`providerInfoId`) REFERENCES `provider_torrent_info`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "autoId",
@@ -332,7 +332,7 @@
           {
             "table": "provider_torrent_info",
             "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
+            "onUpdate": "CASCADE",
             "columns": [
               "providerInfoId"
             ],
@@ -344,7 +344,7 @@
       },
       {
         "tableName": "download_files",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` TEXT NOT NULL, `link` TEXT NOT NULL, `unrestrictedLink` TEXT, `state` TEXT NOT NULL, `stateDescription` TEXT, `progress` INTEGER NOT NULL, `filePath` TEXT, `speed` INTEGER NOT NULL, `totalBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` TEXT NOT NULL, `link` TEXT NOT NULL, `unrestrictedLink` TEXT, `state` TEXT NOT NULL, `stateDescription` TEXT, `progress` INTEGER NOT NULL, `filePath` TEXT, `speed` INTEGER NOT NULL, `totalBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "autoId",
@@ -431,7 +431,7 @@
           {
             "table": "download_tasks",
             "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
+            "onUpdate": "CASCADE",
             "columns": [
               "taskId"
             ],
@@ -508,7 +508,7 @@
       },
       {
         "tableName": "rss_items",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `feedId` TEXT NOT NULL, `title` TEXT NOT NULL, `link` TEXT NOT NULL, `description` TEXT, `pubDate` INTEGER, `isRead` INTEGER NOT NULL, `isDownloaded` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`feedId`) REFERENCES `rss_feeds`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `feedId` TEXT NOT NULL, `title` TEXT NOT NULL, `link` TEXT NOT NULL, `description` TEXT, `pubDate` INTEGER, `isRead` INTEGER NOT NULL, `isDownloaded` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`feedId`) REFERENCES `rss_feeds`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -578,7 +578,7 @@
           {
             "table": "rss_feeds",
             "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
+            "onUpdate": "CASCADE",
             "columns": [
               "feedId"
             ],
@@ -591,7 +591,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f513a98ca3b01ebf48bbcfacb0857b07')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ff30d7918d62991ef09c7981307488e0')"
     ]
   }
 }

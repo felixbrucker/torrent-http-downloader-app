@@ -23,7 +23,7 @@ class RssRepository @Inject constructor(
         return details.toDomainModel()
     }
 
-    suspend fun saveFeed(feed: RssFeed) {
+    suspend fun insertFeed(feed: RssFeed) {
         val feedEntity = RssFeedEntity(
             id = feed.id,
             name = feed.name,
@@ -37,7 +37,6 @@ class RssRepository @Inject constructor(
         )
         rssFeedDao.insertFeed(feedEntity)
 
-        rssFeedDao.deleteItemsForFeed(feed.id)
         val itemEntities = feed.items.map { item ->
             RssItemEntity(
                 id = item.id,
@@ -55,14 +54,12 @@ class RssRepository @Inject constructor(
         }
     }
 
-    suspend fun saveFeeds(feeds: List<RssFeed>) {
-        for (feed in feeds) {
-            saveFeed(feed)
-        }
-    }
-
     suspend fun updateItemState(id: String, isRead: Boolean, isDownloaded: Boolean) {
         rssFeedDao.updateItemState(id, isRead, isDownloaded)
+    }
+
+    suspend fun updateFeedLastCheck(id: String, lastCheck: Long) {
+        rssFeedDao.updateFeedLastCheck(id, lastCheck)
     }
 
     suspend fun deleteFeed(id: String) {
