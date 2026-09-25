@@ -27,11 +27,13 @@ object DatabaseModule {
     }
 
     @Provides
+    @Singleton
     fun provideDownloadDao(database: AppDatabase): DownloadDao {
         return database.downloadDao()
     }
 
     @Provides
+    @Singleton
     fun provideRssFeedDao(database: AppDatabase): RssFeedDao {
         return database.rssFeedDao()
     }
