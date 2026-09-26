@@ -5,6 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.network.RealDebridApiService
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -29,11 +30,12 @@ class RealDebridProvider @Inject constructor(
 
     private var apiToken: String = ""
     private val auth: String get() = "Bearer $apiToken"
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     init {
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             appSettingsRepository.preferencesFlow.collect { prefs ->
-                apiToken = prefs.realDebridApiKey
+                apiToken = prefs.realDebridApiToken
             }
         }
     }
@@ -150,14 +152,13 @@ class RealDebridProvider @Inject constructor(
     }
 
     override fun reloadSettings() {
-        // Updated via Flow collection
+        scope.launch {
+            val prefs = appSettingsRepository.preferencesFlow.first()
+            apiToken = prefs.realDebridApiToken
+        }
     }
 
-    private suspend fun checkApiToken() {
-        if (apiToken.isEmpty()) {
-            val prefs = appSettingsRepository.preferencesFlow.first()
-            apiToken = prefs.realDebridApiKey
-        }
+    private fun checkApiToken() {
         if (apiToken.isEmpty()) {
             throw Exception("API token is empty")
         }

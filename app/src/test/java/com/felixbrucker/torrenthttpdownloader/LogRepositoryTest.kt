@@ -5,6 +5,7 @@ import android.util.Log
 import com.felixbrucker.torrenthttpdownloader.data.logging.AppLogTree
 import com.felixbrucker.torrenthttpdownloader.data.logging.LogEntry
 import com.felixbrucker.torrenthttpdownloader.data.logging.LogRepository
+import com.google.gson.Gson
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -108,12 +109,13 @@ class LogRepositoryTest {
 
     @Test
     fun testPruneEntriesByAge() {
+        val repo = LogRepository(context, Gson())
         val now = 1000000L
         val oldEntry = LogEntry(timestamp = 100L, message = "Old")
         val newEntry = LogEntry(timestamp = 900000L, message = "New")
         val entries = listOf(oldEntry, newEntry)
 
-        val result = LogRepository.pruneEntries(entries, nowMs = now, maxAgeMs = 500000L, maxEntries = 10)
+        val result = repo.pruneEntries(entries, nowMs = now, maxAgeMs = 500000L, maxEntries = 10)
 
         val count = result.size
         val firstMessage = result.first().message
@@ -123,13 +125,14 @@ class LogRepositoryTest {
 
     @Test
     fun testPruneEntriesByMaxCount() {
+        val repo = LogRepository(context, Gson())
         val now = 1000000L
         val entry1 = LogEntry(timestamp = 900000L, message = "E1")
         val entry2 = LogEntry(timestamp = 950000L, message = "E2")
         val entry3 = LogEntry(timestamp = 980000L, message = "E3")
         val entries = listOf(entry1, entry2, entry3)
 
-        val result = LogRepository.pruneEntries(entries, nowMs = now, maxAgeMs = 500000L, maxEntries = 2)
+        val result = repo.pruneEntries(entries, nowMs = now, maxAgeMs = 500000L, maxEntries = 2)
 
         val count = result.size
         val firstMsg = result[0].message
@@ -142,17 +145,26 @@ class LogRepositoryTest {
     @Test
     fun testRepositoryInitAddClear() = runTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        LogRepository.ioDispatcher = testDispatcher
-        LogRepository.init(context)
-        LogRepository.clearLogs()
-        val testEntry = LogEntry(timestamp = System.currentTimeMillis(), priority = Log.INFO, tag = "TestTag", message = "Hello Test")
+        val repo = LogRepository(context, Gson())
+        repo.ioDispatcher = testDispatcher
+        repo.init(context)
+        testScheduler.advanceUntilIdle()
 
-        LogRepository.addLog(testEntry)
-        val logsAfterAdd = LogRepository.logsFlow.value
+        repo.clearLogs()
+        testScheduler.advanceUntilIdle()
+
+        val testEntry = LogEntry(timestamp = System.currentTimeMillis(), priority = Log.INFO, tag = "TestTag", message = "Hello Test")
+        repo.addLog(testEntry)
+        testScheduler.advanceUntilIdle()
+
+        val logsAfterAdd = repo.logsFlow.value
         val addSize = logsAfterAdd.size
         val addedMsg = logsAfterAdd.last().message
-        LogRepository.clearLogs()
-        val logsAfterClear = LogRepository.logsFlow.value
+
+        repo.clearLogs()
+        testScheduler.advanceUntilIdle()
+
+        val logsAfterClear = repo.logsFlow.value
         val clearSize = logsAfterClear.size
 
         assertEquals(1, addSize)
@@ -162,7 +174,8 @@ class LogRepositoryTest {
 
     @Test
     fun testAppLogTreeIsLoggable() {
-        val tree = AppLogTree()
+        val repo = LogRepository(context, Gson())
+        val tree = AppLogTree(repo)
 
         val isLoggableVerbose = tree.isLoggable("Tag", Log.VERBOSE)
         val isLoggableError = tree.isLoggable("Tag", Log.ERROR)
@@ -174,14 +187,21 @@ class LogRepositoryTest {
     @Test
     fun testAppLogTreeLog() = runTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        LogRepository.ioDispatcher = testDispatcher
-        LogRepository.init(context)
-        LogRepository.clearLogs()
-        val tree = AppLogTree()
+        val repo = LogRepository(context, Gson())
+        repo.ioDispatcher = testDispatcher
+        repo.init(context)
+        testScheduler.advanceUntilIdle()
+
+        repo.clearLogs()
+        testScheduler.advanceUntilIdle()
+
+        val tree = AppLogTree(repo)
         val exception = RuntimeException("Test Exception")
 
         tree.e(exception, "Error occurred")
-        val logs = LogRepository.logsFlow.value
+        testScheduler.advanceUntilIdle()
+
+        val logs = repo.logsFlow.value
         val size = logs.size
         val lastEntry = logs.last()
         val priority = lastEntry.priority

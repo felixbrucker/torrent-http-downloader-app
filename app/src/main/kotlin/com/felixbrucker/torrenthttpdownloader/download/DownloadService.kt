@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.download
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,8 +10,11 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
+import com.felixbrucker.torrenthttpdownloader.MainActivity
+import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.data.preferences.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
+import com.felixbrucker.torrenthttpdownloader.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.AddTorrentParams
 import com.felixbrucker.torrenthttpdownloader.IAddTorrentCallback
 import com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService
@@ -52,9 +55,9 @@ class DownloadService : Service() {
     @Inject lateinit var localDownloadManager: LocalDownloadManager
     @Inject lateinit var providerFactory: ProviderFactory
     @Inject lateinit var torrentUriResolver: TorrentUriResolver
+    @Inject lateinit var torrentStateMachine: TorrentStateMachine
 
     private lateinit var provider: TorrentProvider
-    private lateinit var torrentStateMachine: TorrentStateMachine
 
     private val binder = object : ITorrentDownloadService.Stub() {
         override fun addTorrent(params: AddTorrentParams, callback: IAddTorrentCallback) {
@@ -116,34 +119,27 @@ class DownloadService : Service() {
             provider = providerFactory.getSelectedProvider()
 
             localDownloadManager.onLinkExpired = { task, file ->
-                torrentStateMachine.updateFileInfo(task, file)
+                serviceScope.launch { torrentStateMachine.updateFileInfo(task, file) }
             }
             localDownloadManager.onPostNotification = ::postNotification
 
-            torrentStateMachine = TorrentStateMachine(
-                scope = serviceScope,
-                provider = provider,
-                localDownloadManager = localDownloadManager,
-                downloadRepository = downloadRepository,
-                contentResolver = contentResolver,
-                onTaskCompleted = { task ->
-                    task.onCompletionIntentUri?.let { uri ->
-                        try {
-                            val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
-                            sendBroadcast(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+            torrentStateMachine.onTaskCompleted = { task ->
+                task.onCompletionIntentUri?.let { uri ->
+                    try {
+                        val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                        sendBroadcast(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
-                    updateNotification()
-                    stopSelfIfIdle()
-                },
-                onPostNotification = ::postNotification
-            )
+                }
+                updateNotification()
+                stopSelfIfIdle()
+            }
+            torrentStateMachine.onPostNotification = ::postNotification
 
             startNotificationUpdates()
 
-            localDownloadManager.start(serviceScope)
+            localDownloadManager.start()
             torrentStateMachine.start()
         }
     }

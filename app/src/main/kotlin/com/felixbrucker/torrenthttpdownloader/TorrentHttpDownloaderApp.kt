@@ -6,6 +6,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.felixbrucker.torrenthttpdownloader.data.logging.AppLogTree
 import com.felixbrucker.torrenthttpdownloader.data.logging.LogRepository
+import com.felixbrucker.torrenthttpdownloader.download.DownloadTracker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import java.lang.ref.WeakReference
@@ -15,6 +16,7 @@ import javax.inject.Inject
 class TorrentHttpDownloaderApp : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Inject lateinit var logRepository: LogRepository
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -32,8 +34,8 @@ class TorrentHttpDownloaderApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         contextRef = WeakReference(applicationContext)
-        LogRepository.init(this)
-        Timber.plant(AppLogTree())
+        logRepository.init(this)
+        Timber.plant(AppLogTree(logRepository))
         DownloadTracker.init()
     }
 }

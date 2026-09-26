@@ -64,9 +64,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.felixbrucker.torrenthttpdownloader.DownloadService
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
-import com.felixbrucker.torrenthttpdownloader.Formatter
+import com.felixbrucker.torrenthttpdownloader.download.DownloadService
+import com.felixbrucker.torrenthttpdownloader.download.DownloadService.Companion.ACTION_RESTART_TASK
+import com.felixbrucker.torrenthttpdownloader.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
@@ -78,8 +78,8 @@ import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFile
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentFileState
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.asStateText
-import com.felixbrucker.torrenthttpdownloader.capitalized
+import com.felixbrucker.torrenthttpdownloader.util.asStateText
+import com.felixbrucker.torrenthttpdownloader.util.capitalized
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.ui.icons.arrow_upload_progress
 import com.felixbrucker.torrenthttpdownloader.ui.icons.downloading

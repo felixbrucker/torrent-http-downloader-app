@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState

@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.util
 
 import org.libtorrent4j.TorrentInfo
 

@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader.ui.viewmodel
+package com.felixbrucker.torrenthttpdownloader.ui.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,10 +25,10 @@ class RssFeedDetailViewModel @Inject constructor(
         }
     }
 
-    fun markItemRead(itemId: String, isRead: Boolean) {
+    fun updateFeed(feed: RssFeed) {
         viewModelScope.launch {
-            rssRepository.updateItemState(itemId, isRead = isRead, isDownloaded = _feed.value?.items?.find { it.id == itemId }?.isDownloaded ?: false)
-            _feed.value?.id?.let { loadFeed(it) }
+            rssRepository.insertFeed(feed)
+            _feed.value = feed
         }
     }
 }

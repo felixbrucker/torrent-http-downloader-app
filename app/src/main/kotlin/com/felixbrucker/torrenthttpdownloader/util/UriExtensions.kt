@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.util
 
 import android.content.ContentResolver
 import android.net.Uri

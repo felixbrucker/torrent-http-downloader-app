@@ -2,8 +2,8 @@ package com.felixbrucker.torrenthttpdownloader.storage
 
 import android.os.Environment
 import com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp.Companion.getContext
-import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
-import com.felixbrucker.torrenthttpdownloader.hash
+import com.felixbrucker.torrenthttpdownloader.util.cleanedForUseAsPath
+import com.felixbrucker.torrenthttpdownloader.util.hash
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import java.io.File
 

@@ -1,9 +1,11 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.download
 
 import android.content.Context
 import android.content.Intent
+import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.data.preferences.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
+import com.felixbrucker.torrenthttpdownloader.util.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
@@ -12,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -40,25 +43,25 @@ class LocalDownloadManager @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val httpClient: OkHttpClient
 ) {
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = ConcurrentHashMap.newKeySet<DownloadWork>()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
-    private var scope: CoroutineScope? = null
 
     var onLinkExpired: (suspend (DownloadTask, DownloadFile) -> Unit)? = null
     var onPostNotification: ((String, String, Intent?, Int?) -> Unit)? = null
 
-    fun start(externalScope: CoroutineScope) {
-        scope = externalScope
-        externalScope.launch(Dispatchers.IO) {
-            val parallelDownloads = 2
+    fun start() {
+        scope.launch {
+            val prefs = appSettingsRepository.preferencesFlow.first()
+            val parallelDownloads = prefs.localParallelDownloads
             repeat(parallelDownloads) {
-                launchWorker(externalScope)
+                launchWorker()
             }
         }
     }
 
-    private fun launchWorker(coroutineScope: CoroutineScope) = coroutineScope.launch(Dispatchers.IO) {
+    private fun launchWorker() = scope.launch {
         while (isActive) {
             val work = downloadQueue.poll()
             if (work == null) {
@@ -67,28 +70,30 @@ class LocalDownloadManager @Inject constructor(
             }
             inProgressWork.add(work)
             try {
-                processDownload(work, coroutineScope)
+                processDownload(work)
             } finally {
                 inProgressWork.remove(work)
             }
         }
     }
 
-    private suspend fun processDownload(work: DownloadWork, coroutineScope: CoroutineScope) {
+    private suspend fun processDownload(work: DownloadWork) {
         var file = work.file
+        // Should not happen, we enqueued an already completed file
         if (file.state == LocalDownloadState.COMPLETED) {
             return
         }
 
         try {
+            // Support regenerating the link if the existing one expires
             if (file.unrestrictedLink == null) {
                 val task = downloadRepository.getTaskById(work.taskId) ?: return
                 onLinkExpired?.invoke(task, file)
-                file = downloadRepository.getTaskById(work.taskId)?.files?.find { it.link == file.link } ?: return
+                file = downloadRepository.getFileByLink(work.taskId, file.link) ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
 
-            val job = coroutineScope.launch(Dispatchers.IO) {
+            val job = scope.launch {
                 performDownload(work, downloadUrl, file)
             }
             activeDownloads[file.link] = job
@@ -112,6 +117,7 @@ class LocalDownloadManager @Inject constructor(
         val filePath = downloadFile.filePath ?: return
         val destFile = File(filePath)
 
+        // Ensure we can create the file
         destFile.parentFile?.createDirectoryRecursivelyIfNotExists()
 
         val existingBytes = if (destFile.exists()) destFile.length() else 0L
@@ -128,6 +134,7 @@ class LocalDownloadManager @Inject constructor(
         try {
             val call = httpClient.newCall(request)
 
+            // Link coroutine cancellation to OkHttp call cancellation
             val currentJob = coroutineContext[Job]
             currentJob?.invokeOnCompletion {
                 call.cancel()
@@ -141,20 +148,19 @@ class LocalDownloadManager @Inject constructor(
                     }
 
                     val body = response.body
-                    val contentLength = body?.contentLength() ?: 0L
+                    val contentLength = body.contentLength()
                     val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
                     downloadRepository.updateFileProgress(
                         taskId = taskId,
                         link = downloadFile.link,
                         state = LocalDownloadState.DOWNLOADING,
-                        progress = 0,
                         speed = 0,
                         downloadedBytes = existingBytes
                     )
 
                     val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
-                    val source: BufferedSource = body!!.source()
+                    val source: BufferedSource = body.source()
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
                     var totalDownloaded = existingBytes
@@ -179,7 +185,6 @@ class LocalDownloadManager @Inject constructor(
                                     taskId = taskId,
                                     link = downloadFile.link,
                                     state = LocalDownloadState.DOWNLOADING,
-                                    progress = progress,
                                     speed = speed,
                                     downloadedBytes = totalDownloaded
                                 )
@@ -206,27 +211,15 @@ class LocalDownloadManager @Inject constructor(
             null,
             R.drawable.error_24px
         )
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             delay(5.seconds)
             enqueueDownload(work.copy(file = downloadFile))
         }
     }
 
     private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        scope?.launch(Dispatchers.IO) {
-            val task = downloadRepository.getTaskById(taskId)
-            val file = task?.files?.find { it.link == fileLink }
-            val downloadedBytes = file?.downloadedBytes ?: 0L
-            val totalBytes = file?.totalBytes ?: 0L
-            val progress = if (state == LocalDownloadState.COMPLETED) 100 else (file?.progress ?: 0)
-            downloadRepository.updateFileProgress(
-                taskId = taskId,
-                link = fileLink,
-                state = state,
-                progress = progress,
-                speed = 0,
-                downloadedBytes = if (state == LocalDownloadState.COMPLETED && totalBytes > 0) totalBytes else downloadedBytes
-            )
+        scope.launch {
+            downloadRepository.updateFileState(taskId, fileLink, state, error)
         }
     }
 
@@ -250,7 +243,7 @@ class LocalDownloadManager @Inject constructor(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             val task = downloadRepository.getTaskById(taskId) ?: return@launch
             val file = task.files.find { it.link == fileLink } ?: return@launch
             enqueueDownload(DownloadWork(taskId, file))
@@ -258,7 +251,7 @@ class LocalDownloadManager @Inject constructor(
     }
 
     fun pauseTask(taskId: String) {
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             val task = downloadRepository.getTaskById(taskId) ?: return@launch
             task.files.forEach { file ->
                 if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
@@ -269,7 +262,7 @@ class LocalDownloadManager @Inject constructor(
     }
 
     fun resumeTask(taskId: String) {
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             val task = downloadRepository.getTaskById(taskId) ?: return@launch
             task.files.forEach { file ->
                 if (file.state == LocalDownloadState.PAUSED) {
@@ -280,7 +273,7 @@ class LocalDownloadManager @Inject constructor(
     }
 
     fun pauseAll() {
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             downloadRepository.tasksFlow.first().forEach { task ->
                 pauseTask(task.id)
             }
@@ -288,7 +281,7 @@ class LocalDownloadManager @Inject constructor(
     }
 
     fun resumeAll() {
-        scope?.launch(Dispatchers.IO) {
+        scope.launch {
             downloadRepository.tasksFlow.first().forEach { task ->
                 resumeTask(task.id)
             }

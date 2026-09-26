@@ -43,6 +43,12 @@ import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import dagger.hilt.android.AndroidEntryPoint
 import okhttp3.OkHttpClient
+import com.felixbrucker.torrenthttpdownloader.download.DownloadService
+import com.felixbrucker.torrenthttpdownloader.download.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.NavRoute
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.Navigator
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.rememberNavigationState
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.toEntries
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
@@ -164,18 +170,26 @@ class MainActivity : ComponentActivity() {
                     entry<NavRoute.Settings> {
                         SettingsScreen(
                             onBack = { navigator.goBack() },
-                            onNavigateToLogs = { navigator.navigate(NavRoute.LogViewer) }
+                            onSave = {
+                                val intent = Intent(context, DownloadService::class.java).apply {
+                                    action = DownloadService.ACTION_RELOAD_SETTINGS
+                                }
+                                startService(intent)
+                            },
+                            onViewLogs = {
+                                navigator.navigate(NavRoute.LogViewer)
+                            }
                         )
                     }
                     entry<NavRoute.LogViewer> {
                         LogViewerScreen(
-                            onBack = { navigator.goBack() }
+                            onNavigateBack = { navigator.goBack() }
                         )
                     }
                 }
 
                 NavDisplay(
-                    entries = navigationState.toEntries { entryProvider(it as NavRoute) as NavEntry<NavKey> },
+                    entries = navigationState.toEntries { key -> entryProvider(key as NavRoute) as NavEntry<NavKey> },
                     onBack = { navigator.goBack() }
                 )
 

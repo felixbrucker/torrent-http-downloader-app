@@ -13,12 +13,20 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
-object LogRepository {
-    private const val MAX_ENTRIES = 3000
-    private const val PRUNE_THRESHOLD = 3500
-    private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000 // 7 days
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
-    private val gson = Gson()
+@Singleton
+class LogRepository @Inject constructor(
+    @ApplicationContext context: Context,
+    private val gson: Gson
+) {
+    companion object {
+        private const val MAX_ENTRIES = 3000
+        private const val PRUNE_THRESHOLD = 3500
+        private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000 // 7 days
+    }
 
     private val mutex = Mutex()
     private val _logsFlow = MutableStateFlow<List<LogEntry>>(emptyList())

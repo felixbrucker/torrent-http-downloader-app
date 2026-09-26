@@ -4,10 +4,10 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
-import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
-import com.felixbrucker.torrenthttpdownloader.models.TorrentType
+import com.felixbrucker.torrenthttpdownloader.util.createDirectoryRecursivelyIfNotExists
+import com.felixbrucker.torrenthttpdownloader.util.makeTorrentId
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
-import com.felixbrucker.torrenthttpdownloader.makeTorrentId
+import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

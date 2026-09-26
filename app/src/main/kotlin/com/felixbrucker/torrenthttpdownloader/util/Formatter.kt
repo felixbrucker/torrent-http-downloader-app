@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.util
 
 import java.util.Locale
 import kotlin.math.log10
@@ -27,6 +27,11 @@ class Formatter {
                 bytes / POWERS_OF_1024[digitGroups],
                 UNITS[digitGroups]
             )
+        }
+
+        fun formatTimestamp(millis: Long): String {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+            return sdf.format(java.util.Date(millis))
         }
 
         fun formatTime(seconds: Long): String {

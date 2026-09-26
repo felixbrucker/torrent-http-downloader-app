@@ -56,7 +56,6 @@ class DownloadRepository @Inject constructor(
                 unrestrictedLink = file.unrestrictedLink,
                 state = file.state,
                 stateDescription = file.stateDescription,
-                progress = file.progress,
                 filePath = file.filePath,
                 speed = file.speed,
                 totalBytes = file.totalBytes,
@@ -119,6 +118,28 @@ class DownloadRepository @Inject constructor(
         downloadDao.updateTaskState(id, state, errorMessage)
     }
 
+    suspend fun updateTaskStateAndProviderId(id: String, state: TorrentState, providerId: String?) {
+        downloadDao.updateTaskStateAndProviderId(id, state, providerId)
+    }
+
+    suspend fun getTaskIdsByProviderState(state: com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState): List<String> {
+        return downloadDao.getTaskIdsByProviderState(state)
+    }
+
+    suspend fun getFileByLink(taskId: String, link: String): com.felixbrucker.torrenthttpdownloader.models.DownloadFile? {
+        val entity = downloadDao.getFileByLink(taskId, link) ?: return null
+        return com.felixbrucker.torrenthttpdownloader.models.DownloadFile(
+            link = entity.link,
+            unrestrictedLink = entity.unrestrictedLink,
+            state = entity.state,
+            stateDescription = entity.stateDescription,
+            filePath = entity.filePath,
+            speed = entity.speed,
+            totalBytes = entity.totalBytes,
+            downloadedBytes = entity.downloadedBytes
+        )
+    }
+
     suspend fun updateProviderInfo(taskId: String, info: ProviderTorrentInfo) {
         val infoEntity = ProviderTorrentInfoEntity(
             id = info.id,
@@ -136,18 +157,81 @@ class DownloadRepository @Inject constructor(
             peers = info.peers,
             totalPeers = info.totalPeers
         )
-        downloadDao.updateProviderInfo(infoEntity)
+        downloadDao.insertProviderInfo(infoEntity)
+
+        downloadDao.deleteProviderFiles(info.id)
+        val pFileEntities = info.files.map { file ->
+            ProviderTorrentFileEntity(
+                providerInfoId = info.id,
+                fileId = file.id,
+                path = file.path,
+                size = file.size,
+                isSelected = file.isSelected,
+                progress = file.progress,
+                downloadedBytes = file.downloadedBytes,
+                priority = file.priority
+            )
+        }
+        if (pFileEntities.isNotEmpty()) {
+            downloadDao.insertProviderFiles(pFileEntities)
+        }
+
+        downloadDao.deleteProviderLinks(info.id)
+        val pLinkEntities = info.links.map { link ->
+            ProviderTorrentLinkEntity(
+                providerInfoId = info.id,
+                link = link
+            )
+        }
+        if (pLinkEntities.isNotEmpty()) {
+            downloadDao.insertProviderLinks(pLinkEntities)
+        }
+    }
+
+    suspend fun insertFiles(taskId: String, files: List<com.felixbrucker.torrenthttpdownloader.models.DownloadFile>) {
+        val fileEntities = files.map { file ->
+            DownloadFileEntity(
+                taskId = taskId,
+                link = file.link,
+                unrestrictedLink = file.unrestrictedLink,
+                state = file.state,
+                stateDescription = file.stateDescription,
+                filePath = file.filePath,
+                speed = file.speed,
+                totalBytes = file.totalBytes,
+                downloadedBytes = file.downloadedBytes
+            )
+        }
+        if (fileEntities.isNotEmpty()) {
+            downloadDao.insertFiles(fileEntities)
+        }
+    }
+
+    suspend fun deleteProviderInfo(taskId: String) {
+        downloadDao.deleteProviderInfoForTask(taskId)
+    }
+
+    suspend fun deleteFiles(taskId: String) {
+        downloadDao.deleteFilesForTask(taskId)
     }
 
     suspend fun updateFileProgress(
         taskId: String,
         link: String,
         state: LocalDownloadState,
-        progress: Int,
         speed: Long,
         downloadedBytes: Long
     ) {
-        downloadDao.updateFileProgress(taskId, link, state, progress, speed, downloadedBytes)
+        downloadDao.updateFileProgress(taskId, link, state, speed, downloadedBytes)
+    }
+
+    suspend fun updateFileState(
+        taskId: String,
+        link: String,
+        state: LocalDownloadState,
+        stateDescription: String? = null
+    ) {
+        downloadDao.updateFileState(taskId, link, state, stateDescription)
     }
 
     suspend fun deleteTask(id: String) {

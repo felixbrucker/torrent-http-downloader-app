@@ -6,7 +6,7 @@ import androidx.core.net.toUri
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.felixbrucker.torrenthttpdownloader.DownloadService
+import com.felixbrucker.torrenthttpdownloader.download.DownloadService
 import com.felixbrucker.torrenthttpdownloader.data.repository.RssRepository
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
@@ -60,14 +60,8 @@ class RssSyncWorker @AssistedInject constructor(
             val newlyDiscoveredItems = newItems.filter { it.id !in existingItemIds }
 
             if (newlyDiscoveredItems.isNotEmpty()) {
-                val updatedItems = (newlyDiscoveredItems + feed.items)
-                    .distinctBy { it.id }
-                    .take(max(newItems.size, 25))
-                val updatedFeed = feed.copy(
-                    items = updatedItems,
-                    lastCheck = System.currentTimeMillis()
-                )
-                rssRepository.insertFeed(updatedFeed)
+                rssRepository.insertItems(feed.id, newlyDiscoveredItems)
+                rssRepository.updateFeedLastCheck(feed.id, System.currentTimeMillis())
 
                 if (feed.autoDownload && feed.lastCheck > 0) {
                     newlyDiscoveredItems.forEach { item ->

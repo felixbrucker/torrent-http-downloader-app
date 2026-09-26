@@ -16,6 +16,11 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class TorrentProviderType {
+    REAL_DEBRID,
+    LIBTORRENT
+}
+
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
     produceMigrations = { context ->
@@ -26,7 +31,9 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
                 keysToMigrate = setOf(
                     "provider",
                     "real_debrid_api_token",
-                    "real_debrid_api_key",
+                    "local_parallel_downloads",
+                    "libtorrent_parallel_downloads",
+                    "libtorrent_require_vpn_connection",
                     "default_destination_subdirectory",
                     "rss_check_interval",
                     "notify_on_completion",
@@ -40,8 +47,11 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
 )
 
 data class AppSettingsPreferences(
-    val selectedProvider: String = "real_debrid",
-    val realDebridApiKey: String = "",
+    val selectedProvider: TorrentProviderType = TorrentProviderType.REAL_DEBRID,
+    val realDebridApiToken: String = "",
+    val localParallelDownloads: Int = 2,
+    val libTorrentParallelDownloads: Int = 3,
+    val libTorrentRequireVpnConnection: Boolean = false,
     val defaultDestinationSubdirectory: String = "",
     val rssCheckIntervalHours: Int = 1,
     val notifyOnCompletion: Boolean = true,
@@ -52,14 +62,16 @@ data class AppSettingsPreferences(
 
 @Singleton
 class AppSettingsRepository @Inject constructor(
-    @ApplicationContext context: Context
+    @param:ApplicationContext context: Context
 ) {
     private val dataStore = context.settingsDataStore
 
     companion object {
         private val KEY_PROVIDER = stringPreferencesKey("provider")
         private val KEY_REAL_DEBRID_API_TOKEN = stringPreferencesKey("real_debrid_api_token")
-        private val KEY_REAL_DEBRID_API_KEY = stringPreferencesKey("real_debrid_api_key")
+        private val KEY_LOCAL_PARALLEL_DOWNLOADS = intPreferencesKey("local_parallel_downloads")
+        private val KEY_LIBTORRENT_PARALLEL_DOWNLOADS = intPreferencesKey("libtorrent_parallel_downloads")
+        private val KEY_LIBTORRENT_REQUIRE_VPN = booleanPreferencesKey("libtorrent_require_vpn_connection")
         private val KEY_DEFAULT_DESTINATION_SUBDIRECTORY = stringPreferencesKey("default_destination_subdirectory")
         private val KEY_RSS_CHECK_INTERVAL = intPreferencesKey("rss_check_interval")
         private val KEY_NOTIFY_ON_COMPLETION = booleanPreferencesKey("notify_on_completion")
@@ -69,6 +81,19 @@ class AppSettingsRepository @Inject constructor(
     }
 
     val preferencesFlow: Flow<AppSettingsPreferences> = dataStore.data.map { preferences ->
+        val providerStr = preferences[KEY_PROVIDER]
+        val providerType = try {
+            if (providerStr != null) {
+                if (providerStr.contains("libtorrent", ignoreCase = true)) {
+                    TorrentProviderType.LIBTORRENT
+                } else {
+                    TorrentProviderType.REAL_DEBRID
+                }
+            } else TorrentProviderType.REAL_DEBRID
+        } catch (_: Exception) {
+            TorrentProviderType.REAL_DEBRID
+        }
+
         val fileSelectionModeStr = preferences[KEY_FILE_SELECTION_MODE]
         val mode = try {
             if (fileSelectionModeStr != null) FileSelectionMode.valueOf(fileSelectionModeStr) else FileSelectionMode.ALL
@@ -77,8 +102,11 @@ class AppSettingsRepository @Inject constructor(
         }
 
         AppSettingsPreferences(
-            selectedProvider = preferences[KEY_PROVIDER] ?: "real_debrid",
-            realDebridApiKey = preferences[KEY_REAL_DEBRID_API_TOKEN] ?: preferences[KEY_REAL_DEBRID_API_KEY] ?: "",
+            selectedProvider = providerType,
+            realDebridApiToken = preferences[KEY_REAL_DEBRID_API_TOKEN] ?: "",
+            localParallelDownloads = preferences[KEY_LOCAL_PARALLEL_DOWNLOADS] ?: 2,
+            libTorrentParallelDownloads = preferences[KEY_LIBTORRENT_PARALLEL_DOWNLOADS] ?: 3,
+            libTorrentRequireVpnConnection = preferences[KEY_LIBTORRENT_REQUIRE_VPN] ?: false,
             defaultDestinationSubdirectory = preferences[KEY_DEFAULT_DESTINATION_SUBDIRECTORY] ?: "",
             rssCheckIntervalHours = preferences[KEY_RSS_CHECK_INTERVAL] ?: 1,
             notifyOnCompletion = preferences[KEY_NOTIFY_ON_COMPLETION] ?: true,
@@ -88,12 +116,24 @@ class AppSettingsRepository @Inject constructor(
         )
     }
 
-    suspend fun setSelectedProvider(provider: String) {
-        dataStore.edit { it[KEY_PROVIDER] = provider }
+    suspend fun setSelectedProvider(provider: TorrentProviderType) {
+        dataStore.edit { it[KEY_PROVIDER] = provider.name }
     }
 
-    suspend fun setRealDebridApiKey(apiKey: String) {
-        dataStore.edit { it[KEY_REAL_DEBRID_API_KEY] = apiKey }
+    suspend fun setRealDebridApiToken(token: String) {
+        dataStore.edit { it[KEY_REAL_DEBRID_API_TOKEN] = token }
+    }
+
+    suspend fun setLocalParallelDownloads(limit: Int) {
+        dataStore.edit { it[KEY_LOCAL_PARALLEL_DOWNLOADS] = limit }
+    }
+
+    suspend fun setLibTorrentParallelDownloads(limit: Int) {
+        dataStore.edit { it[KEY_LIBTORRENT_PARALLEL_DOWNLOADS] = limit }
+    }
+
+    suspend fun setLibTorrentRequireVpnConnection(require: Boolean) {
+        dataStore.edit { it[KEY_LIBTORRENT_REQUIRE_VPN] = require }
     }
 
     suspend fun setDefaultDestinationSubdirectory(subdirectory: String) {

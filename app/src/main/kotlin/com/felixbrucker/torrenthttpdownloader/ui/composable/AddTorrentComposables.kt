@@ -42,12 +42,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.felixbrucker.torrenthttpdownloader.INVALID_CHARACTERS_FOR_PATH
 import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.listSubdirectoriesAsRelativeStrings
-import com.felixbrucker.torrenthttpdownloader.countItemsRecursively
-import com.felixbrucker.torrenthttpdownloader.totalSizeBytesRecursively
-import com.felixbrucker.torrenthttpdownloader.Formatter
+import com.felixbrucker.torrenthttpdownloader.util.INVALID_CHARACTERS_FOR_PATH
+import com.felixbrucker.torrenthttpdownloader.util.listSubdirectoriesAsRelativeStrings
+import com.felixbrucker.torrenthttpdownloader.util.countItemsRecursively
+import com.felixbrucker.torrenthttpdownloader.util.totalSizeBytesRecursively
+import com.felixbrucker.torrenthttpdownloader.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
 import java.io.File
 

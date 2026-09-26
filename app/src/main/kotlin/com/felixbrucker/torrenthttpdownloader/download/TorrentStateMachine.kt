@@ -1,7 +1,8 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.download
 
 import android.app.BackgroundServiceStartNotAllowedException
 import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
 import androidx.annotation.VisibleForTesting
 import androidx.core.net.toUri
@@ -17,14 +18,25 @@ import com.felixbrucker.torrenthttpdownloader.network.BandwidthLimitExceededExce
 import com.felixbrucker.torrenthttpdownloader.network.RateLimitExceededException
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
 import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import com.felixbrucker.torrenthttpdownloader.util.asFile
+import com.felixbrucker.torrenthttpdownloader.util.cleanedForUseAsPath
+import com.felixbrucker.torrenthttpdownloader.util.createDirectoryRecursivelyIfNotExists
+import com.felixbrucker.torrenthttpdownloader.util.flatten
+import com.felixbrucker.torrenthttpdownloader.util.makeOpenFileIntent
+import com.felixbrucker.torrenthttpdownloader.util.mergeIntoDirectory
+import com.felixbrucker.torrenthttpdownloader.util.tryToExtractArchiveInPlace
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -32,24 +44,33 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-class TorrentStateMachine(
-    private val scope: CoroutineScope,
-    private val provider: TorrentProvider,
+@Singleton
+class TorrentStateMachine @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val providerFactory: ProviderFactory,
     private val localDownloadManager: LocalDownloadManager,
-    private val downloadRepository: DownloadRepository,
-    private val contentResolver: ContentResolver,
-    private val onTaskCompleted: (DownloadTask) -> Unit,
-    private val onPostNotification: (String, String, Intent?, Int?) -> Unit
+    private val downloadRepository: DownloadRepository
 ) {
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val contentResolver: ContentResolver get() = context.contentResolver
+    private var provider: TorrentProvider? = null
+
+    var onTaskCompleted: ((DownloadTask) -> Unit)? = null
+    var onPostNotification: ((String, String, Intent?, Int?) -> Unit)? = null
     private val processingTasks = ConcurrentHashMap.newKeySet<String>()
     private val taskIdsToProcess = ConcurrentLinkedQueue<String>()
 
     fun start() {
         scope.launch(Dispatchers.IO) {
+            if (provider == null) {
+                provider = providerFactory.getSelectedProvider()
+            }
             while (isActive) {
                 val taskId = taskIdsToProcess.poll()
                 if (taskId == null) {
@@ -78,24 +99,29 @@ class TorrentStateMachine(
         }
     }
 
+    private suspend fun getProvider(): TorrentProvider {
+        return provider ?: providerFactory.getSelectedProvider().also { provider = it }
+    }
+
     suspend fun pauseAllTasksOnProvider() {
-        if (!provider.supports(ProviderFeature.PauseResume)) return
-        downloadRepository.tasksFlow.first()
-            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
-            .forEach { task -> pauseTaskOnProvider(task.id) }
+        val activeProvider = getProvider()
+        if (!activeProvider.supports(ProviderFeature.PauseResume)) return
+        downloadRepository.getTaskIdsByProviderState(ProviderTorrentState.DOWNLOADING)
+            .forEach { taskId -> pauseTaskOnProvider(taskId) }
     }
 
     suspend fun resumeAllTasksOnProvider() {
-        if (!provider.supports(ProviderFeature.PauseResume)) return
-        downloadRepository.tasksFlow.first()
-            .filter { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
-            .forEach { task -> resumeTaskOnProvider(task.id) }
+        val activeProvider = getProvider()
+        if (!activeProvider.supports(ProviderFeature.PauseResume)) return
+        downloadRepository.getTaskIdsByProviderState(ProviderTorrentState.PAUSED)
+            .forEach { taskId -> resumeTaskOnProvider(taskId) }
     }
 
     suspend fun pauseTaskOnProvider(taskId: String) {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return
         val providerId = task.providerId ?: return
-        provider.pause(providerId)
+        activeProvider.pause(providerId)
         val info = task.providerTorrentInfo?.copy(state = ProviderTorrentState.PAUSED)
         if (info != null) {
             downloadRepository.updateProviderInfo(taskId, info)
@@ -103,9 +129,10 @@ class TorrentStateMachine(
     }
 
     suspend fun resumeTaskOnProvider(taskId: String) {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return
         val providerId = task.providerId ?: return
-        provider.resume(providerId)
+        activeProvider.resume(providerId)
         val info = task.providerTorrentInfo?.copy(state = ProviderTorrentState.DOWNLOADING)
         if (info != null) {
             downloadRepository.updateProviderInfo(taskId, info)
@@ -113,9 +140,10 @@ class TorrentStateMachine(
     }
 
     suspend fun setFilePriority(taskId: String, fileId: Int, priority: FilePriority) {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return
         val providerId = task.providerId ?: return
-        provider.setFilePriority(providerId, fileId, priority)
+        activeProvider.setFilePriority(providerId, fileId, priority)
 
         val updatedFiles = task.providerTorrentInfo?.files?.map { file ->
             if (file.id == fileId) {
@@ -157,6 +185,7 @@ class TorrentStateMachine(
     }
 
     suspend fun confirmFileSelection(taskId: String) {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return
         if (task.state != TorrentState.SELECTING_FILES) return
 
@@ -164,11 +193,11 @@ class TorrentStateMachine(
         val selectedFileIds = task.providerTorrentInfo?.files?.filter { it.isSelected }?.map { it.id } ?: listOf()
 
         try {
-            val isSuccessful = provider.selectFiles(providerId, selectedFileIds)
+            val isSuccessful = activeProvider.selectFiles(providerId, selectedFileIds)
             if (isSuccessful) {
                 downloadRepository.updateTaskState(taskId, TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD)
-                if (provider.supports(ProviderFeature.PauseResume)) {
-                    provider.resume(providerId)
+                if (activeProvider.supports(ProviderFeature.PauseResume)) {
+                    activeProvider.resume(providerId)
                 }
                 taskIdsToProcess.add(taskId)
             }
@@ -200,6 +229,7 @@ class TorrentStateMachine(
         deleteFiles: Boolean = true,
         deleteTorrentFile: Boolean = true
     ) {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return
 
         localDownloadManager.removeTaskFromQueues(task)
@@ -215,15 +245,16 @@ class TorrentStateMachine(
         }
 
         if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
-            provider.deleteTorrent(task.providerId, deleteFiles = deleteFiles)
+            activeProvider.deleteTorrent(task.providerId, deleteFiles = deleteFiles)
         }
 
         downloadRepository.deleteTask(taskId)
     }
 
     suspend fun updateFileInfo(task: DownloadTask, file: DownloadFile) {
+        val activeProvider = getProvider()
         val providerId = task.providerId ?: return
-        val unrestrictLinkResponse = provider.unrestrictLink(providerId, file.link)
+        val unrestrictLinkResponse = activeProvider.unrestrictLink(providerId, file.link)
         val filePath = File(
             PathFactory.getScopedTemporaryDirectory(task.name).absolutePath,
             unrestrictLinkResponse.filename.cleanedForUseAsPath()
@@ -233,17 +264,17 @@ class TorrentStateMachine(
             taskId = task.id,
             link = file.link,
             state = file.state,
-            progress = file.progress,
             speed = file.speed,
             downloadedBytes = unrestrictLinkResponse.size
         )
     }
 
     private suspend fun resumeDownloads() {
+        val activeProvider = provider ?: providerFactory.getSelectedProvider().also { provider = it }
         val tasks = downloadRepository.tasksFlow.first()
         tasks.filter { it.location == TaskLocation.PROVIDER }
             .mapNotNull { it.providerId }
-            .forEach { provider.restoreTorrent(it) }
+            .forEach { activeProvider.restoreTorrent(it) }
 
         tasks.forEach { task -> taskIdsToProcess.add(task.id) }
     }
@@ -263,15 +294,16 @@ class TorrentStateMachine(
     }
 
     private suspend fun processTask(taskId: String): String? {
+        val activeProvider = getProvider()
         val task = downloadRepository.getTaskById(taskId) ?: return null
-        val delayBetweenInitialProviderUpdates = if (provider.isLocalProvider) 500.milliseconds else 2.seconds
-        val delayBetweenProviderUpdates = if (provider.isLocalProvider) 1.seconds else 5.seconds
+        val delayBetweenInitialProviderUpdates = if (activeProvider.isLocalProvider) 500.milliseconds else 2.seconds
+        val delayBetweenProviderUpdates = if (activeProvider.isLocalProvider) 1.seconds else 5.seconds
 
         try {
             when (task.state) {
                 TorrentState.ADDING_TO_PROVIDER -> {
                     val providerId = if (task.torrent.type == TorrentType.MAGNET) {
-                        provider.addMagnet(task.torrent.uri, task.name)
+                        activeProvider.addMagnet(task.torrent.uri, task.name)
                     } else {
                         val inputStream = try {
                             contentResolver.openInputStream(task.torrent.uri.toUri())
@@ -279,21 +311,21 @@ class TorrentStateMachine(
                             contentResolver.openInputStream(task.torrent.uri.asFile().toUri())
                         }
                         inputStream?.use {
-                            provider.addTorrent(it.readBytes(), task.name)
+                            activeProvider.addTorrent(it.readBytes(), task.name)
                         } ?: throw Exception("Could not open torrent file")
                     }
-                    val updatedTask = task.copy(
-                        providerId = providerId,
-                        state = TorrentState.WAITING_FOR_FILE_SELECTION
+                    downloadRepository.updateTaskStateAndProviderId(
+                        id = task.id,
+                        state = TorrentState.WAITING_FOR_FILE_SELECTION,
+                        providerId = providerId
                     )
-                    downloadRepository.insertTask(updatedTask)
 
                     return task.id
                 }
 
                 TorrentState.WAITING_FOR_FILE_SELECTION -> {
                     require(task.providerId != null) { "Missing provider id" }
-                    val torrentInfo = provider.getTorrentInfo(task.providerId)
+                    val torrentInfo = activeProvider.getTorrentInfo(task.providerId)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.state == ProviderTorrentState.ERROR) {
@@ -317,12 +349,12 @@ class TorrentStateMachine(
 
                 TorrentState.SELECTING_FILES -> {
                     require(task.providerId != null) { "Missing provider id" }
-                    val torrentInfo = provider.getTorrentInfo(task.providerId)
+                    val torrentInfo = activeProvider.getTorrentInfo(task.providerId)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (task.fileSelectionMode == FileSelectionMode.MANUAL) {
-                        if (provider.supports(ProviderFeature.PauseResume)) {
-                            provider.pause(task.providerId)
+                        if (activeProvider.supports(ProviderFeature.PauseResume)) {
+                            activeProvider.pause(task.providerId)
                         }
                         val info = task.providerTorrentInfo?.copy(
                             state = ProviderTorrentState.WAITING_FOR_FILE_SELECTION,
@@ -344,7 +376,7 @@ class TorrentStateMachine(
                         torrentInfo.files.map { it.id }
                     }
                     try {
-                        val isSuccessful = provider.selectFiles(task.providerId, fileIdsToSelect)
+                        val isSuccessful = activeProvider.selectFiles(task.providerId, fileIdsToSelect)
                         if (isSuccessful) {
                             downloadRepository.updateTaskState(task.id, TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD)
                             return task.id
@@ -360,7 +392,7 @@ class TorrentStateMachine(
 
                 TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD -> {
                     require(task.providerId != null) { "Missing provider id" }
-                    val torrentInfo = provider.getTorrentInfo(task.providerId)
+                    val torrentInfo = activeProvider.getTorrentInfo(task.providerId)
                     updateTaskWithTorrentInfo(task.id, torrentInfo)
 
                     if (torrentInfo.state == ProviderTorrentState.ERROR) {
@@ -370,11 +402,8 @@ class TorrentStateMachine(
 
                     if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
                         val files = torrentInfo.links.map { DownloadFile(it) }
-                        val updatedTask = task.copy(
-                            files = files,
-                            state = TorrentState.POPULATING_FILE_INFOS
-                        )
-                        downloadRepository.insertTask(updatedTask)
+                        downloadRepository.insertFiles(task.id, files)
+                        downloadRepository.updateTaskState(task.id, TorrentState.POPULATING_FILE_INFOS)
                     } else {
                         delay(delayBetweenProviderUpdates)
                     }
@@ -411,7 +440,7 @@ class TorrentStateMachine(
 
                 TorrentState.DELETING_FROM_PROVIDER -> {
                     require(task.providerId != null) { "Missing provider id" }
-                    val isTorrentDeleted = provider.deleteTorrent(task.providerId)
+                    val isTorrentDeleted = activeProvider.deleteTorrent(task.providerId)
                     if (isTorrentDeleted) {
                         task.removeTorrentFile()
                         task.removeResumeData()
@@ -471,7 +500,7 @@ class TorrentStateMachine(
                     if (task.notifyOnCompletion) {
                         val destination = PathFactory.getScopedDestinationDirectory(task)
 
-                        onPostNotification(
+                        onPostNotification?.invoke(
                             "Download finished",
                             "${task.name} finished downloading",
                             destination.makeOpenFileIntent(),
@@ -480,7 +509,7 @@ class TorrentStateMachine(
                     }
                     downloadRepository.deleteTask(taskId)
 
-                    onTaskCompleted(task)
+                    onTaskCompleted?.invoke(task)
                 }
                 else -> { }
             }
@@ -508,7 +537,7 @@ class TorrentStateMachine(
 
     private suspend fun handleFailedProviderTask(task: DownloadTask) {
         resetTorrent(task)
-        onPostNotification(
+        onPostNotification?.invoke(
             "Torrent has been restarted",
             "Torrent ${task.name} encountered an error on provider and has been restarted",
             null,
@@ -517,26 +546,17 @@ class TorrentStateMachine(
     }
 
     private suspend fun resetTorrent(task: DownloadTask) {
+        val activeProvider = getProvider()
         localDownloadManager.removeTaskFromQueues(task)
         if (task.providerId != null) {
-            provider.deleteTorrent(task.providerId)
+            activeProvider.deleteTorrent(task.providerId)
         }
-        val updatedTask = task.copy(
-            providerId = null,
-            state = TorrentState.ADDING_TO_PROVIDER,
-            providerTorrentInfo = null,
-            files = listOf(),
-            errorMessage = null
-        )
-        downloadRepository.insertTask(updatedTask)
+        downloadRepository.updateTaskState(task.id, TorrentState.ADDING_TO_PROVIDER, null)
+        downloadRepository.deleteProviderInfo(task.id)
+        downloadRepository.deleteFiles(task.id)
     }
 
     private suspend fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
-        val task = downloadRepository.getTaskById(taskId) ?: return
-        val updatedTask = task.copy(
-            name = if (task.name == task.torrent.uri) torrentInfo.name else task.name,
-            providerTorrentInfo = torrentInfo
-        )
-        downloadRepository.insertTask(updatedTask)
+        downloadRepository.updateProviderInfo(taskId, torrentInfo)
     }
 }

@@ -3,7 +3,9 @@ package com.felixbrucker.torrenthttpdownloader.data.logging
 import android.util.Log
 import timber.log.Timber
 
-class AppLogTree : Timber.DebugTree() {
+class AppLogTree(
+    private val logRepository: LogRepository
+) : Timber.DebugTree() {
 
     public override fun isLoggable(tag: String?, priority: Int): Boolean {
         return true
@@ -18,7 +20,7 @@ class AppLogTree : Timber.DebugTree() {
             message = message,
             throwableStackTrace = stackTrace
         )
-        LogRepository.addLog(entry)
+        logRepository.addLog(entry)
 
         super.log(priority, tag, message, t)
     }

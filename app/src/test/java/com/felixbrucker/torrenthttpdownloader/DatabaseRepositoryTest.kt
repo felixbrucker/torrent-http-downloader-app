@@ -76,7 +76,6 @@ class DatabaseRepositoryTest {
             unrestrictedLink = null,
             state = LocalDownloadState.DOWNLOADING,
             stateDescription = null,
-            progress = 50,
             filePath = "/path",
             speed = 100,
             totalBytes = 200,
@@ -164,10 +163,10 @@ class DatabaseRepositoryTest {
     @Test
     fun testDownloadRepositoryTargetedUpdates() = runTest {
         downloadRepository.updateTaskState("t1", TorrentState.COMPLETED, null)
-        downloadRepository.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 100, 0, 1000)
+        downloadRepository.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 0, 1000)
 
-        coVerify { downloadDao.updateTaskState("t1", TorrentState.COMPLETED, null) }
-        coVerify { downloadDao.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 100, 0, 1000) }
+        coVerify { downloadDao.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 0, 1000) }
+        coVerify { downloadDao.updateFileProgress("t1", "link1", LocalDownloadState.COMPLETED, 0, 1000) }
     }
 
     @Test

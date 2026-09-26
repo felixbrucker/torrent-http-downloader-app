@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader.ui.viewmodel
+package com.felixbrucker.torrenthttpdownloader.ui.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,11 +16,12 @@ class RssFeedsViewModel @Inject constructor(
     private val rssRepository: RssRepository
 ) : ViewModel() {
 
-    val feeds: StateFlow<List<RssFeed>> = rssRepository.feedsFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val feeds: StateFlow<List<RssFeed>> = rssRepository.feedsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     fun addFeed(feed: RssFeed) {
         viewModelScope.launch {
@@ -28,7 +29,7 @@ class RssFeedsViewModel @Inject constructor(
         }
     }
 
-    fun removeFeed(feedId: String) {
+    fun deleteFeed(feedId: String) {
         viewModelScope.launch {
             rssRepository.deleteFeed(feedId)
         }

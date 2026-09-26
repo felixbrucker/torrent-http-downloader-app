@@ -1,5 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import com.felixbrucker.torrenthttpdownloader.util.Formatter
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

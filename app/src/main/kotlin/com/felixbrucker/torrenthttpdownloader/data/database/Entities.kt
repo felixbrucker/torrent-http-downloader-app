@@ -134,7 +134,6 @@ data class DownloadFileEntity(
     val unrestrictedLink: String?,
     val state: LocalDownloadState,
     val stateDescription: String?,
-    val progress: Int,
     val filePath: String?,
     val speed: Long,
     val totalBytes: Long,
@@ -206,12 +205,13 @@ data class DownloadTaskWithDetails(
             state = task.state,
             providerTorrentInfo = providerTorrentInfoDomain,
             files = files.map { file ->
+                val computedProgress = if (file.totalBytes > 0) ((file.downloadedBytes * 100L) / file.totalBytes).toInt() else 0
                 DownloadFile(
                     link = file.link,
                     unrestrictedLink = file.unrestrictedLink,
                     state = file.state,
                     stateDescription = file.stateDescription,
-                    progress = file.progress,
+                    progress = computedProgress,
                     filePath = file.filePath,
                     speed = file.speed,
                     totalBytes = file.totalBytes,

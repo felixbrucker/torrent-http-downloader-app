@@ -54,12 +54,43 @@ class RssRepository @Inject constructor(
         }
     }
 
+    suspend fun insertItems(feedId: String, items: List<com.felixbrucker.torrenthttpdownloader.models.RssItem>) {
+        val itemEntities = items.map { item ->
+            RssItemEntity(
+                id = item.id,
+                feedId = feedId,
+                title = item.title,
+                link = item.link,
+                description = item.description,
+                pubDate = item.pubDate,
+                isRead = item.isRead,
+                isDownloaded = item.isDownloaded
+            )
+        }
+        if (itemEntities.isNotEmpty()) {
+            rssFeedDao.insertItems(itemEntities)
+        }
+    }
+
     suspend fun updateItemState(id: String, isRead: Boolean, isDownloaded: Boolean) {
         rssFeedDao.updateItemState(id, isRead, isDownloaded)
     }
 
     suspend fun updateFeedLastCheck(id: String, lastCheck: Long) {
         rssFeedDao.updateFeedLastCheck(id, lastCheck)
+    }
+
+    suspend fun updateFeedDetails(feed: RssFeed) {
+        rssFeedDao.updateFeedDetails(
+            id = feed.id,
+            name = feed.name,
+            url = feed.url,
+            destinationSubdirectory = feed.destinationSubdirectory,
+            createSubfolderByName = feed.createSubfolderByName,
+            notifyOnCompletion = feed.notifyOnCompletion,
+            fileSelectionMode = feed.fileSelectionMode,
+            autoDownload = feed.autoDownload
+        )
     }
 
     suspend fun deleteFeed(id: String) {

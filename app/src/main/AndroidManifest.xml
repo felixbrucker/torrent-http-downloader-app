@@ -73,7 +73,7 @@
         </activity>
 
         <service
-            android:name=".DownloadService"
+            android:name=".download.DownloadService"
             android:exported="true"
             android:foregroundServiceType="dataSync">
             <intent-filter>

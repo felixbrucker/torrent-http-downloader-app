@@ -1,8 +1,11 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.content.ContentResolver
+import android.content.Context
 import com.felixbrucker.torrenthttpdownloader.data.repository.DownloadRepository
+import com.felixbrucker.torrenthttpdownloader.download.LocalDownloadManager
+import com.felixbrucker.torrenthttpdownloader.download.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.models.*
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
@@ -18,25 +21,22 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TorrentStateMachineStressTest {
+    private val context = mockk<Context>(relaxed = true)
     private val provider = mockk<TorrentProvider>()
+    private val providerFactory = mockk<ProviderFactory>()
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)
     private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
-    private val contentResolver = mockk<ContentResolver>()
-    private val testDispatcher = StandardTestDispatcher()
-    private val testScope = TestScope(testDispatcher)
 
     private lateinit var stateMachine: TorrentStateMachine
 
     @Before
     fun setup() {
+        coEvery { providerFactory.getSelectedProvider() } returns provider
         stateMachine = TorrentStateMachine(
-            scope = testScope,
-            provider = provider,
+            context = context,
+            providerFactory = providerFactory,
             localDownloadManager = localDownloadManager,
-            downloadRepository = downloadRepository,
-            contentResolver = contentResolver,
-            onTaskCompleted = {},
-            onPostNotification = { _, _, _, _ -> }
+            downloadRepository = downloadRepository
         )
     }
 

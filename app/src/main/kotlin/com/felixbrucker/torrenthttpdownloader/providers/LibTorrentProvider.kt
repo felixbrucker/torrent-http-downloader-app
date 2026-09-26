@@ -5,14 +5,19 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
-import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
-import com.felixbrucker.torrenthttpdownloader.makeAddTorrentParams
-import com.felixbrucker.torrenthttpdownloader.sha1Hash
+import com.felixbrucker.torrenthttpdownloader.util.createDirectoryRecursivelyIfNotExists
+import com.felixbrucker.torrenthttpdownloader.util.makeAddTorrentParams
+import com.felixbrucker.torrenthttpdownloader.util.sha1Hash
+import com.felixbrucker.torrenthttpdownloader.util.torrentId
+import com.felixbrucker.torrenthttpdownloader.util.torrentInfo
+import com.felixbrucker.torrenthttpdownloader.data.preferences.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
-import com.felixbrucker.torrenthttpdownloader.torrentId
-import com.felixbrucker.torrenthttpdownloader.torrentInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.Priority
@@ -42,7 +47,8 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @Singleton
 class LibTorrentProvider @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val appSettingsRepository: AppSettingsRepository
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
@@ -59,6 +65,7 @@ class LibTorrentProvider @Inject constructor(
 
     private val sessionManager = SessionManager()
     private val sessionSettings = SessionSettings()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var requireVpnConnection = false
     private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -127,6 +134,14 @@ class LibTorrentProvider @Inject constructor(
         sessionManager.addListener(libTorrentListener)
         sessionManager.start(params)
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
+
+        scope.launch {
+            appSettingsRepository.preferencesFlow.collect { prefs ->
+                requireVpnConnection = prefs.libTorrentRequireVpnConnection
+                sessionSettings.activeDownloads = prefs.libTorrentParallelDownloads
+                reloadSettings()
+            }
+        }
     }
 
     private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {

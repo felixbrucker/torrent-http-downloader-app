@@ -1,11 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.ui.screens
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,15 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.felixbrucker.torrenthttpdownloader.download.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.ui.composable.EditRssFeedDialog
 import com.felixbrucker.torrenthttpdownloader.ui.composable.RssFeedItem
-import com.felixbrucker.torrenthttpdownloader.ui.viewmodel.RssFeedsViewModel
+import com.felixbrucker.torrenthttpdownloader.ui.viewmodels.RssFeedsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +48,10 @@ fun RssFeedsScreen(
     onNavigateToDetail: (String) -> Unit,
     viewModel: RssFeedsViewModel = hiltViewModel()
 ) {
-    val feeds by viewModel.feeds.collectAsState()
+    val feeds by viewModel.feeds.collectAsStateWithLifecycle()
+    val isSyncingAll by DownloadTracker.isSyncingAll.collectAsState()
+    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
 
@@ -67,7 +65,7 @@ fun RssFeedsScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = false,
+            isRefreshing = isSyncingAll,
             onRefresh = syncFeeds,
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
@@ -76,8 +74,9 @@ fun RssFeedsScreen(
             } else {
                 RssFeedList(
                     feeds = feeds,
+                    syncingFeedIds = syncingFeedIds,
                     onNavigateToDetail = onNavigateToDetail,
-                    onDelete = { viewModel.removeFeed(it) },
+                    onDelete = { viewModel.deleteFeed(it) },
                     onSync = syncFeed,
                     onEdit = { editFeedConfig = it }
                 )
@@ -85,7 +84,7 @@ fun RssFeedsScreen(
         }
 
         if (showAddFeedDialog) {
-            AddRssFeedDialog(
+            EditRssFeedDialog(
                 onDismiss = { showAddFeedDialog = false },
                 onConfirm = { feed ->
                     viewModel.addFeed(feed)
@@ -95,13 +94,13 @@ fun RssFeedsScreen(
             )
         }
 
-        editFeedConfig?.let { feed ->
-            EditRssFeedDialogWrapper(
-                feed = feed,
+        editFeedConfig?.let { editingFeed ->
+            EditRssFeedDialog(
+                feed = editingFeed,
                 onDismiss = { editFeedConfig = null },
-                onConfirm = { updatedFeed ->
-                    viewModel.addFeed(updatedFeed)
-                    syncFeed(updatedFeed)
+                onConfirm = { newFeed ->
+                    viewModel.addFeed(newFeed)
+                    syncFeed(newFeed)
                     editFeedConfig = null
                 }
             )
@@ -147,6 +146,7 @@ private fun EmptyRssFeedsView() {
 @Composable
 private fun RssFeedList(
     feeds: List<RssFeed>,
+    syncingFeedIds: Set<String>,
     onNavigateToDetail: (String) -> Unit,
     onDelete: (String) -> Unit,
     onSync: (RssFeed) -> Unit,
@@ -164,32 +164,8 @@ private fun RssFeedList(
                 onDelete = { onDelete(feed.id) },
                 syncFeed = { onSync(feed) },
                 editFeed = { onEdit(feed) },
-                isSyncing = false
+                isSyncing = syncingFeedIds.contains(feed.id)
             )
         }
     }
-}
-
-@Composable
-private fun AddRssFeedDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (RssFeed) -> Unit
-) {
-    EditRssFeedDialog(
-        onDismiss = onDismiss,
-        onConfirm = onConfirm
-    )
-}
-
-@Composable
-private fun EditRssFeedDialogWrapper(
-    feed: RssFeed,
-    onDismiss: () -> Unit,
-    onConfirm: (RssFeed) -> Unit
-) {
-    EditRssFeedDialog(
-        feed = feed,
-        onDismiss = onDismiss,
-        onConfirm = onConfirm
-    )
 }

@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.download
 
 import android.app.backup.BackupManager
 import android.content.Context

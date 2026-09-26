@@ -17,18 +17,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.felixbrucker.torrenthttpdownloader.download.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
 import com.felixbrucker.torrenthttpdownloader.ui.composable.RssItemsList
-import com.felixbrucker.torrenthttpdownloader.ui.viewmodel.RssFeedDetailViewModel
+import com.felixbrucker.torrenthttpdownloader.ui.viewmodels.RssFeedDetailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,38 +39,38 @@ fun RssFeedDetailScreen(
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
     viewModel: RssFeedDetailViewModel = hiltViewModel()
 ) {
-    LaunchedEffect(feed.id) {
-        viewModel.loadFeed(feed.id)
-    }
-
-    val currentFeed by viewModel.feed.collectAsState()
-    val displayFeed = currentFeed ?: feed
+    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+    val isSyncing = syncingFeedIds.contains(feed.id)
 
     Scaffold(
         topBar = {
             RssDetailTopBar(
-                feed = displayFeed,
+                feed = feed,
                 onBack = onBack,
-                onSync = { syncFeed(displayFeed) },
+                onSync = { syncFeed(feed) },
                 onMarkAllRead = {
-                    displayFeed.items.forEach { viewModel.markItemRead(it.id, isRead = true) }
+                    val updatedFeed = feed.copy(items = feed.items.map { it.copy(isRead = true) })
+                    viewModel.updateFeed(updatedFeed)
                 }
             )
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = false,
-            onRefresh = { syncFeed(displayFeed) },
+            isRefreshing = isSyncing,
+            onRefresh = { syncFeed(feed) },
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-            if (displayFeed.items.isEmpty()) {
+            if (feed.items.isEmpty()) {
                 EmptyRssItemsView()
             } else {
                 RssItemsList(
-                    feed = displayFeed,
+                    feed = feed,
                     onItemClick = { item ->
-                        viewModel.markItemRead(item.id, isRead = true)
-                        addTorrentFromFeed(displayFeed, item)
+                        val updatedFeed = feed.copy(items = feed.items.map {
+                            if (it.id == item.id) it.copy(isRead = true) else it
+                        })
+                        viewModel.updateFeed(updatedFeed)
+                        addTorrentFromFeed(feed, item)
                     }
                 )
             }

@@ -1,7 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
-import com.felixbrucker.torrenthttpdownloader.asFile
-import com.felixbrucker.torrenthttpdownloader.deleteIfExists
+import com.felixbrucker.torrenthttpdownloader.util.asFile
+import com.felixbrucker.torrenthttpdownloader.util.deleteIfExists
+
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory

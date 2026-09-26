@@ -1,4 +1,4 @@
-package com.felixbrucker.torrenthttpdownloader
+package com.felixbrucker.torrenthttpdownloader.util
 
 import androidx.core.net.toUri
 import org.libtorrent4j.Sha1Hash

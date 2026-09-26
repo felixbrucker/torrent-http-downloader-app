@@ -20,6 +20,9 @@ interface DownloadDao {
     @Query("SELECT * FROM download_tasks WHERE id = :id")
     suspend fun getTaskById(id: String): DownloadTaskWithDetails?
 
+    @Query("SELECT * FROM download_files WHERE taskId = :taskId AND link = :link LIMIT 1")
+    suspend fun getFileByLink(taskId: String, link: String): DownloadFileEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTask(task: DownloadTaskEntity)
 
@@ -28,6 +31,12 @@ interface DownloadDao {
 
     @Query("UPDATE download_tasks SET state = :state, errorMessage = :errorMessage WHERE id = :id")
     suspend fun updateTaskState(id: String, state: TorrentState, errorMessage: String?)
+
+    @Query("UPDATE download_tasks SET state = :state, providerId = :providerId WHERE id = :id")
+    suspend fun updateTaskStateAndProviderId(id: String, state: TorrentState, providerId: String?)
+
+    @Query("SELECT dt.id FROM download_tasks dt INNER JOIN provider_torrent_info pti ON dt.id = pti.taskId WHERE pti.state = :state")
+    suspend fun getTaskIdsByProviderState(state: com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProviderInfo(info: ProviderTorrentInfoEntity)
@@ -53,14 +62,21 @@ interface DownloadDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFiles(files: List<DownloadFileEntity>)
 
-    @Query("UPDATE download_files SET state = :state, progress = :progress, speed = :speed, downloadedBytes = :downloadedBytes WHERE taskId = :taskId AND link = :link")
+    @Query("UPDATE download_files SET state = :state, speed = :speed, downloadedBytes = :downloadedBytes WHERE taskId = :taskId AND link = :link")
     suspend fun updateFileProgress(
         taskId: String,
         link: String,
         state: LocalDownloadState,
-        progress: Int,
         speed: Long,
         downloadedBytes: Long
+    )
+
+    @Query("UPDATE download_files SET state = :state, stateDescription = :stateDescription WHERE taskId = :taskId AND link = :link")
+    suspend fun updateFileState(
+        taskId: String,
+        link: String,
+        state: LocalDownloadState,
+        stateDescription: String?
     )
 
     @Query("DELETE FROM download_files WHERE taskId = :taskId")
@@ -91,6 +107,18 @@ interface RssFeedDao {
 
     @Query("UPDATE rss_feeds SET lastCheck = :lastCheck WHERE id = :id")
     suspend fun updateFeedLastCheck(id: String, lastCheck: Long)
+
+    @Query("UPDATE rss_feeds SET name = :name, url = :url, destinationSubdirectory = :destinationSubdirectory, createSubfolderByName = :createSubfolderByName, notifyOnCompletion = :notifyOnCompletion, fileSelectionMode = :fileSelectionMode, autoDownload = :autoDownload WHERE id = :id")
+    suspend fun updateFeedDetails(
+        id: String,
+        name: String,
+        url: String,
+        destinationSubdirectory: String?,
+        createSubfolderByName: Boolean,
+        notifyOnCompletion: Boolean,
+        fileSelectionMode: com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode,
+        autoDownload: Boolean
+    )
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItems(items: List<RssItemEntity>)

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "ff30d7918d62991ef09c7981307488e0",
+    "identityHash": "49f09c473944bd24a7e479c1e1e4db0a",
     "entities": [
       {
         "tableName": "download_tasks",
@@ -344,7 +344,7 @@
       },
       {
         "tableName": "download_files",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` TEXT NOT NULL, `link` TEXT NOT NULL, `unrestrictedLink` TEXT, `state` TEXT NOT NULL, `stateDescription` TEXT, `progress` INTEGER NOT NULL, `filePath` TEXT, `speed` INTEGER NOT NULL, `totalBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`autoId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` TEXT NOT NULL, `link` TEXT NOT NULL, `unrestrictedLink` TEXT, `state` TEXT NOT NULL, `stateDescription` TEXT, `filePath` TEXT, `speed` INTEGER NOT NULL, `totalBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, FOREIGN KEY(`taskId`) REFERENCES `download_tasks`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "autoId",
@@ -379,12 +379,6 @@
             "fieldPath": "stateDescription",
             "columnName": "stateDescription",
             "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "progress",
-            "columnName": "progress",
-            "affinity": "INTEGER",
-            "notNull": true
           },
           {
             "fieldPath": "filePath",
@@ -591,7 +585,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ff30d7918d62991ef09c7981307488e0')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '49f09c473944bd24a7e479c1e1e4db0a')"
     ]
   }
 }

@@ -49,11 +49,12 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.felixbrucker.torrenthttpdownloader.DownloadService
-import com.felixbrucker.torrenthttpdownloader.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.NavRoute
-import com.felixbrucker.torrenthttpdownloader.Navigator
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.felixbrucker.torrenthttpdownloader.download.DownloadService
+import com.felixbrucker.torrenthttpdownloader.download.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.NavRoute
+import com.felixbrucker.torrenthttpdownloader.ui.navigation.Navigator
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
@@ -61,9 +62,7 @@ import com.felixbrucker.torrenthttpdownloader.models.TorrentType
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.ui.composable.DownloadItem
 import com.felixbrucker.torrenthttpdownloader.ui.composable.DownloadStatsBar
-import com.felixbrucker.torrenthttpdownloader.ui.viewmodel.DownloadsViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import com.felixbrucker.torrenthttpdownloader.ui.viewmodels.DownloadsViewModel
 
 @Composable
 fun DownloadsScreen(
@@ -73,7 +72,7 @@ fun DownloadsScreen(
     val context = LocalContext.current
     val windowInfo = LocalWindowInfo.current
     val isNarrowScreen = windowInfo.containerSize.width.dp < 1400.dp
-    val tasks by viewModel.tasks.collectAsState()
+    val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val unreadRssCount by DownloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
 
     val lazyListState = rememberLazyListState()
@@ -148,7 +147,13 @@ fun DownloadsScreen(
                 onDeleteTorrentFileChange = { deleteTorrentFile = it },
                 onDismiss = { taskToRemove = null },
                 onConfirm = {
-                    viewModel.removeTask(task.id)
+                    val intent = Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_REMOVE_TASK
+                        putExtra(DownloadService.EXTRA_TASK_ID, task.id)
+                        putExtra(DownloadService.EXTRA_DELETE_FILES, deleteFiles)
+                        putExtra(DownloadService.EXTRA_DELETE_TORRENT_FILE, deleteTorrentFile)
+                    }
+                    context.startService(intent)
                     taskToRemove = null
                 }
             )
