@@ -6,10 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.ui.NavDisplay
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -33,6 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -40,24 +40,25 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
-import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
-import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
-import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
-import com.felixbrucker.torrenthttpdownloader.ui.screens.DownloadsScreen
-import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedDetailScreen
-import com.felixbrucker.torrenthttpdownloader.ui.screens.SettingsScreen
-import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
+import dagger.hilt.android.AndroidEntryPoint
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import dagger.hilt.android.AndroidEntryPoint
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
+import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfig
+import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
+import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
+import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {

@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 
 class FormatterTest {
 

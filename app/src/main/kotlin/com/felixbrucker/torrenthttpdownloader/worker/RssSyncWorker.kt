@@ -6,26 +6,17 @@ import androidx.core.net.toUri
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.felixbrucker.torrenthttpdownloader.DownloadService
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_ADD_TASK
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_CREATE_SUBFOLDER_BY_NAME
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_DESTINATION_SUBDIRECTORY
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_NOTIFY_ON_COMPLETION
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_FILE_SELECTION_MODE
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_ID
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_NAME
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_URI
-import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.EXTRA_TORRENT_TYPE
-import com.felixbrucker.torrenthttpdownloader.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.models.RssFeed
-import com.felixbrucker.torrenthttpdownloader.models.RssItem
-import com.felixbrucker.torrenthttpdownloader.network.RssParser
-import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
+import okhttp3.OkHttpClient
+import com.felixbrucker.torrenthttpdownloader.DownloadService
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
+import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
+import com.felixbrucker.torrenthttpdownloader.core.network.RssParser
+import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 
 @HiltWorker
 class RssSyncWorker @AssistedInject constructor(
@@ -106,15 +97,15 @@ class RssSyncWorker @AssistedInject constructor(
     private suspend fun addRssItemToDownloads(feed: RssFeed, item: RssItem) {
         val result = torrentUriResolver.resolve(item.link.toUri())
         val intent = Intent(applicationContext, DownloadService::class.java).apply {
-            action = ACTION_ADD_TASK
-            putExtra(EXTRA_TORRENT_ID, result.id)
-            putExtra(EXTRA_TORRENT_URI, result.uri.toString())
-            putExtra(EXTRA_TORRENT_NAME, result.name ?: item.title)
-            putExtra(EXTRA_DESTINATION_SUBDIRECTORY, feed.destinationSubdirectory)
-            putExtra(EXTRA_CREATE_SUBFOLDER_BY_NAME, feed.createSubfolderByName)
-            putExtra(EXTRA_NOTIFY_ON_COMPLETION, feed.notifyOnCompletion)
-            putExtra(EXTRA_FILE_SELECTION_MODE, feed.fileSelectionMode.name)
-            putExtra(EXTRA_TORRENT_TYPE, result.type.name)
+            action = DownloadService.ACTION_ADD_TASK
+            putExtra(DownloadService.EXTRA_TORRENT_ID, result.id)
+            putExtra(DownloadService.EXTRA_TORRENT_URI, result.uri.toString())
+            putExtra(DownloadService.EXTRA_TORRENT_NAME, result.name ?: item.title)
+            putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, feed.destinationSubdirectory)
+            putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, feed.createSubfolderByName)
+            putExtra(DownloadService.EXTRA_NOTIFY_ON_COMPLETION, feed.notifyOnCompletion)
+            putExtra(DownloadService.EXTRA_FILE_SELECTION_MODE, feed.fileSelectionMode.name)
+            putExtra(DownloadService.EXTRA_TORRENT_TYPE, result.type.name)
         }
         applicationContext.startService(intent)
 

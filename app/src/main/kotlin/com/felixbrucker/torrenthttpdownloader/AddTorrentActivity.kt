@@ -17,17 +17,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
-import com.felixbrucker.torrenthttpdownloader.ui.theme.TorrentHttpDownloaderTheme
+import androidx.core.net.toUri
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import androidx.core.net.toUri
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
+import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfig
 
 @AndroidEntryPoint
 class AddTorrentActivity : ComponentActivity() {

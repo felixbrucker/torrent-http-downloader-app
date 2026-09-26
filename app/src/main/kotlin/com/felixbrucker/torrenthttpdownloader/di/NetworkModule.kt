@@ -1,7 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.di
 
-import com.felixbrucker.torrenthttpdownloader.network.ErrorInterceptor
-import com.felixbrucker.torrenthttpdownloader.network.RealDebridApiService
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -9,10 +7,12 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import javax.inject.Singleton
+import com.felixbrucker.torrenthttpdownloader.core.network.ErrorInterceptor
+import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
 
 @Module
 @InstallIn(SingletonComponent::class)
