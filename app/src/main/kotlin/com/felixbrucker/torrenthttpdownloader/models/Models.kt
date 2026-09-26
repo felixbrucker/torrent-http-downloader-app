@@ -162,14 +162,14 @@ data class DownloadTask(
         }
     }
 
-    fun removeResumeData() {
+    fun removeResumeData(pathFactory: PathFactory) {
         if (providerId != null) {
-            PathFactory.getResumeDataPath(providerId).deleteIfExists()
+            pathFactory.getResumeDataPath(providerId).deleteIfExists()
         }
     }
 
-    fun removeScopedTemporaryDirectory() {
-        val tempDir = PathFactory.getScopedTemporaryDirectory(name)
+    fun removeScopedTemporaryDirectory(pathFactory: PathFactory) {
+        val tempDir = pathFactory.getScopedTemporaryDirectory(name)
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
         }

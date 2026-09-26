@@ -5,8 +5,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
-import com.felixbrucker.torrenthttpdownloader.container.Container
-import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.makeAddTorrentParams
 import com.felixbrucker.torrenthttpdownloader.sha1Hash
@@ -37,12 +35,17 @@ import org.libtorrent4j.swig.torrent_handle
 import java.io.File
 import java.util.Random
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Named
+import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
 
 
-class LibTorrentProvider(
-    private val sharedPreferences: SharedPreferences,
+@Singleton
+class LibTorrentProvider @Inject constructor(
+    @param:Named("settings") private val sharedPreferences: SharedPreferences,
     private val connectivityManager: ConnectivityManager,
+    private val pathFactory: PathFactory,
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
@@ -50,15 +53,8 @@ class LibTorrentProvider(
         ProviderFeature.FilePriorities,
     )
 
-    companion object: ServiceBuilder {
-        override val NAME: String = "libtorrent"
-
-        override fun build(): LibTorrentProvider {
-            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-            val connectivityManager = Container.getService<ConnectivityManager>("ConnectivityManager")
-
-            return LibTorrentProvider(sharedPreferences, connectivityManager)
-        }
+    companion object {
+        const val NAME: String = "libtorrent"
     }
 
     private val sessionManager = SessionManager()
@@ -118,7 +114,7 @@ class LibTorrentProvider(
     }
 
     init {
-        PathFactory.getResumeDataDirectory().createDirectoryRecursivelyIfNotExists()
+        pathFactory.getResumeDataDirectory().createDirectoryRecursivelyIfNotExists()
 
         if (sessionSettings.useRandomPort) {
             val range = SessionSettings.randomRangePort
@@ -179,7 +175,7 @@ class LibTorrentProvider(
 
         sessionManager.download(
             info,
-            PathFactory.getScopedTemporaryDirectory(name),
+            pathFactory.getScopedTemporaryDirectory(name),
             null,
             null,
             null,
@@ -200,7 +196,7 @@ class LibTorrentProvider(
 
         sessionManager.download(
             magnetUri,
-            PathFactory.getScopedTemporaryDirectory(name),
+            pathFactory.getScopedTemporaryDirectory(name),
             makeDefaultTorrentFlags(),
         )
         setPerTorrentSettings(torrentId)
@@ -379,7 +375,7 @@ class LibTorrentProvider(
     }
 
     private fun loadSessionParams(): SessionParams {
-        val sessionFile = File(PathFactory.getResumeDataDirectory(), "session")
+        val sessionFile = File(pathFactory.getResumeDataDirectory(), "session")
         if (!sessionFile.exists()) {
             return SessionParams()
         }
@@ -389,12 +385,12 @@ class LibTorrentProvider(
 
     private fun saveSessionParams() {
         val params = sessionManager.saveState() ?: return
-        val sessionFile = File(PathFactory.getResumeDataDirectory(), "session")
+        val sessionFile = File(pathFactory.getResumeDataDirectory(), "session")
         sessionFile.writeBytes(params)
     }
 
     private fun readResumeData(id: String): ByteArray? {
-        val path = PathFactory.getResumeDataPath(id)
+        val path = pathFactory.getResumeDataPath(id)
         if (!path.exists()) {
             return null
         }
@@ -403,7 +399,7 @@ class LibTorrentProvider(
     }
 
     private fun saveResumeData(id: String, data: ByteArray) {
-        val path = PathFactory.getResumeDataPath(id)
+        val path = pathFactory.getResumeDataPath(id)
         path.writeBytes(data)
     }
 

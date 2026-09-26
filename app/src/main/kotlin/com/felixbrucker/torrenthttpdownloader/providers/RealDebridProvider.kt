@@ -1,30 +1,27 @@
 package com.felixbrucker.torrenthttpdownloader.providers
 
 import android.content.SharedPreferences
+import com.felixbrucker.torrenthttpdownloader.network.RealDebridApiService
 import com.felixbrucker.torrenthttpdownloader.network.ResourceNotFoundException
-import com.felixbrucker.torrenthttpdownloader.network.RetrofitClient
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.felixbrucker.torrenthttpdownloader.container.Container
-import com.felixbrucker.torrenthttpdownloader.container.ServiceBuilder
+import javax.inject.Inject
+import javax.inject.Named
+import javax.inject.Singleton
 import kotlin.math.min
 
-class RealDebridProvider(
-    private val sharedPreferences: SharedPreferences,
+@Singleton
+class RealDebridProvider @Inject constructor(
+    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val realDebridApiService: RealDebridApiService,
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
         ProviderFeature.LocalDownloads,
     )
 
-    companion object: ServiceBuilder {
-        override val NAME: String = "Real-Debrid"
-
-        override fun build(): RealDebridProvider {
-            val sharedPreferences = Container.getService<SharedPreferences>("SharedPreferences")
-
-            return RealDebridProvider(sharedPreferences)
-        }
+    companion object {
+        const val NAME: String = "Real-Debrid"
     }
 
     private var apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
@@ -42,7 +39,7 @@ class RealDebridProvider(
             0,
             torrentFileBytes.size
         )
-        val response = RetrofitClient.instance.addTorrentFile(auth, requestBody)
+        val response = realDebridApiService.addTorrentFile(auth, requestBody)
 
         return response.id
     }
@@ -50,7 +47,7 @@ class RealDebridProvider(
     override suspend fun addMagnet(magnetUri: String, name: String): String {
         checkApiToken()
 
-        val response = RetrofitClient.instance.addMagnet(auth, magnetUri)
+        val response = realDebridApiService.addMagnet(auth, magnetUri)
 
         return response.id
     }
@@ -58,7 +55,7 @@ class RealDebridProvider(
     override suspend fun getTorrentInfo(id: String): ProviderTorrentInfo {
         checkApiToken()
 
-        val info = RetrofitClient.instance.getTorrentInfo(auth, id)
+        val info = realDebridApiService.getTorrentInfo(auth, id)
         val totalBytes = info.bytes
         val downloadedBytes = min((totalBytes * (info.progress / 100.0)).toLong(), totalBytes)
 
@@ -93,7 +90,7 @@ class RealDebridProvider(
     override suspend fun selectFiles(id: String, fileIds: List<Int>): Boolean {
         checkApiToken()
 
-        val response = RetrofitClient.instance.selectFiles(auth, id, fileIds.joinToString(","))
+        val response = realDebridApiService.selectFiles(auth, id, fileIds.joinToString(","))
 
         return response.isSuccessful
     }
@@ -110,7 +107,7 @@ class RealDebridProvider(
         checkApiToken()
 
         try {
-            val response = RetrofitClient.instance.deleteTorrent(auth, id)
+            val response = realDebridApiService.deleteTorrent(auth, id)
 
             return response.isSuccessful
         } catch (_: ResourceNotFoundException) {
@@ -121,7 +118,7 @@ class RealDebridProvider(
     override suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink {
         checkApiToken()
 
-        val response = RetrofitClient.instance.unrestrictLink(auth, link)
+        val response = realDebridApiService.unrestrictLink(auth, link)
         return UnrestrictedLink(
             filename = response.filename,
             downloadUrl = response.download,

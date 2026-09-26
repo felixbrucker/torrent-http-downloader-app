@@ -41,6 +41,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
@@ -54,8 +56,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var downloadTracker: DownloadTracker
+    @Inject lateinit var providerFactory: ProviderFactory
+    @Inject lateinit var pathFactory: PathFactory
+    @Inject lateinit var torrentUriResolver: TorrentUriResolver
+
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
@@ -114,7 +124,11 @@ class MainActivity : ComponentActivity() {
 
                 val entryProvider = entryProvider {
                     entry<NavRoute.Downloads> {
-                        DownloadsScreen(navigator = navigator)
+                        DownloadsScreen(
+                            navigator = navigator,
+                            downloadTracker = downloadTracker,
+                            providerFactory = providerFactory,
+                        )
                     }
                     entry<NavRoute.RssFeeds> {
                         RssFeedsScreen(
@@ -123,11 +137,12 @@ class MainActivity : ComponentActivity() {
                             syncFeeds = { runRssSyncOnce() },
                             onNavigateToDetail = { feedId ->
                                 navigator.navigate(NavRoute.RssFeedDetail(feedId))
-                            }
+                            },
+                            downloadTracker = downloadTracker,
                         )
                     }
                     entry<NavRoute.RssFeedDetail> { key ->
-                        val feeds by DownloadTracker.rssFeeds.collectAsState()
+                        val feeds by downloadTracker.rssFeeds.collectAsState()
                         val feed = feeds.find { it.id == key.feedId }
                         feed?.let { feed ->
                             RssFeedDetailScreen(
@@ -138,7 +153,7 @@ class MainActivity : ComponentActivity() {
                                     serviceScope.launch {
                                         isResolvingTorrent = true
                                         try {
-                                            val resolvedTorrent = TorrentUriResolver(context.contentResolver).resolve(item.link.toUri())
+                                            val resolvedTorrent = torrentUriResolver.resolve(item.link.toUri())
                                             pendingConfig = AddTorrentConfig(
                                                 id = resolvedTorrent.id,
                                                 uri = resolvedTorrent.uri.toString(),
@@ -153,7 +168,8 @@ class MainActivity : ComponentActivity() {
                                             isResolvingTorrent = false
                                         }
                                     }
-                                }
+                                },
+                                downloadTracker = downloadTracker,
                             )
                         }
                     }
@@ -197,7 +213,7 @@ class MainActivity : ComponentActivity() {
                             startService(intent)
 
                             if (updatedConfig.feedId != null && updatedConfig.feedItemId != null) {
-                                DownloadTracker.updateRssFeed(updatedConfig.feedId) { f ->
+                                downloadTracker.updateRssFeed(updatedConfig.feedId) { f ->
                                     f.copy(items = f.items.map { if (it.id == updatedConfig.feedItemId) it.copy(isDownloaded = true) else it })
                                 }
                             }
@@ -229,7 +245,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
 
-        if (DownloadTracker.hasTasksWhichNeedProcessing()) {
+        if (downloadTracker.hasTasksWhichNeedProcessing()) {
             startService(Intent(this, DownloadService::class.java))
         }
         ensureRssSyncIsScheduled()
@@ -261,4 +277,3 @@ class MainActivity : ComponentActivity() {
     }
 
 }
-

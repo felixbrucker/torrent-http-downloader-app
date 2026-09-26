@@ -50,10 +50,11 @@ fun RssFeedsScreen(
     syncFeed: (RssFeed) -> Unit,
     syncFeeds: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
+    downloadTracker: DownloadTracker,
 ) {
-    val feeds by DownloadTracker.rssFeeds.collectAsState()
-    val isSyncingAll by DownloadTracker.isSyncingAll.collectAsState()
-    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+    val feeds by downloadTracker.rssFeeds.collectAsState()
+    val isSyncingAll by downloadTracker.isSyncingAll.collectAsState()
+    val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
 
     val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
     val rotation by infiniteTransition.animateFloat(
@@ -119,7 +120,7 @@ fun RssFeedsScreen(
                         RssFeedItem(
                             feed = feed,
                             onClick = { onNavigateToDetail(feed.id) },
-                            onDelete = { DownloadTracker.removeRssFeed(feed.id) },
+                            onDelete = { downloadTracker.removeRssFeed(feed.id) },
                             syncFeed = { syncFeed(feed) },
                             editFeed = { editFeedConfig = feed },
                             isSyncing = syncingFeedIds.contains(feed.id)
@@ -133,7 +134,7 @@ fun RssFeedsScreen(
             EditRssFeedDialog(
                 onDismiss = { showAddFeedDialog = false },
                 onConfirm = { newFeed ->
-                    DownloadTracker.addRssFeed(newFeed)
+                    downloadTracker.addRssFeed(newFeed)
                     showAddFeedDialog = false
                     syncFeed(newFeed)
                 }
@@ -145,7 +146,7 @@ fun RssFeedsScreen(
                 feed = editingFeed,
                 onDismiss = { editFeedConfig = null },
                 onConfirm = { newFeed ->
-                    DownloadTracker.updateRssFeed(newFeed.id) { feed ->
+                    downloadTracker.updateRssFeed(newFeed.id) { feed ->
                         val isResetState = feed.url != newFeed.url
 
                         newFeed.copy(

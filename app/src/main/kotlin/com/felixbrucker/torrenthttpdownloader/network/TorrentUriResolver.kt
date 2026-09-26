@@ -14,7 +14,8 @@ import okhttp3.Request
 import java.io.File
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
-
+import javax.inject.Inject
+import javax.inject.Singleton
 
 data class ResolvedTorrent(
     val type: TorrentType,
@@ -23,7 +24,11 @@ data class ResolvedTorrent(
     val name: String?,
 )
 
-class TorrentUriResolver(private val contentResolver: ContentResolver) {
+@Singleton
+class TorrentUriResolver @Inject constructor(
+    private val contentResolver: ContentResolver,
+    private val pathFactory: PathFactory,
+) {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -34,8 +39,9 @@ class TorrentUriResolver(private val contentResolver: ContentResolver) {
         if (uri.scheme == "http" || uri.scheme == "https") {
             // Fetch torrent file
             val torrentFileName = uri.toString().substringAfterLast("/")
-            val temporaryTorrentFile = File(PathFactory.getTemporaryTorrentFileDirectory(), torrentFileName)
-            PathFactory.getTemporaryTorrentFileDirectory().createDirectoryRecursivelyIfNotExists()
+            val torrentDir = pathFactory.getTemporaryTorrentFileDirectory()
+            torrentDir.createDirectoryRecursivelyIfNotExists()
+            val temporaryTorrentFile = File(torrentDir, torrentFileName)
             val request = Request.Builder().url(uri.toString()).build()
             withContext(Dispatchers.IO) {
                 httpClient.newCall(request).execute().use { response ->

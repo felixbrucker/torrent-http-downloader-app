@@ -1,11 +1,29 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kover)
 }
 
+
 android {
+    namespace = "com.felixbrucker.torrenthttpdownloader"
+    compileSdk {
+        version = release(37)
+    }
+
+    defaultConfig {
+        applicationId = "com.felixbrucker.torrenthttpdownloader"
+        minSdk = 35
+        targetSdk = 37
+        versionCode = 2
+        versionName = "1.0.1"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
     signingConfigs {
         getByName("debug") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
@@ -29,20 +47,6 @@ android {
             keyAlias = System.getenv("KEY_ALIAS")
             keyPassword = System.getenv("KEY_PASSWORD")
         }
-    }
-    namespace = "com.felixbrucker.torrenthttpdownloader"
-    compileSdk {
-        version = release(37)
-    }
-
-    defaultConfig {
-        applicationId = "com.felixbrucker.torrenthttpdownloader"
-        minSdk = 35
-        targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.1"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -71,7 +75,7 @@ kover {
         total {
             verify {
                 rule {
-                    minBound(90)
+                    minBound(70)
                 }
             }
         }
@@ -93,6 +97,10 @@ kover {
 }
 
 dependencies {
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

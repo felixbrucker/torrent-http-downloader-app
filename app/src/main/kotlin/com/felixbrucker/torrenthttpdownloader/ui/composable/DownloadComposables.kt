@@ -67,7 +67,6 @@ import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.DownloadService.Companion.ACTION_RESTART_TASK
 import com.felixbrucker.torrenthttpdownloader.Formatter
-import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.FileSelectionMode
@@ -88,9 +87,12 @@ import com.felixbrucker.torrenthttpdownloader.ui.icons.graph_3
 import kotlin.math.roundToInt
 
 @Composable
-fun DownloadItem(task: DownloadTask, onRemove: () -> Unit) {
+fun DownloadItem(
+    task: DownloadTask,
+    onRemove: () -> Unit,
+    provider: TorrentProvider? = null,
+) {
     val context = LocalContext.current
-    val provider = Container.getOptionalService<TorrentProvider>("TorrentProvider")
     var isExpanded by remember { mutableStateOf(false) }
     val isLocal = task.location == TaskLocation.LOCAL
     val hasUnfinishedLocalDownloads = isLocal && task.files.any { it.state != LocalDownloadState.COMPLETED }

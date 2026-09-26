@@ -26,8 +26,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class AddTorrentActivity : ComponentActivity() {
+    @Inject lateinit var torrentUriResolver: TorrentUriResolver
+
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
@@ -120,7 +125,7 @@ class AddTorrentActivity : ComponentActivity() {
             serviceScope.launch {
                 isResolvingTorrent = true
                 try {
-                    val resolvedTorrent = TorrentUriResolver(contentResolver).resolve(data)
+                    val resolvedTorrent = torrentUriResolver.resolve(data)
                     pendingConfig = AddTorrentConfig(
                         id = resolvedTorrent.id,
                         uri = resolvedTorrent.uri.toString(),

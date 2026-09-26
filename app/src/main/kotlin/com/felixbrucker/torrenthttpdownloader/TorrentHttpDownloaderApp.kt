@@ -1,21 +1,17 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.app.Application
-import android.content.Context
-import java.lang.ref.WeakReference
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
-class TorrentHttpDownloaderApp : Application() {
-    companion object {
-        private var contextRef: WeakReference<Context> = WeakReference(null)
+@HiltAndroidApp
+class TorrentHttpDownloaderApp : Application(), Configuration.Provider {
+    @Inject lateinit var workerFactory: HiltWorkerFactory
 
-        fun getContext(): Context {
-            return contextRef.get() ?: throw IllegalStateException("Application context is null")
-        }
-    }
-
-    override fun onCreate() {
-        super.onCreate()
-        contextRef = WeakReference(applicationContext)
-        DownloadTracker.init()
-    }
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 }

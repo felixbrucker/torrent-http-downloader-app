@@ -24,6 +24,7 @@ data class DownloadWork(val taskId: String, val file: DownloadFile)
 class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val sharedPreferences: SharedPreferences,
+    private val downloadTracker: DownloadTracker,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
@@ -70,9 +71,9 @@ class LocalDownloadManager(
             // Support regenerating the link if the existing one expires (
             // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
-                val task = DownloadTracker.findTask(work.taskId) ?: return
+                val task = downloadTracker.findTask(work.taskId) ?: return
                 onLinkExpired(task, file)
-                file = DownloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+                file = downloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
 
@@ -134,7 +135,7 @@ class LocalDownloadManager(
                     val contentLength = body.contentLength()
                     val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
-                    DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
+                    downloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
                         file.copy(
                             state = LocalDownloadState.DOWNLOADING,
                             totalBytes = totalBytes,
@@ -164,7 +165,7 @@ class LocalDownloadManager(
                                 val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
                                 val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
 
-                                DownloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
+                                downloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
                                     file.copy(
                                         progress = progress,
                                         downloadedBytes = totalDownloaded,
@@ -203,7 +204,7 @@ class LocalDownloadManager(
     }
 
     private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        DownloadTracker.updateTaskFile(taskId, fileLink) { file ->
+        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
             file.copy(state = state, stateDescription = error, speed = 0)
         }
     }
@@ -228,13 +229,13 @@ class LocalDownloadManager(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
+        val task = downloadTracker.findTask(taskId) ?: return
         val file = task.files.find { it.link == fileLink } ?: return
         enqueueDownload(DownloadWork(taskId, file))
     }
 
     fun pauseTask(taskId: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
+        val task = downloadTracker.findTask(taskId) ?: return
         task.files.forEach { file ->
             if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
                 pauseFile(taskId, file.link)
@@ -243,7 +244,7 @@ class LocalDownloadManager(
     }
 
     fun resumeTask(taskId: String) {
-        val task = DownloadTracker.findTask(taskId) ?: return
+        val task = downloadTracker.findTask(taskId) ?: return
         task.files.forEach { file ->
             if (file.state == LocalDownloadState.PAUSED) {
                 resumeFile(taskId, file.link)
@@ -252,13 +253,13 @@ class LocalDownloadManager(
     }
 
     fun pauseAll() {
-        DownloadTracker.getTasks().forEach { task ->
+        downloadTracker.getTasks().forEach { task ->
             pauseTask(task.id)
         }
     }
 
     fun resumeAll() {
-        DownloadTracker.getTasks().forEach { task ->
+        downloadTracker.getTasks().forEach { task ->
             resumeTask(task.id)
         }
     }
