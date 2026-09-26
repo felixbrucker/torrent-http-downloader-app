@@ -2,8 +2,10 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.app.Application
 import android.content.Context
+import dagger.hilt.android.HiltAndroidApp
 import java.lang.ref.WeakReference
 
+@HiltAndroidApp
 class TorrentHttpDownloaderApp : Application() {
     companion object {
         private var contextRef: WeakReference<Context> = WeakReference(null)
@@ -16,6 +18,5 @@ class TorrentHttpDownloaderApp : Application() {
     override fun onCreate() {
         super.onCreate()
         contextRef = WeakReference(applicationContext)
-        DownloadTracker.init()
     }
 }

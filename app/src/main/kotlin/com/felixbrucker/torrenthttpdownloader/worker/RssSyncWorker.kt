@@ -22,9 +22,12 @@ import com.felixbrucker.torrenthttpdownloader.network.RssParser
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 import kotlin.math.max
 
 class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    @Inject lateinit var downloadTracker: DownloadTracker
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -37,7 +40,7 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             if (feedId == null) {
                 syncRssFeeds()
             } else {
-                val feed = DownloadTracker.rssFeeds.value.find { it.id == feedId }
+                val feed = downloadTracker.rssFeeds.value.find { it.id == feedId }
                 if (feed != null) {
                     syncFeed(feed)
                 }
@@ -52,23 +55,23 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     }
 
     private suspend fun syncRssFeeds() {
-        DownloadTracker.setAllFeedsSyncing(true)
+        downloadTracker.setAllFeedsSyncing(true)
         try {
-            DownloadTracker.rssFeeds.value.forEach { syncFeed(it) }
+            downloadTracker.rssFeeds.value.forEach { syncFeed(it) }
         } finally {
-            DownloadTracker.setAllFeedsSyncing(false)
+            downloadTracker.setAllFeedsSyncing(false)
         }
     }
 
     private suspend fun syncFeed(feed: RssFeed) {
-        DownloadTracker.setFeedSyncing(feed.id, true)
+        downloadTracker.setFeedSyncing(feed.id, true)
         try {
             val newItems = rssParser.fetchAndParse(feed.url)
             val existingItemIds = feed.items.map { it.id }.toSet()
             val newlyDiscoveredItems = newItems.filter { it.id !in existingItemIds }
 
             if (newlyDiscoveredItems.isNotEmpty()) {
-                DownloadTracker.updateRssFeed(feed.id) { currentFeed ->
+                downloadTracker.updateRssFeed(feed.id) { currentFeed ->
                     val updatedItems = (newlyDiscoveredItems + currentFeed.items)
                         .distinctBy { it.id }
                         .take(max(newItems.size, 25))
@@ -85,12 +88,12 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     }
                 }
             } else {
-                DownloadTracker.updateRssFeed(feed.id) { it.copy(lastCheck = System.currentTimeMillis()) }
+                downloadTracker.updateRssFeed(feed.id) { it.copy(lastCheck = System.currentTimeMillis()) }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
-            DownloadTracker.setFeedSyncing(feed.id, false)
+            downloadTracker.setFeedSyncing(feed.id, false)
         }
     }
 
@@ -109,7 +112,7 @@ class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         }
         applicationContext.startService(intent)
 
-        DownloadTracker.updateRssFeed(feed.id) { currentFeed ->
+        downloadTracker.updateRssFeed(feed.id) { currentFeed ->
             currentFeed.copy(items = currentFeed.items.map {
                 if (it.id == item.id) it.copy(isDownloaded = true, isRead = true) else it
             })

@@ -42,8 +42,9 @@ fun RssFeedDetailScreen(
     onBack: () -> Unit,
     syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
+    downloadTracker: DownloadTracker,
 ) {
-    val syncingFeedIds by DownloadTracker.syncingFeedIds.collectAsState()
+    val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
     val isSyncing = syncingFeedIds.contains(feed.id)
 
     val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
@@ -75,7 +76,7 @@ fun RssFeedDetailScreen(
                         )
                     }
                     IconButton(onClick = {
-                        DownloadTracker.updateRssFeed(feed.id) { feed ->
+                        downloadTracker.updateRssFeed(feed.id) { feed ->
                             feed.copy(items = feed.items.map { it.copy(isRead = true) })
                         }
                     }) {
@@ -105,7 +106,7 @@ fun RssFeedDetailScreen(
                 RssItemsList(
                     feed = feed,
                     onItemClick = { item ->
-                        DownloadTracker.updateRssFeed(feed.id) { f ->
+                        downloadTracker.updateRssFeed(feed.id) { f ->
                             f.copy(items = f.items.map {
                                 if (it.id == item.id) it.copy(isRead = true) else it
                             })

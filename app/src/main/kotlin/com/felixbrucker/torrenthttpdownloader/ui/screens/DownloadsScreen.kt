@@ -59,18 +59,22 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.models.TorrentType
+import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     navigator: Navigator,
+    downloadTracker: DownloadTracker,
+    providerFactory: ProviderFactory,
 ) {
     val context = LocalContext.current
     val windowInfo = LocalWindowInfo.current
     val isNarrowScreen = windowInfo.containerSize.width.dp < 1400.dp
-    val tasks by DownloadTracker.tasks.collectAsState()
-    val unreadRssCount by DownloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
+    val tasks by downloadTracker.tasks.collectAsState()
+    val unreadRssCount by downloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
+    val provider = remember { providerFactory.getProvider() }
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -97,7 +101,7 @@ fun DownloadsScreen(
         }
 
         if (targetItem != null) {
-            DownloadTracker.moveTask(currentDraggedIndex, targetItem.index)
+            downloadTracker.moveTask(currentDraggedIndex, targetItem.index)
             draggedItemIndex = targetItem.index
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }
@@ -285,11 +289,15 @@ fun DownloadsScreen(
                                 shadowElevation = if (isDragging) 8f else 0f
                             }
                     ) {
-                        DownloadItem(task = task, onRemove = {
-                            taskToRemove = task
-                            deleteFiles = true
-                            deleteTorrentFile = true
-                        })
+                        DownloadItem(
+                            task = task,
+                            onRemove = {
+                                taskToRemove = task
+                                deleteFiles = true
+                                deleteTorrentFile = true
+                            },
+                            provider = provider
+                        )
                     }
                 }
             }

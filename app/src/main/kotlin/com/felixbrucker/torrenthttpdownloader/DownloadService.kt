@@ -6,25 +6,30 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
-import android.net.ConnectivityManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
-import com.felixbrucker.torrenthttpdownloader.container.Container
 import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
-import com.felixbrucker.torrenthttpdownloader.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import javax.inject.Inject
+import javax.inject.Named
 import kotlin.time.Duration.Companion.seconds
 
+@AndroidEntryPoint
 class DownloadService : Service() {
+    @Inject lateinit var downloadTracker: DownloadTracker
+    @Inject lateinit var providerFactory: ProviderFactory
+    @Inject @field:Named("settings") lateinit var sharedPreferences: SharedPreferences
+
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var notificationUpdateJob: Job? = null
@@ -44,7 +49,7 @@ class DownloadService : Service() {
                     val name = params.name ?: resolved.name ?: uri
                     val type = resolved.type
 
-                    if (DownloadTracker.getTasks().any { it.id == id }) {
+                    if (downloadTracker.getTasks().any { it.id == id }) {
                         callback.onFailure("Torrent already added")
                         return@launch
                     }
@@ -69,7 +74,7 @@ class DownloadService : Service() {
         }
 
         override fun getProgress(taskId: String): TorrentProgressStats? {
-            val task = DownloadTracker.getTasks().find { it.id == taskId } ?: return null
+            val task = downloadTracker.getTasks().find { it.id == taskId } ?: return null
 
             return TorrentProgressStats().apply {
                 bytesDownloaded = task.downloadedBytes
@@ -82,18 +87,11 @@ class DownloadService : Service() {
     override fun onCreate() {
         super.onCreate()
         torrentUriResolver = TorrentUriResolver(contentResolver)
-        Container
-            .registerService("SharedPreferences", getSharedPreferences("settings", MODE_PRIVATE))
-            .registerService("ConnectivityManager", getSystemService(ConnectivityManager::class.java))
-            .registerServiceBuilder(RealDebridProvider)
-            .registerServiceBuilder(LibTorrentProvider)
-            .registerService("TorrentProvider", ProviderFactory.getProvider())
-
-        provider = Container.getService("TorrentProvider")
+        provider = providerFactory.getProvider()
 
         localDownloadManager = LocalDownloadManager(
             scope = serviceScope,
-            sharedPreferences = Container.getService("SharedPreferences"),
+            sharedPreferences = sharedPreferences,
             onLinkExpired = { task, file ->
                 torrentStateMachine.updateFileInfo(task, file)
             },
@@ -170,7 +168,7 @@ class DownloadService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val tasks = DownloadTracker.getTasks()
+        val tasks = downloadTracker.getTasks()
 
         var totalSpeed = 0L
         var totalProgress = 0
@@ -373,7 +371,7 @@ class DownloadService : Service() {
     }
 
     private fun stopSelfIfIdle() {
-        if (!DownloadTracker.hasTasksWhichNeedProcessing()) {
+        if (!downloadTracker.hasTasksWhichNeedProcessing()) {
             stopSelf()
         }
     }
@@ -471,7 +469,7 @@ class DownloadService : Service() {
         val onCompletionIntentUri = intent.getStringExtra(EXTRA_ON_COMPLETION_INTENT_URI)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (DownloadTracker.getTasks().any { it.id == id }) {
+        if (downloadTracker.getTasks().any { it.id == id }) {
             postNotification(
                 title = "Torrent already added",
                 message = "Torrent $torrentName was not added as it is already in the list of active torrents",
@@ -548,7 +546,6 @@ class DownloadService : Service() {
         torrentStateMachine.stop()
         localDownloadManager.stop()
         provider.stop()
-        Container.clear()
         serviceJob.cancel()
     }
 
