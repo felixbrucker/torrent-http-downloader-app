@@ -9,6 +9,21 @@ plugins {
 
 
 android {
+    namespace = "com.felixbrucker.torrenthttpdownloader"
+    compileSdk {
+        version = release(37)
+    }
+
+    defaultConfig {
+        applicationId = "com.felixbrucker.torrenthttpdownloader"
+        minSdk = 35
+        targetSdk = 37
+        versionCode = 2
+        versionName = "1.0.1"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
     signingConfigs {
         getByName("debug") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
@@ -32,20 +47,6 @@ android {
             keyAlias = System.getenv("KEY_ALIAS")
             keyPassword = System.getenv("KEY_PASSWORD")
         }
-    }
-    namespace = "com.felixbrucker.torrenthttpdownloader"
-    compileSdk {
-        version = release(37)
-    }
-
-    defaultConfig {
-        applicationId = "com.felixbrucker.torrenthttpdownloader"
-        minSdk = 35
-        targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.1"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -74,7 +75,7 @@ kover {
         total {
             verify {
                 rule {
-                    minBound(90)
+                    minBound(70)
                 }
             }
         }

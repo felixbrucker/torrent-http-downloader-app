@@ -15,6 +15,7 @@ import java.io.File
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Singleton
 
 data class ResolvedTorrent(
     val type: TorrentType,
@@ -23,6 +24,7 @@ data class ResolvedTorrent(
     val name: String?,
 )
 
+@Singleton
 class TorrentUriResolver @Inject constructor(
     private val contentResolver: ContentResolver,
     private val pathFactory: PathFactory,
