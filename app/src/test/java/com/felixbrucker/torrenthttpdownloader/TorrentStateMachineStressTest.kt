@@ -5,6 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.models.*
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import io.mockk.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
@@ -20,6 +21,8 @@ class TorrentStateMachineStressTest {
     private val provider = mockk<TorrentProvider>()
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)
     private val contentResolver = mockk<ContentResolver>()
+    private val downloadTracker = mockk<DownloadTracker>()
+    private val pathFactory = mockk<PathFactory>()
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
 
@@ -32,10 +35,11 @@ class TorrentStateMachineStressTest {
             provider = provider,
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
+            downloadTracker = downloadTracker,
+            pathFactory = pathFactory,
             onTaskCompleted = {},
             onPostNotification = { _, _, _, _ -> }
         )
-        mockkObject(DownloadTracker)
     }
 
     @After
@@ -54,8 +58,8 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id"
         )
 
-        every { DownloadTracker.findTask(taskId) } returns task
-        every { DownloadTracker.updateTask(any(), any()) } just runs
+        every { downloadTracker.findTask(taskId) } returns task
+        every { downloadTracker.updateTask(any(), any()) } just runs
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)
@@ -113,9 +117,9 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id-2"
         )
 
-        every { DownloadTracker.findTask(taskId1) } returns task1
-        every { DownloadTracker.findTask(taskId2) } returns task2
-        every { DownloadTracker.updateTask(any(), any()) } just runs
+        every { downloadTracker.findTask(taskId1) } returns task1
+        every { downloadTracker.findTask(taskId2) } returns task2
+        every { downloadTracker.updateTask(any(), any()) } just runs
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)

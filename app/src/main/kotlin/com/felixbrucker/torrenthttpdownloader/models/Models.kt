@@ -1,10 +1,14 @@
 package com.felixbrucker.torrenthttpdownloader.models
 
+import android.os.Environment
 import com.felixbrucker.torrenthttpdownloader.asFile
+import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.deleteIfExists
+import com.felixbrucker.torrenthttpdownloader.hash
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
+import java.io.File
 import java.util.UUID
 import kotlin.math.max
 
@@ -162,14 +166,21 @@ data class DownloadTask(
         }
     }
 
-    fun removeResumeData() {
+    fun removeResumeData(pathFactory: PathFactory? = null) {
         if (providerId != null) {
-            PathFactory.getResumeDataPath(providerId).deleteIfExists()
+            val resumeFile = pathFactory?.getResumeDataPath(providerId) ?: File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "resume/$providerId"
+            )
+            resumeFile.deleteIfExists()
         }
     }
 
-    fun removeScopedTemporaryDirectory() {
-        val tempDir = PathFactory.getScopedTemporaryDirectory(name)
+    fun removeScopedTemporaryDirectory(pathFactory: PathFactory? = null) {
+        val tempDir = pathFactory?.getScopedTemporaryDirectory(name) ?: run {
+            val subDirName = if (name.length > 127) name.hash() else name.cleanedForUseAsPath()
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "tmp/$subDirName")
+        }
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
         }

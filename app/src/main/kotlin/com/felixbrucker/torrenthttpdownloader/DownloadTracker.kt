@@ -4,7 +4,6 @@ import android.app.backup.BackupManager
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp.Companion.getContext
 import com.felixbrucker.torrenthttpdownloader.models.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.models.LocalDownloadState
@@ -163,41 +162,5 @@ class DownloadTracker @Inject constructor(
 
     fun setAllFeedsSyncing(syncing: Boolean) {
         _isSyncingAll.value = syncing
-    }
-
-    companion object {
-        private var instance: DownloadTracker? = null
-
-        fun getInstance(context: Context = getContext()): DownloadTracker {
-            return instance ?: synchronized(this) {
-                instance ?: run {
-                    val settingsSp = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-                    val downloadsSp = context.getSharedPreferences("downloads", Context.MODE_PRIVATE)
-                    val gson = Gson()
-                    DownloadTracker(context, downloadsSp, settingsSp, gson).also { instance = it }
-                }
-            }
-        }
-
-        val tasks get() = getInstance().tasks
-        val rssFeeds get() = getInstance().rssFeeds
-        val syncingFeedIds get() = getInstance().syncingFeedIds
-        val isSyncingAll get() = getInstance().isSyncingAll
-        val totalUnreadRssCount get() = getInstance().totalUnreadRssCount
-
-        fun getTasks() = getInstance().getTasks()
-        fun hasTasksWhichNeedProcessing() = getInstance().hasTasksWhichNeedProcessing()
-        fun addTask(task: DownloadTask) = getInstance().addTask(task)
-        fun moveTask(fromIndex: Int, toIndex: Int) = getInstance().moveTask(fromIndex, toIndex)
-        fun findTask(id: String) = getInstance().findTask(id)
-        fun removeTask(id: String) = getInstance().removeTask(id)
-        fun updateTask(id: String, update: (DownloadTask) -> DownloadTask) = getInstance().updateTask(id, update)
-        fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) = getInstance().updateTaskFile(taskId, fileLink, update)
-        fun updateTaskFiles(taskId: String, update: (DownloadFile) -> DownloadFile) = getInstance().updateTaskFiles(taskId, update)
-        fun addRssFeed(feed: RssFeed) = getInstance().addRssFeed(feed)
-        fun updateRssFeed(id: String, update: (RssFeed) -> RssFeed) = getInstance().updateRssFeed(id, update)
-        fun removeRssFeed(id: String) = getInstance().removeRssFeed(id)
-        fun setFeedSyncing(feedId: String, syncing: Boolean) = getInstance().setFeedSyncing(feedId, syncing)
-        fun setAllFeedsSyncing(syncing: Boolean) = getInstance().setAllFeedsSyncing(syncing)
     }
 }

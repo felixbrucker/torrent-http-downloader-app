@@ -3,6 +3,7 @@ package com.felixbrucker.torrenthttpdownloader.worker
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
+import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.felixbrucker.torrenthttpdownloader.DownloadService
@@ -20,14 +21,18 @@ import com.felixbrucker.torrenthttpdownloader.models.RssFeed
 import com.felixbrucker.torrenthttpdownloader.models.RssItem
 import com.felixbrucker.torrenthttpdownloader.network.RssParser
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 import kotlin.math.max
 
-class RssSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    @Inject lateinit var downloadTracker: DownloadTracker
-
+@HiltWorker
+class RssSyncWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val downloadTracker: DownloadTracker,
+) : CoroutineWorker(context, params) {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)

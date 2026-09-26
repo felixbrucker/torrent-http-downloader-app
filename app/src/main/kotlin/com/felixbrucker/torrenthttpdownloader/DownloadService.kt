@@ -18,6 +18,7 @@ import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import javax.inject.Inject
@@ -29,6 +30,7 @@ class DownloadService : Service() {
     @Inject lateinit var downloadTracker: DownloadTracker
     @Inject lateinit var providerFactory: ProviderFactory
     @Inject @field:Named("settings") lateinit var sharedPreferences: SharedPreferences
+    @Inject lateinit var pathFactory: PathFactory
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -92,6 +94,7 @@ class DownloadService : Service() {
         localDownloadManager = LocalDownloadManager(
             scope = serviceScope,
             sharedPreferences = sharedPreferences,
+            downloadTracker = downloadTracker,
             onLinkExpired = { task, file ->
                 torrentStateMachine.updateFileInfo(task, file)
             },
@@ -103,6 +106,8 @@ class DownloadService : Service() {
             provider = provider,
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
+            downloadTracker = downloadTracker,
+            pathFactory = pathFactory,
             onTaskCompleted = { task ->
                 task.onCompletionIntentUri?.let { uri ->
                     try {

@@ -2,7 +2,6 @@ package com.felixbrucker.torrenthttpdownloader.storage
 
 import android.content.Context
 import android.os.Environment
-import com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp.Companion.getContext
 import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.hash
@@ -24,14 +23,14 @@ class PathFactory @Inject constructor(
         return File(
             context.cacheDir,
             "resume"
-        ).apply { createDirectoryRecursivelyIfNotExists() }
+        )
     }
 
     fun getTemporaryTorrentFileDirectory(): File {
         return File(
             context.cacheDir,
             "torrents"
-        ).apply { createDirectoryRecursivelyIfNotExists() }
+        )
     }
 
     fun getScopedTemporaryDirectory(taskName: String): File {
@@ -44,7 +43,7 @@ class PathFactory @Inject constructor(
         return File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath,
             "tmp/${subDirName}"
-        ).apply { createDirectoryRecursivelyIfNotExists() }
+        )
     }
 
     fun getScopedDestinationDirectory(task: DownloadTask): File {
@@ -55,7 +54,7 @@ class PathFactory @Inject constructor(
             downloadsDir
         }
 
-        val result = if (task.createSubfolderByName) {
+        return if (task.createSubfolderByName) {
             val subDirName = if (task.name.length > 127) {
                 task.name.hash()
             } else {
@@ -64,30 +63,6 @@ class PathFactory @Inject constructor(
             File(baseDir, subDirName)
         } else {
             baseDir
-        }
-        result.createDirectoryRecursivelyIfNotExists()
-        return result
-    }
-
-    companion object {
-        fun getResumeDataPath(providerId: String): File {
-            return PathFactory(getContext()).getResumeDataPath(providerId)
-        }
-
-        fun getResumeDataDirectory(): File {
-            return PathFactory(getContext()).getResumeDataDirectory()
-        }
-
-        fun getTemporaryTorrentFileDirectory(): File {
-            return PathFactory(getContext()).getTemporaryTorrentFileDirectory()
-        }
-
-        fun getScopedTemporaryDirectory(taskName: String): File {
-            return PathFactory(getContext()).getScopedTemporaryDirectory(taskName)
-        }
-
-        fun getScopedDestinationDirectory(task: DownloadTask): File {
-            return PathFactory(getContext()).getScopedDestinationDirectory(task)
         }
     }
 }

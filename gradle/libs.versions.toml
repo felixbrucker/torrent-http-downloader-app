@@ -26,12 +26,15 @@ kotlinxCoroutinesTest = "1.11.0"
 workRuntimeKtx = "2.11.2"
 navigation3 = "1.1.7"
 kover = "0.9.9"
-hilt = "2.56.2"
-ksp = "2.0.21-1.0.28"
+hilt = "2.60.1"
+hiltWork = "1.4.0"
+ksp = "2.3.11"
 
 [libraries]
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "recyclerview" }
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converterGson" }
