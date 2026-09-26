@@ -3,7 +3,6 @@ package com.felixbrucker.torrenthttpdownloader.storage
 import android.content.Context
 import android.os.Environment
 import com.felixbrucker.torrenthttpdownloader.cleanedForUseAsPath
-import com.felixbrucker.torrenthttpdownloader.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.hash
 import com.felixbrucker.torrenthttpdownloader.models.DownloadTask
 import dagger.hilt.android.qualifiers.ApplicationContext
