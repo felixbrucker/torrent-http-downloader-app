@@ -12,7 +12,7 @@ import javax.inject.Singleton
 
 @Singleton
 class PathFactory @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) {
     fun getResumeDataPath(providerId: String): File {
         return File(getResumeDataDirectory(), providerId)

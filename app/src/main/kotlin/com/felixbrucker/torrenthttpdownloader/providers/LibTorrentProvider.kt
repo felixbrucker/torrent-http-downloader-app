@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @Singleton
 class LibTorrentProvider @Inject constructor(
-    @Named("settings") private val sharedPreferences: SharedPreferences,
+    @param:Named("settings") private val sharedPreferences: SharedPreferences,
     private val connectivityManager: ConnectivityManager,
     private val pathFactory: PathFactory,
 ) : TorrentProvider {

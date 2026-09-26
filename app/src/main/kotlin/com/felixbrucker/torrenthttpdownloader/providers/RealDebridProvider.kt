@@ -12,7 +12,7 @@ import kotlin.math.min
 
 @Singleton
 class RealDebridProvider @Inject constructor(
-    @Named("settings") private val sharedPreferences: SharedPreferences,
+    @param:Named("settings") private val sharedPreferences: SharedPreferences,
     private val realDebridApiService: RealDebridApiService,
 ) : TorrentProvider {
     override val name: String = NAME

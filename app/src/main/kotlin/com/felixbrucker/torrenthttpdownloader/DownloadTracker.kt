@@ -22,9 +22,9 @@ import javax.inject.Singleton
 
 @Singleton
 class DownloadTracker @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @Named("downloads") private val downloadsSharedPreferences: SharedPreferences,
-    @Named("settings") private val settingsSharedPreferences: SharedPreferences,
+    @param:ApplicationContext private val context: Context,
+    @param:Named("downloads") private val downloadsSharedPreferences: SharedPreferences,
+    @param:Named("settings") private val settingsSharedPreferences: SharedPreferences,
     private val gson: Gson,
 ) {
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())

@@ -29,7 +29,7 @@ import kotlin.time.Duration.Companion.seconds
 class DownloadService : Service() {
     @Inject lateinit var downloadTracker: DownloadTracker
     @Inject lateinit var providerFactory: ProviderFactory
-    @Inject @field:Named("settings") lateinit var sharedPreferences: SharedPreferences
+    @Inject @Named("settings") lateinit var sharedPreferences: SharedPreferences
     @Inject lateinit var pathFactory: PathFactory
     @Inject lateinit var torrentUriResolver: TorrentUriResolver
 

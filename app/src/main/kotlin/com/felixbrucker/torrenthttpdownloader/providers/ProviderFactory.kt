@@ -7,7 +7,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ProviderFactory @Inject constructor(
-    @Named("settings") private val sharedPreferences: SharedPreferences,
+    @param:Named("settings") private val sharedPreferences: SharedPreferences,
     private val libTorrentProvider: LibTorrentProvider,
     private val realDebridProvider: RealDebridProvider,
 ) {
