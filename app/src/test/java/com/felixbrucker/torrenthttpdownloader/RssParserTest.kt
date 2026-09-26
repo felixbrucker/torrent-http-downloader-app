@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import com.felixbrucker.torrenthttpdownloader.network.RssParser
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -12,6 +11,7 @@ import org.junit.Before
 import org.junit.Test
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import com.felixbrucker.torrenthttpdownloader.core.network.RssParser
 
 class RssParserTest {
 

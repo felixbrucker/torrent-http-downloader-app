@@ -11,19 +11,29 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
-import com.felixbrucker.torrenthttpdownloader.models.*
-import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.providers.FilePriority
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderFeature
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
 import javax.inject.Inject
 import javax.inject.Named
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.*
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
+import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeature
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
+import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.core.model.TaskLocation
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
+import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
+import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 
 @AndroidEntryPoint
 class DownloadService : Service() {

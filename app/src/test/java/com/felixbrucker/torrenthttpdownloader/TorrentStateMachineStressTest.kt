@@ -1,20 +1,27 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.content.ContentResolver
-import com.felixbrucker.torrenthttpdownloader.models.*
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentInfo
-import com.felixbrucker.torrenthttpdownloader.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import io.mockk.*
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Duration.Companion.milliseconds
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
+import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
+import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
+import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TorrentStateMachineStressTest {
