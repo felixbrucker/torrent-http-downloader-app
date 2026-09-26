@@ -42,6 +42,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.storage.PathFactory
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentBottomSheet
 import com.felixbrucker.torrenthttpdownloader.ui.composable.AddTorrentConfig
 import com.felixbrucker.torrenthttpdownloader.ui.screens.RssFeedsScreen
@@ -62,6 +63,8 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var downloadTracker: DownloadTracker
     @Inject lateinit var providerFactory: ProviderFactory
+    @Inject lateinit var pathFactory: PathFactory
+    @Inject lateinit var torrentUriResolver: TorrentUriResolver
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -150,7 +153,7 @@ class MainActivity : ComponentActivity() {
                                     serviceScope.launch {
                                         isResolvingTorrent = true
                                         try {
-                                            val resolvedTorrent = TorrentUriResolver(context.contentResolver).resolve(item.link.toUri())
+                                            val resolvedTorrent = torrentUriResolver.resolve(item.link.toUri())
                                             pendingConfig = AddTorrentConfig(
                                                 id = resolvedTorrent.id,
                                                 uri = resolvedTorrent.uri.toString(),

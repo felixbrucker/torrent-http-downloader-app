@@ -32,6 +32,7 @@ class RssSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val downloadTracker: DownloadTracker,
+    private val torrentUriResolver: TorrentUriResolver,
 ) : CoroutineWorker(context, params) {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -103,7 +104,7 @@ class RssSyncWorker @AssistedInject constructor(
     }
 
     private suspend fun addRssItemToDownloads(feed: RssFeed, item: RssItem) {
-        val result = TorrentUriResolver(applicationContext.contentResolver).resolve(item.link.toUri())
+        val result = torrentUriResolver.resolve(item.link.toUri())
         val intent = Intent(applicationContext, DownloadService::class.java).apply {
             action = ACTION_ADD_TASK
             putExtra(EXTRA_TORRENT_ID, result.id)

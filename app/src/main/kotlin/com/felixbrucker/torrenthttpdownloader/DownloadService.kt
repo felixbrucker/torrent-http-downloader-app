@@ -31,6 +31,7 @@ class DownloadService : Service() {
     @Inject lateinit var providerFactory: ProviderFactory
     @Inject @field:Named("settings") lateinit var sharedPreferences: SharedPreferences
     @Inject lateinit var pathFactory: PathFactory
+    @Inject lateinit var torrentUriResolver: TorrentUriResolver
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -38,8 +39,6 @@ class DownloadService : Service() {
     private lateinit var provider: TorrentProvider
     private lateinit var localDownloadManager: LocalDownloadManager
     private lateinit var torrentStateMachine: TorrentStateMachine
-
-    private lateinit var torrentUriResolver: TorrentUriResolver
 
     private val binder = object : ITorrentDownloadService.Stub() {
         override fun addTorrent(params: AddTorrentParams, callback: IAddTorrentCallback) {
@@ -88,7 +87,6 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        torrentUriResolver = TorrentUriResolver(contentResolver)
         provider = providerFactory.getProvider()
 
         localDownloadManager = LocalDownloadManager(

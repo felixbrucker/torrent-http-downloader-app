@@ -199,8 +199,8 @@ class TorrentStateMachine(
 
         if (deleteFiles) {
             task.deleteFiles()
-            task.removeScopedTemporaryDirectory()
-            task.removeResumeData()
+            task.removeScopedTemporaryDirectory(pathFactory)
+            task.removeResumeData(pathFactory)
         }
 
         if (deleteTorrentFile) {
@@ -438,7 +438,7 @@ class TorrentStateMachine(
                     val isTorrentDeleted = provider.deleteTorrent(task.providerId)
                     if (isTorrentDeleted) {
                         task.removeTorrentFile()
-                        task.removeResumeData()
+                        task.removeResumeData(pathFactory)
                         downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
                     } else {
                         delay(5.seconds)
