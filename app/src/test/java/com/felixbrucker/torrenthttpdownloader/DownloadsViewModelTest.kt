@@ -54,20 +54,20 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun testResumeAllDelegatesToServiceLauncher() {
+    fun testResumeAllLocalDownloadsDelegatesToServiceLauncher() {
         val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
-        viewModel.resumeAll()
+        viewModel.resumeAllLocalDownloads()
 
-        verify { serviceLauncher.resumeAll() }
+        verify { serviceLauncher.resumeAllLocalDownloads() }
     }
 
     @Test
-    fun testPauseAllDelegatesToServiceLauncher() {
+    fun testPauseAllLocalDownloadsDelegatesToServiceLauncher() {
         val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
-        viewModel.pauseAll()
+        viewModel.pauseAllLocalDownloads()
 
-        verify { serviceLauncher.pauseAll() }
+        verify { serviceLauncher.pauseAllLocalDownloads() }
     }
 }

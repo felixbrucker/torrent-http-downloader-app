@@ -45,8 +45,6 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 @Composable
 fun RssFeedsScreen(
     onBack: () -> Unit,
-    syncFeed: (RssFeed) -> Unit,
-    syncFeeds: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
     viewModel: RssFeedsViewModel = viewModel(),
 ) {
@@ -62,14 +60,14 @@ fun RssFeedsScreen(
             RssFeedsTopBar(
                 isSyncingAll = isSyncingAll,
                 onBack = onBack,
-                onSyncFeeds = syncFeeds,
+                onSyncFeeds = { viewModel.syncFeeds() },
                 onAddFeedClick = { showAddFeedDialog = true }
             )
         }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isSyncingAll,
-            onRefresh = syncFeeds,
+            onRefresh = { viewModel.syncFeeds() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -82,7 +80,7 @@ fun RssFeedsScreen(
                     syncingFeedIds = syncingFeedIds,
                     onNavigateToDetail = onNavigateToDetail,
                     onDeleteFeed = { viewModel.removeRssFeed(it) },
-                    syncFeed = syncFeed,
+                    syncFeed = { viewModel.syncFeed(it) },
                     onEditFeed = { editFeedConfig = it }
                 )
             }
@@ -94,7 +92,7 @@ fun RssFeedsScreen(
                 onConfirm = { newFeed ->
                     viewModel.addRssFeed(newFeed)
                     showAddFeedDialog = false
-                    syncFeed(newFeed)
+                    viewModel.syncFeed(newFeed)
                 }
             )
         }
@@ -105,7 +103,7 @@ fun RssFeedsScreen(
                 onDismiss = { editFeedConfig = null },
                 onConfirm = { newFeed ->
                     viewModel.updateFeedConfig(newFeed)
-                    syncFeed(newFeed)
+                    viewModel.syncFeed(newFeed)
                     editFeedConfig = null
                 }
             )

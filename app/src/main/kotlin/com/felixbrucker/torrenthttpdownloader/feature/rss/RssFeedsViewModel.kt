@@ -11,7 +11,8 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 @HiltViewModel
 class RssFeedsViewModel @Inject constructor(
     private val downloadTracker: DownloadTracker,
-    private val rssRepository: RssRepository
+    private val rssRepository: RssRepository,
+    private val rssSyncLauncher: RssSyncLauncher
 ) : ViewModel() {
 
     val feeds: StateFlow<List<RssFeed>> = downloadTracker.rssFeeds
@@ -28,5 +29,13 @@ class RssFeedsViewModel @Inject constructor(
 
     fun updateFeedConfig(feed: RssFeed) {
         rssRepository.updateFeedConfig(feed)
+    }
+
+    fun syncFeed(feed: RssFeed) {
+        rssSyncLauncher.runRssSyncOnce(feed.id)
+    }
+
+    fun syncFeeds() {
+        rssSyncLauncher.runRssSyncOnce()
     }
 }

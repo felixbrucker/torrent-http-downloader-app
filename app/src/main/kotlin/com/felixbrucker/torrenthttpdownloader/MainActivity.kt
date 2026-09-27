@@ -34,15 +34,7 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import dagger.hilt.android.AndroidEntryPoint
-import java.util.concurrent.TimeUnit
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
@@ -50,7 +42,6 @@ import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
-import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -119,8 +110,6 @@ class MainActivity : ComponentActivity() {
                     entry<NavRoute.RssFeeds> {
                         RssFeedsScreen(
                             onBack = { navigator.goBack() },
-                            syncFeed = { runRssSyncOnce(it.id) },
-                            syncFeeds = { runRssSyncOnce() },
                             onNavigateToDetail = { feedId ->
                                 navigator.navigate(NavRoute.RssFeedDetail(feedId))
                             }
@@ -130,7 +119,6 @@ class MainActivity : ComponentActivity() {
                         RssFeedDetailScreen(
                             feedId = key.feedId,
                             onBack = { navigator.goBack() },
-                            syncFeed = { runRssSyncOnce(it.id) },
                             addTorrentFromFeed = { feedItem, item ->
                                 addTorrentViewModel.resolveTorrentUri(
                                     uri = item.link.toUri(),
@@ -187,31 +175,6 @@ class MainActivity : ComponentActivity() {
         super.onStart()
 
         mainViewModel.checkAndStartDownloadService(this)
-        ensureRssSyncIsScheduled()
-    }
-
-    private fun ensureRssSyncIsScheduled() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val rssSyncRequest = PeriodicWorkRequestBuilder<RssSyncWorker>(3, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "RssSyncRequest",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            rssSyncRequest,
-        )
-    }
-
-    private fun runRssSyncOnce(feedId: String? = null) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val rssSyncRequest = OneTimeWorkRequestBuilder<RssSyncWorker>()
-            .setConstraints(constraints)
-            .setInputData(workDataOf("feedId" to feedId))
-            .build()
-        WorkManager.getInstance(this).enqueue(rssSyncRequest)
+        mainViewModel.ensureRssSyncIsScheduled()
     }
 }

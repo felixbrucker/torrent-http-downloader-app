@@ -39,7 +39,6 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 fun RssFeedDetailScreen(
     feedId: String,
     onBack: () -> Unit,
-    syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
     viewModel: RssFeedDetailViewModel = viewModel(),
 ) {
@@ -54,14 +53,14 @@ fun RssFeedDetailScreen(
                 feedName = currentFeed.name,
                 isSyncing = isSyncing,
                 onBack = onBack,
-                onSyncFeed = { syncFeed(currentFeed) },
+                onSyncFeed = { viewModel.syncFeed(currentFeed) },
                 onMarkAllRead = { viewModel.markAllItemsAsRead(currentFeed.id) }
             )
         }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isSyncing,
-            onRefresh = { syncFeed(currentFeed) },
+            onRefresh = { viewModel.syncFeed(currentFeed) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)

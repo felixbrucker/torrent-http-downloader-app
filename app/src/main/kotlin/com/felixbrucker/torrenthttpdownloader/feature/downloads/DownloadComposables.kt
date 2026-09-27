@@ -87,7 +87,7 @@ fun DownloadItem(
     task: DownloadTask,
     onRemove: () -> Unit,
     provider: TorrentProvider? = null,
-    onToggleAllSelection: (taskId: String, selectAll: Boolean) -> Unit = { _, _ -> },
+    onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit = { _, _ -> },
     onConfirmFileSelection: (taskId: String) -> Unit = {},
     onPauseTaskOnProvider: (taskId: String) -> Unit = {},
     onResumeTaskOnProvider: (taskId: String) -> Unit = {},
@@ -130,7 +130,7 @@ fun DownloadItem(
                         TaskSelectionOrStateIcon(
                             task = task,
                             isExpanded = isExpanded,
-                            onToggleAllSelection = onToggleAllSelection
+                            onToggleAllProviderFileSelection = onToggleAllProviderFileSelection
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -139,7 +139,7 @@ fun DownloadItem(
                             task = task,
                             isNarrow = isNarrow,
                             isExpanded = isExpanded,
-                            onToggleAllSelection = onToggleAllSelection
+                            onToggleAllProviderFileSelection = onToggleAllProviderFileSelection
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         TaskProgressBar(progress = task.overallProgress)
@@ -210,7 +210,7 @@ fun DownloadItem(
 fun TaskSelectionOrStateIcon(
     task: DownloadTask,
     isExpanded: Boolean,
-    onToggleAllSelection: (String, Boolean) -> Unit
+    onToggleAllProviderFileSelection: (String, Boolean) -> Unit
 ) {
     val isManualSelectionMode = task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL
 
@@ -221,7 +221,7 @@ fun TaskSelectionOrStateIcon(
             contentDescription = if (allSelected) "Deselect All" else "Select All",
             tint = if (allSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
             modifier = Modifier.clickable {
-                onToggleAllSelection(task.id, !allSelected)
+                onToggleAllProviderFileSelection(task.id, !allSelected)
             }
         )
     } else {
@@ -234,14 +234,14 @@ fun TaskHeaderRow(
     task: DownloadTask,
     isNarrow: Boolean,
     isExpanded: Boolean,
-    onToggleAllSelection: (String, Boolean) -> Unit
+    onToggleAllProviderFileSelection: (String, Boolean) -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (isNarrow) {
             TaskSelectionOrStateIcon(
                 task = task,
                 isExpanded = isExpanded,
-                onToggleAllSelection = onToggleAllSelection
+                onToggleAllProviderFileSelection = onToggleAllProviderFileSelection
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
@@ -425,8 +425,8 @@ fun TaskExpandedFilesList(
                     SubDownloadItem(
                         task = task,
                         file = file,
-                        onResumeFile = onResumeLocalFileDownload,
-                        onPauseFile = onPauseLocalFileDownload
+                        onResumeLocalFileDownload = onResumeLocalFileDownload,
+                        onPauseLocalFileDownload = onPauseLocalFileDownload
                     )
                 }
             }
@@ -438,8 +438,8 @@ fun TaskExpandedFilesList(
                     supportsPriorities = provider?.supports(ProviderFeature.FilePriorities) == true,
                     isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED,
                     isManualSelectionMode = isManualSelectionMode,
-                    onToggleSelection = onToggleProviderFileSelection,
-                    onSetPriority = onSetProviderFilePriority
+                    onToggleProviderFileSelection = onToggleProviderFileSelection,
+                    onSetProviderFilePriority = onSetProviderFilePriority
                 )
             }
         }
@@ -603,8 +603,8 @@ private fun EtaStatsColumn(etaSeconds: Long) {
 fun SubDownloadItem(
     task: DownloadTask,
     file: DownloadFile,
-    onResumeFile: (taskId: String, fileLink: String) -> Unit,
-    onPauseFile: (taskId: String, fileLink: String) -> Unit
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -621,8 +621,8 @@ fun SubDownloadItem(
             SubDownloadActions(
                 taskId = task.id,
                 file = file,
-                onResumeFile = onResumeFile,
-                onPauseFile = onPauseFile
+                onResumeLocalFileDownload = onResumeLocalFileDownload,
+                onPauseLocalFileDownload = onPauseLocalFileDownload
             )
         }
     }
@@ -688,16 +688,16 @@ private fun SubDownloadDetails(file: DownloadFile, modifier: Modifier = Modifier
 private fun SubDownloadActions(
     taskId: String,
     file: DownloadFile,
-    onResumeFile: (taskId: String, fileLink: String) -> Unit,
-    onPauseFile: (taskId: String, fileLink: String) -> Unit
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit
 ) {
     if (file.state == LocalDownloadState.PAUSED || file.state == LocalDownloadState.ERROR) {
-        IconButton(onClick = { onResumeFile(taskId, file.link) }) {
+        IconButton(onClick = { onResumeLocalFileDownload(taskId, file.link) }) {
             if (file.state == LocalDownloadState.PAUSED) Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
             if (file.state == LocalDownloadState.ERROR) Icon(Icons.Default.Replay, contentDescription = "Retry")
         }
     } else if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
-        IconButton(onClick = { onPauseFile(taskId, file.link) }) {
+        IconButton(onClick = { onPauseLocalFileDownload(taskId, file.link) }) {
             Icon(Icons.Default.Pause, contentDescription = "Pause")
         }
     }
@@ -710,15 +710,15 @@ fun ProviderTorrentFileItem(
     supportsPriorities: Boolean,
     isTorrentCompletedOnProvider: Boolean,
     isManualSelectionMode: Boolean = false,
-    onToggleSelection: (taskId: String, fileId: Int) -> Unit,
-    onSetPriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit,
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
             .clickable(enabled = isManualSelectionMode) {
-                onToggleSelection(taskId, file.id)
+                onToggleProviderFileSelection(taskId, file.id)
             },
         colors = CardDefaults.cardColors(
             containerColor = if (file.isSelected) {
@@ -755,7 +755,7 @@ fun ProviderTorrentFileItem(
                     taskId = taskId,
                     file = file,
                     isTorrentCompletedOnProvider = isTorrentCompletedOnProvider,
-                    onSetPriority = onSetPriority
+                    onSetProviderFilePriority = onSetProviderFilePriority
                 )
             }
         }
@@ -811,7 +811,7 @@ private fun ProviderFilePrioritySelector(
     taskId: String,
     file: ProviderTorrentFile,
     isTorrentCompletedOnProvider: Boolean,
-    onSetPriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     var showPriorityMenu by remember { mutableStateOf(false) }
 
@@ -852,7 +852,7 @@ private fun ProviderFilePrioritySelector(
                     text = { Text(priority.name.lowercase().capitalized()) },
                     onClick = {
                         showPriorityMenu = false
-                        onSetPriority(taskId, file.id, priority)
+                        onSetProviderFilePriority(taskId, file.id, priority)
                     }
                 )
             }

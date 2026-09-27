@@ -21,19 +21,25 @@ class DownloadServiceLauncher @Inject constructor(
         context.startService(intent)
     }
 
-    fun resumeAll() {
+    fun resumeAllLocalDownloads() {
         context.startService(Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
         })
+    }
+
+    fun resumeAllOnProvider() {
         context.startService(Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
         })
     }
 
-    fun pauseAll() {
+    fun pauseAllLocalDownloads() {
         context.startService(Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
         })
+    }
+
+    fun pauseAllOnProvider() {
         context.startService(Intent(context, DownloadService::class.java).apply {
             action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
         })

@@ -4,6 +4,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsViewModel
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -13,6 +14,7 @@ import org.junit.Test
 class RssFeedsViewModelTest {
     private val downloadTracker = mockk<DownloadTracker>()
     private val rssRepository = mockk<RssRepository>()
+    private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
 
     @Test
     fun testAddRssFeedDelegatesToTracker() {
@@ -21,7 +23,7 @@ class RssFeedsViewModelTest {
         every { downloadTracker.isSyncingAll } returns MutableStateFlow(false)
         every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
         every { downloadTracker.addRssFeed(feed) } returns Unit
-        val viewModel = RssFeedsViewModel(downloadTracker, rssRepository)
+        val viewModel = RssFeedsViewModel(downloadTracker, rssRepository, rssSyncLauncher)
 
         viewModel.addRssFeed(feed)
 
@@ -29,29 +31,15 @@ class RssFeedsViewModelTest {
     }
 
     @Test
-    fun testRemoveRssFeedDelegatesToTracker() {
-        every { downloadTracker.rssFeeds } returns MutableStateFlow(emptyList())
-        every { downloadTracker.isSyncingAll } returns MutableStateFlow(false)
-        every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
-        every { downloadTracker.removeRssFeed("feed-1") } returns Unit
-        val viewModel = RssFeedsViewModel(downloadTracker, rssRepository)
-
-        viewModel.removeRssFeed("feed-1")
-
-        verify { downloadTracker.removeRssFeed("feed-1") }
-    }
-
-    @Test
-    fun testUpdateFeedConfigDelegatesToRepository() {
+    fun testSyncFeedDelegatesToRssSyncLauncher() {
         val feed = RssFeed("feed-1", "Name", "http://example.com")
         every { downloadTracker.rssFeeds } returns MutableStateFlow(emptyList())
         every { downloadTracker.isSyncingAll } returns MutableStateFlow(false)
         every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
-        every { rssRepository.updateFeedConfig(feed) } returns Unit
-        val viewModel = RssFeedsViewModel(downloadTracker, rssRepository)
+        val viewModel = RssFeedsViewModel(downloadTracker, rssRepository, rssSyncLauncher)
 
-        viewModel.updateFeedConfig(feed)
+        viewModel.syncFeed(feed)
 
-        verify { rssRepository.updateFeedConfig(feed) }
+        verify { rssSyncLauncher.runRssSyncOnce("feed-1") }
     }
 }

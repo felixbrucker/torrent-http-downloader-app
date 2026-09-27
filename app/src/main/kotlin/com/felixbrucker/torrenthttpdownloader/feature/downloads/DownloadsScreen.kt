@@ -124,8 +124,10 @@ fun DownloadsScreen(
                         DownloadsTopBarActions(
                             taskStateFlags = taskStateFlags,
                             unreadRssCount = unreadRssCount,
-                            onResumeAll = { viewModel.resumeAll() },
-                            onPauseAll = { viewModel.pauseAll() },
+                            onResumeAllLocalDownloads = { viewModel.resumeAllLocalDownloads() },
+                            onResumeAllOnProvider = { viewModel.resumeAllOnProvider() },
+                            onPauseAllLocalDownloads = { viewModel.pauseAllLocalDownloads() },
+                            onPauseAllOnProvider = { viewModel.pauseAllOnProvider() },
                             onNavigateRss = { navigator.navigate(NavRoute.RssFeeds) },
                             onNavigateSettings = { navigator.navigate(NavRoute.Settings) }
                         )
@@ -184,7 +186,7 @@ fun DownloadsScreen(
                             deleteTorrentFile = true
                         },
                         provider = provider,
-                        onToggleAllSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
+                        onToggleAllProviderFileSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
                         onConfirmFileSelection = { taskId -> viewModel.confirmFileSelection(taskId) },
                         onPauseTaskOnProvider = { taskId -> viewModel.pauseTaskOnProvider(taskId) },
                         onResumeTaskOnProvider = { taskId -> viewModel.resumeTaskOnProvider(taskId) },
@@ -276,18 +278,26 @@ private fun DownloadsTopBarTitle(isNarrowScreen: Boolean, tasks: List<DownloadTa
 private fun DownloadsTopBarActions(
     taskStateFlags: TaskStateFlags,
     unreadRssCount: Int,
-    onResumeAll: () -> Unit,
-    onPauseAll: () -> Unit,
+    onResumeAllLocalDownloads: () -> Unit,
+    onResumeAllOnProvider: () -> Unit,
+    onPauseAllLocalDownloads: () -> Unit,
+    onPauseAllOnProvider: () -> Unit,
     onNavigateRss: () -> Unit,
     onNavigateSettings: () -> Unit
 ) {
     if (taskStateFlags.anyPaused || taskStateFlags.anyPausedOnProvider) {
-        IconButton(onClick = onResumeAll) {
+        IconButton(onClick = {
+            onResumeAllLocalDownloads()
+            onResumeAllOnProvider()
+        }) {
             Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
         }
     }
     if (taskStateFlags.anyDownloading || taskStateFlags.anyDownloadingOnProvider) {
-        IconButton(onClick = onPauseAll) {
+        IconButton(onClick = {
+            onPauseAllLocalDownloads()
+            onPauseAllOnProvider()
+        }) {
             Icon(Icons.Default.Pause, contentDescription = "Pause All")
         }
     }
@@ -333,7 +343,7 @@ private fun LazyItemScope.DownloadTaskListItem(
     draggingOffset: Float,
     onRemove: () -> Unit,
     provider: TorrentProvider?,
-    onToggleAllSelection: (taskId: String, selectAll: Boolean) -> Unit,
+    onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit,
     onConfirmFileSelection: (taskId: String) -> Unit,
     onPauseTaskOnProvider: (taskId: String) -> Unit,
     onResumeTaskOnProvider: (taskId: String) -> Unit,
@@ -360,7 +370,7 @@ private fun LazyItemScope.DownloadTaskListItem(
             task = task,
             onRemove = onRemove,
             provider = provider,
-            onToggleAllSelection = onToggleAllSelection,
+            onToggleAllProviderFileSelection = onToggleAllProviderFileSelection,
             onConfirmFileSelection = onConfirmFileSelection,
             onPauseTaskOnProvider = onPauseTaskOnProvider,
             onResumeTaskOnProvider = onResumeTaskOnProvider,

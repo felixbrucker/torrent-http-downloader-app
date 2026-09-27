@@ -33,12 +33,20 @@ class DownloadsViewModel @Inject constructor(
         serviceLauncher.removeTask(taskId, deleteFiles, deleteTorrentFile)
     }
 
-    fun resumeAll() {
-        serviceLauncher.resumeAll()
+    fun resumeAllLocalDownloads() {
+        serviceLauncher.resumeAllLocalDownloads()
     }
 
-    fun pauseAll() {
-        serviceLauncher.pauseAll()
+    fun resumeAllOnProvider() {
+        serviceLauncher.resumeAllOnProvider()
+    }
+
+    fun pauseAllLocalDownloads() {
+        serviceLauncher.pauseAllLocalDownloads()
+    }
+
+    fun pauseAllOnProvider() {
+        serviceLauncher.pauseAllOnProvider()
     }
 
     fun toggleAllProviderFileSelection(taskId: String, selectAll: Boolean) {
