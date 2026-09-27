@@ -29,9 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 
@@ -42,10 +41,9 @@ fun RssFeedDetailScreen(
     onBack: () -> Unit,
     syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
-    downloadTracker: DownloadTracker,
-    rssRepository: RssRepository,
+    viewModel: RssFeedDetailViewModel = viewModel(),
 ) {
-    val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
+    val syncingFeedIds by viewModel.syncingFeedIds.collectAsState()
     val isSyncing = syncingFeedIds.contains(feed.id)
 
     Scaffold(
@@ -55,7 +53,7 @@ fun RssFeedDetailScreen(
                 isSyncing = isSyncing,
                 onBack = onBack,
                 onSyncFeed = { syncFeed(feed) },
-                onMarkAllRead = { rssRepository.markAllItemsAsRead(feed.id) }
+                onMarkAllRead = { viewModel.markAllItemsAsRead(feed.id) }
             )
         }
     ) { padding ->
@@ -72,7 +70,7 @@ fun RssFeedDetailScreen(
                 RssItemsList(
                     feed = feed,
                     onItemClick = { item ->
-                        rssRepository.markItemAsRead(feed.id, item.id)
+                        viewModel.markItemAsRead(feed.id, item.id)
                         addTorrentFromFeed(feed, item)
                     }
                 )

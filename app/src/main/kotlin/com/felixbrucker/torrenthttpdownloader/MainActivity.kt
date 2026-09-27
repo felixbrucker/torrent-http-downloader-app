@@ -49,7 +49,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
@@ -65,7 +64,6 @@ import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 class MainActivity : ComponentActivity() {
     @Inject lateinit var downloadTracker: DownloadTracker
     @Inject lateinit var rssRepository: RssRepository
-    @Inject lateinit var providerFactory: ProviderFactory
     @Inject lateinit var pathFactory: PathFactory
     @Inject lateinit var torrentUriResolver: TorrentUriResolver
 
@@ -128,9 +126,7 @@ class MainActivity : ComponentActivity() {
                 val entryProvider = entryProvider {
                     entry<NavRoute.Downloads> {
                         DownloadsScreen(
-                            navigator = navigator,
-                            downloadTracker = downloadTracker,
-                            providerFactory = providerFactory,
+                            navigator = navigator
                         )
                     }
                     entry<NavRoute.RssFeeds> {
@@ -140,9 +136,7 @@ class MainActivity : ComponentActivity() {
                             syncFeeds = { runRssSyncOnce() },
                             onNavigateToDetail = { feedId ->
                                 navigator.navigate(NavRoute.RssFeedDetail(feedId))
-                            },
-                            downloadTracker = downloadTracker,
-                            rssRepository = rssRepository,
+                            }
                         )
                     }
                     entry<NavRoute.RssFeedDetail> { key ->
@@ -153,7 +147,7 @@ class MainActivity : ComponentActivity() {
                                 feed = feed,
                                 onBack = { navigator.goBack() },
                                 syncFeed = { runRssSyncOnce(it.id) },
-                                addTorrentFromFeed = { feed, item ->
+                                addTorrentFromFeed = { feedItem, item ->
                                     serviceScope.launch {
                                         isResolvingTorrent = true
                                         try {
@@ -163,18 +157,16 @@ class MainActivity : ComponentActivity() {
                                                 uri = resolvedTorrent.uri.toString(),
                                                 type = resolvedTorrent.type,
                                                 name = resolvedTorrent.name,
-                                                createSubfolderByName = feed.createSubfolderByName,
-                                                destinationSubdirectory = feed.destinationSubdirectory,
-                                                feedId = feed.id,
+                                                createSubfolderByName = feedItem.createSubfolderByName,
+                                                destinationSubdirectory = feedItem.destinationSubdirectory,
+                                                feedId = feedItem.id,
                                                 feedItemId = item.id,
                                             )
                                         } finally {
                                             isResolvingTorrent = false
                                         }
                                     }
-                                },
-                                downloadTracker = downloadTracker,
-                                rssRepository = rssRepository,
+                                }
                             )
                         }
                     }
