@@ -116,6 +116,7 @@ fun DownloadsScreen(
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }
 
+        // Auto-scroll logic
         val topBound = layoutInfo.viewportStartOffset + 50
         val bottomBound = layoutInfo.viewportEndOffset - 50
         if (draggedItem.offset + draggingOffset < topBound) {

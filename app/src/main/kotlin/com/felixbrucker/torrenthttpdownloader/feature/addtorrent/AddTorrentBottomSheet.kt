@@ -20,10 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -60,30 +58,22 @@ data class AddTorrentConfig(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddTorrentBottomSheet(
-    config: AddTorrentConfig,
-    onDismiss: () -> Unit,
-    onConfirm: (AddTorrentConfig) -> Unit,
+    onFinish: () -> Unit,
     viewModel: AddTorrentViewModel = viewModel()
 ) {
-    val defaultPreferences = remember { viewModel.getDefaultPreferences() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var selectedSubDir by remember {
-        mutableStateOf(config.destinationSubdirectory ?: defaultPreferences.defaultSubDir)
-    }
-    var createSubfolderByName by remember {
-        mutableStateOf(config.createSubfolderByName ?: defaultPreferences.defaultCreateSubfolder)
-    }
-    var notifyOnCompletion by remember {
-        mutableStateOf(config.notifyOnCompletion ?: defaultPreferences.defaultNotifyOnCompletion)
-    }
-    var fileSelectionMode by remember {
-        mutableStateOf(config.fileSelectionMode ?: defaultPreferences.defaultFileSelectionMode)
-    }
-    var name by remember { mutableStateOf(config.name ?: "") }
+    val name by viewModel.nameState.collectAsState()
+    val selectedSubDir by viewModel.selectedSubDirState.collectAsState()
+    val createSubfolderByName by viewModel.createSubfolderByNameState.collectAsState()
+    val notifyOnCompletion by viewModel.notifyOnCompletionState.collectAsState()
+    val fileSelectionMode by viewModel.fileSelectionModeState.collectAsState()
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            viewModel.dismissAddTorrent()
+            onFinish()
+        },
         sheetState = sheetState,
     ) {
         Column(
@@ -94,7 +84,7 @@ fun AddTorrentBottomSheet(
         ) {
             AddTorrentHeaderAndName(
                 name = name,
-                onNameChange = { name = it }
+                onNameChange = { viewModel.updateName(it) }
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -103,25 +93,23 @@ fun AddTorrentBottomSheet(
                 createSubfolderByName = createSubfolderByName,
                 notifyOnCompletion = notifyOnCompletion,
                 fileSelectionMode = fileSelectionMode,
-                onSubdirectorySelected = { selectedSubDir = it },
-                onCreateSubfolderByNameChanged = { createSubfolderByName = it },
-                onNotifyOnCompletionChanged = { notifyOnCompletion = it },
-                onFileSelectionModeChanged = { fileSelectionMode = it },
+                onSubdirectorySelected = { viewModel.updateSelectedSubDir(it) },
+                onCreateSubfolderByNameChanged = { viewModel.updateCreateSubfolderByName(it) },
+                onNotifyOnCompletionChanged = { viewModel.updateNotifyOnCompletion(it) },
+                onFileSelectionModeChanged = { viewModel.updateFileSelectionMode(it) },
                 suggestedSubDirectoryName = name.cleanedForUseAsPath()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             AddTorrentBottomButtons(
-                onDismiss = onDismiss,
+                onDismiss = {
+                    viewModel.dismissAddTorrent()
+                    onFinish()
+                },
                 onConfirm = {
-                    onConfirm(config.copy(
-                        name = name.takeIf { it.isNotBlank() },
-                        destinationSubdirectory = selectedSubDir,
-                        createSubfolderByName = createSubfolderByName,
-                        notifyOnCompletion = notifyOnCompletion,
-                        fileSelectionMode = fileSelectionMode,
-                    ))
+                    viewModel.confirmAddTorrent()
+                    onFinish()
                 }
             )
             Spacer(modifier = Modifier.height(32.dp))

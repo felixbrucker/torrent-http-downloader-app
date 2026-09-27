@@ -453,6 +453,7 @@ fun StatItem(
 
 @Composable
 fun DownloadStatsBar(tasks: List<DownloadTask>) {
+    // Single pass calculation to avoid collection allocations and multiple iterations
     var pendingTasksCount = 0
     var runningTasksCount = 0
     var totalDownloadSpeed = 0L

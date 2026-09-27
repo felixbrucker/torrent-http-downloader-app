@@ -37,17 +37,10 @@ class AddTorrentActivity : ComponentActivity() {
                 val pendingConfig by viewModel.resolvedConfig.collectAsState()
                 val isResolvingTorrent by viewModel.isResolvingTorrent.collectAsState()
 
-                pendingConfig?.let { config ->
+                pendingConfig?.let {
                     AddTorrentBottomSheet(
-                        config = config,
-                        onDismiss = {
-                            viewModel.dismissAddTorrent()
-                            finish()
-                        },
-                        onConfirm = { updatedConfig ->
-                            viewModel.confirmAddTorrent(updatedConfig)
-                            finish()
-                        }
+                        onFinish = { finish() },
+                        viewModel = viewModel
                     )
                 }
 

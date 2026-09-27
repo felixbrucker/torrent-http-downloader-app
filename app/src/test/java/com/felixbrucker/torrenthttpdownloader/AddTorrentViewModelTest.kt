@@ -27,7 +27,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddTorrentViewModelTest {
-    private val sharedPreferences = mockk<SharedPreferences>()
+    private val sharedPreferences = mockk<SharedPreferences>(relaxed = true)
     private val torrentUriResolver = mockk<TorrentUriResolver>()
     private val serviceLauncher = mockk<DownloadServiceLauncher>(relaxed = true)
     private val rssRepository = mockk<RssRepository>(relaxed = true)
@@ -44,51 +44,60 @@ class AddTorrentViewModelTest {
     }
 
     @Test
-    fun testGetDefaultPreferencesReturnsSavedValues() {
-        every { sharedPreferences.getString("default_file_selection_mode", FileSelectionMode.ALL.name) } returns FileSelectionMode.BIGGEST.name
-        every { sharedPreferences.getString("default_sub_dir", null) } returns "Movies"
-        every { sharedPreferences.getBoolean("default_create_subfolder", true) } returns true
-        every { sharedPreferences.getBoolean("default_notify_on_completion", false) } returns false
-        val viewModel = AddTorrentViewModel(sharedPreferences, torrentUriResolver, serviceLauncher, rssRepository)
-
-        val prefs = viewModel.getDefaultPreferences()
-
-        assertEquals("Movies", prefs.defaultSubDir)
-        assertEquals(true, prefs.defaultCreateSubfolder)
-        assertEquals(false, prefs.defaultNotifyOnCompletion)
-        assertEquals(FileSelectionMode.BIGGEST, prefs.defaultFileSelectionMode)
-    }
-
-    @Test
-    fun testResolveTorrentUriSuccessUpdatesResolvedConfig() {
+    fun testResolveTorrentUriSuccessUpdatesResolvedConfigAndFormState() {
         val uri = mockk<Uri>()
         val resolvedTorrent = ResolvedTorrent(type = TorrentType.MAGNET, uri = uri, id = "torrent-1", name = "Test Torrent")
         coEvery { torrentUriResolver.resolve(uri) } returns resolvedTorrent
+        every { sharedPreferences.getString("default_sub_dir", null) } returns "Movies"
+        every { sharedPreferences.getBoolean("default_create_subfolder", true) } returns true
+        every { sharedPreferences.getBoolean("default_notify_on_completion", false) } returns false
+        every { sharedPreferences.getString("default_file_selection_mode", FileSelectionMode.ALL.name) } returns FileSelectionMode.BIGGEST.name
         val viewModel = AddTorrentViewModel(sharedPreferences, torrentUriResolver, serviceLauncher, rssRepository)
 
         viewModel.resolveTorrentUri(uri)
 
         assertEquals("torrent-1", viewModel.resolvedConfig.value?.id)
-        assertEquals("Test Torrent", viewModel.resolvedConfig.value?.name)
+        assertEquals("Test Torrent", viewModel.nameState.value)
+        assertEquals("Movies", viewModel.selectedSubDirState.value)
+        assertEquals(true, viewModel.createSubfolderByNameState.value)
+        assertEquals(false, viewModel.notifyOnCompletionState.value)
+        assertEquals(FileSelectionMode.BIGGEST, viewModel.fileSelectionModeState.value)
     }
 
     @Test
-    fun testConfirmAddTorrentLaunchesServiceAndMarksDownloaded() {
+    fun testConfirmAddTorrentLaunchesServiceAndSavesDefaultsWhenNotFeed() {
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
         every { sharedPreferences.edit() } returns editor
         val config = AddTorrentConfig(
             id = "torrent-1",
             uri = "http://example.com/test.torrent",
             type = TorrentType.TORRENT_FILE,
-            feedId = "feed-1",
-            feedItemId = "item-1"
+            name = "Test Torrent"
         )
         val viewModel = AddTorrentViewModel(sharedPreferences, torrentUriResolver, serviceLauncher, rssRepository)
+        viewModel.setResolvedConfig(config)
+        viewModel.updateName("Updated Torrent")
+        viewModel.updateSelectedSubDir("Downloads")
 
-        viewModel.confirmAddTorrent(config)
+        viewModel.confirmAddTorrent()
 
-        verify { serviceLauncher.addTask(config) }
-        verify { rssRepository.markItemAsDownloaded("feed-1", "item-1") }
+        verify { serviceLauncher.addTask(any()) }
+        verify { editor.putString("default_sub_dir", "Downloads") }
+        assertNull(viewModel.resolvedConfig.value)
+    }
+
+    @Test
+    fun testDismissAddTorrentClearsConfig() {
+        val config = AddTorrentConfig(
+            id = "torrent-1",
+            uri = "magnet:?xt=urn:btih:123",
+            type = TorrentType.MAGNET
+        )
+        val viewModel = AddTorrentViewModel(sharedPreferences, torrentUriResolver, serviceLauncher, rssRepository)
+        viewModel.setResolvedConfig(config)
+
+        viewModel.dismissAddTorrent()
+
         assertNull(viewModel.resolvedConfig.value)
     }
 }

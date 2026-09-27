@@ -161,11 +161,10 @@ class MainActivity : ComponentActivity() {
                     onBack = { navigator.goBack() }
                 )
 
-                pendingConfig?.let { config ->
+                pendingConfig?.let {
                     AddTorrentBottomSheet(
-                        config = config,
-                        onDismiss = { addTorrentViewModel.dismissAddTorrent() },
-                        onConfirm = { updatedConfig -> addTorrentViewModel.confirmAddTorrent(updatedConfig) }
+                        onFinish = { },
+                        viewModel = addTorrentViewModel
                     )
                 }
 
