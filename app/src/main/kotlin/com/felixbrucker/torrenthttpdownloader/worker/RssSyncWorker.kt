@@ -9,10 +9,10 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
-import kotlin.math.max
 import okhttp3.OkHttpClient
 import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.core.network.RssParser
@@ -23,6 +23,7 @@ class RssSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val downloadTracker: DownloadTracker,
+    private val rssRepository: RssRepository,
     private val torrentUriResolver: TorrentUriResolver,
 ) : CoroutineWorker(context, params) {
     private val httpClient = OkHttpClient.Builder()
@@ -68,15 +69,11 @@ class RssSyncWorker @AssistedInject constructor(
             val newlyDiscoveredItems = newItems.filter { it.id !in existingItemIds }
 
             if (newlyDiscoveredItems.isNotEmpty()) {
-                downloadTracker.updateRssFeed(feed.id) { currentFeed ->
-                    val updatedItems = (newlyDiscoveredItems + currentFeed.items)
-                        .distinctBy { it.id }
-                        .take(max(newItems.size, 25))
-                    currentFeed.copy(
-                        items = updatedItems,
-                        lastCheck = System.currentTimeMillis()
-                    )
-                }
+                rssRepository.updateDiscoveredItems(
+                    feedId = feed.id,
+                    newlyDiscoveredItems = newlyDiscoveredItems,
+                    totalNewItemsCount = newItems.size,
+                )
 
                 // Only auto download after initial fetch
                 if (feed.autoDownload && feed.lastCheck > 0) {
@@ -85,7 +82,7 @@ class RssSyncWorker @AssistedInject constructor(
                     }
                 }
             } else {
-                downloadTracker.updateRssFeed(feed.id) { it.copy(lastCheck = System.currentTimeMillis()) }
+                rssRepository.updateLastCheck(feed.id)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -109,10 +106,6 @@ class RssSyncWorker @AssistedInject constructor(
         }
         applicationContext.startService(intent)
 
-        downloadTracker.updateRssFeed(feed.id) { currentFeed ->
-            currentFeed.copy(items = currentFeed.items.map {
-                if (it.id == item.id) it.copy(isDownloaded = true, isRead = true) else it
-            })
-        }
+        rssRepository.markItemAsDownloadedAndRead(feed.id, item.id)
     }
 }

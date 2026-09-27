@@ -10,6 +10,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
@@ -29,6 +30,7 @@ class TorrentStateMachineStressTest {
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)
     private val contentResolver = mockk<ContentResolver>()
     private val downloadTracker = mockk<DownloadTracker>()
+    private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
     private val pathFactory = mockk<PathFactory>()
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
@@ -43,6 +45,7 @@ class TorrentStateMachineStressTest {
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
             downloadTracker = downloadTracker,
+            downloadRepository = downloadRepository,
             pathFactory = pathFactory,
             onTaskCompleted = {},
             onPostNotification = { _, _, _, _ -> }
@@ -66,7 +69,6 @@ class TorrentStateMachineStressTest {
         )
 
         every { downloadTracker.findTask(taskId) } returns task
-        every { downloadTracker.updateTask(any(), any()) } just runs
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)
@@ -126,7 +128,6 @@ class TorrentStateMachineStressTest {
 
         every { downloadTracker.findTask(taskId1) } returns task1
         every { downloadTracker.findTask(taskId2) } returns task2
-        every { downloadTracker.updateTask(any(), any()) } just runs
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)

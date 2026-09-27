@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 
@@ -42,6 +43,7 @@ fun RssFeedDetailScreen(
     syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
     downloadTracker: DownloadTracker,
+    rssRepository: RssRepository,
 ) {
     val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
     val isSyncing = syncingFeedIds.contains(feed.id)
@@ -75,9 +77,7 @@ fun RssFeedDetailScreen(
                         )
                     }
                     IconButton(onClick = {
-                        downloadTracker.updateRssFeed(feed.id) { feed ->
-                            feed.copy(items = feed.items.map { it.copy(isRead = true) })
-                        }
+                        rssRepository.markAllItemsAsRead(feed.id)
                     }) {
                         Icon(Icons.Default.DoneAll, contentDescription = stringResource(R.string.mark_all_read))
                     }
@@ -105,11 +105,7 @@ fun RssFeedDetailScreen(
                 RssItemsList(
                     feed = feed,
                     onItemClick = { item ->
-                        downloadTracker.updateRssFeed(feed.id) { f ->
-                            f.copy(items = f.items.map {
-                                if (it.id == item.id) it.copy(isRead = true) else it
-                            })
-                        }
+                        rssRepository.markItemAsRead(feed.id, item.id)
                         addTorrentFromFeed(feed, item)
                     }
                 )
