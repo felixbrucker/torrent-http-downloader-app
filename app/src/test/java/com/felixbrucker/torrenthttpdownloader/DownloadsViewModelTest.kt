@@ -1,14 +1,12 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.content.Context
-import android.content.Intent
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsViewModel
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkConstructor
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
@@ -16,24 +14,21 @@ import org.junit.Before
 import org.junit.Test
 
 class DownloadsViewModelTest {
-    private val downloadTracker = mockk<DownloadTracker>()
-    private val providerFactory = mockk<ProviderFactory>()
+    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
+    private val providerFactory = mockk<ProviderFactory>(relaxed = true)
+    private val serviceLauncher = mockk<DownloadServiceLauncher>(relaxed = true)
 
     @Before
     fun setUp() {
-        mockkConstructor(Intent::class)
-        every { anyConstructed<Intent>().setAction(any()) } returns mockk(relaxed = true)
-        every { anyConstructed<Intent>().putExtra(any<String>(), any<String>()) } returns mockk(relaxed = true)
-        every { anyConstructed<Intent>().putExtra(any<String>(), any<Boolean>()) } returns mockk(relaxed = true)
+        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
+        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
     }
 
     @Test
     fun testGetProviderReturnsProvider() {
         val provider = mockk<TorrentProvider>()
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
         every { providerFactory.getProvider() } returns provider
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory)
+        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
         val result = viewModel.getProvider()
 
@@ -42,10 +37,7 @@ class DownloadsViewModelTest {
 
     @Test
     fun testMoveTaskDelegatesToDownloadTracker() {
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
-        every { downloadTracker.moveTask(0, 1) } returns Unit
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory)
+        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
         viewModel.moveTask(0, 1)
 
@@ -53,41 +45,29 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun testRemoveTaskStartsServiceWithIntent() {
-        val context = mockk<Context>(relaxed = true)
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
-        every { context.startService(any()) } returns null
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory)
+    fun testRemoveTaskDelegatesToServiceLauncher() {
+        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
-        viewModel.removeTask(context, "task-1", deleteFiles = true, deleteTorrentFile = false)
+        viewModel.removeTask("task-1", deleteFiles = true, deleteTorrentFile = false)
 
-        verify { context.startService(any()) }
+        verify { serviceLauncher.removeTask("task-1", true, false) }
     }
 
     @Test
-    fun testResumeAllStartsServiceIntents() {
-        val context = mockk<Context>(relaxed = true)
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
-        every { context.startService(any()) } returns null
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory)
+    fun testResumeAllDelegatesToServiceLauncher() {
+        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
-        viewModel.resumeAll(context)
+        viewModel.resumeAll()
 
-        verify(exactly = 2) { context.startService(any()) }
+        verify { serviceLauncher.resumeAll() }
     }
 
     @Test
-    fun testPauseAllStartsServiceIntents() {
-        val context = mockk<Context>(relaxed = true)
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
-        every { context.startService(any()) } returns null
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory)
+    fun testPauseAllDelegatesToServiceLauncher() {
+        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
 
-        viewModel.pauseAll(context)
+        viewModel.pauseAll()
 
-        verify(exactly = 2) { context.startService(any()) }
+        verify { serviceLauncher.pauseAll() }
     }
 }

@@ -43,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -65,7 +64,6 @@ fun DownloadsScreen(
     navigator: Navigator,
     viewModel: DownloadsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val windowInfo = LocalWindowInfo.current
     val isNarrowScreen = windowInfo.containerSize.width.dp < 1400.dp
     val tasks by viewModel.tasks.collectAsState()
@@ -124,8 +122,8 @@ fun DownloadsScreen(
                         DownloadsTopBarActions(
                             taskStateFlags = taskStateFlags,
                             unreadRssCount = unreadRssCount,
-                            onResumeAll = { viewModel.resumeAll(context) },
-                            onPauseAll = { viewModel.pauseAll(context) },
+                            onResumeAll = { viewModel.resumeAll() },
+                            onPauseAll = { viewModel.pauseAll() },
                             onNavigateRss = { navigator.navigate(NavRoute.RssFeeds) },
                             onNavigateSettings = { navigator.navigate(NavRoute.Settings) }
                         )
@@ -199,7 +197,6 @@ fun DownloadsScreen(
                 onDismiss = { taskToRemove = null },
                 onConfirm = {
                     viewModel.removeTask(
-                        context = context,
                         taskId = task.id,
                         deleteFiles = deleteFiles,
                         deleteTorrentFile = deleteTorrentFile
