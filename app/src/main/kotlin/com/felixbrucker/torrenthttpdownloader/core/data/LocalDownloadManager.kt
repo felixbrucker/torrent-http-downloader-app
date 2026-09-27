@@ -28,6 +28,7 @@ class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val sharedPreferences: SharedPreferences,
     private val downloadTracker: DownloadTracker,
+    private val downloadRepository: DownloadRepository,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
@@ -138,13 +139,12 @@ class LocalDownloadManager(
                     val contentLength = body.contentLength()
                     val totalBytes = if (response.code == 206) contentLength + existingBytes else contentLength
 
-                    downloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                        file.copy(
-                            state = LocalDownloadState.DOWNLOADING,
-                            totalBytes = totalBytes,
-                            downloadedBytes = existingBytes
-                        )
-                    }
+                    downloadRepository.updateFileDownloadingState(
+                        taskId = taskId,
+                        fileLink = downloadFile.link,
+                        totalBytes = totalBytes,
+                        downloadedBytes = existingBytes,
+                    )
 
                     val sink: BufferedSink = if (existingBytes > 0) destFile.sink(append = true).buffer() else destFile.sink().buffer()
                     val source: BufferedSource = body.source()
@@ -168,15 +168,15 @@ class LocalDownloadManager(
                                 val speed = (bytesSinceLastUpdate * 1000) / (now - lastUpdate)
                                 val progress = if (totalBytes > 0) ((totalDownloaded * 100L) / totalBytes).toInt() else 0
 
-                                downloadTracker.updateTaskFile(taskId, downloadFile.link) { file ->
-                                    file.copy(
-                                        progress = progress,
-                                        downloadedBytes = totalDownloaded,
-                                        speed = speed,
-                                        lastTimestamp = now,
-                                        lastBytes = totalDownloaded
-                                    )
-                                }
+                                downloadRepository.updateFileProgress(
+                                    taskId = taskId,
+                                    fileLink = downloadFile.link,
+                                    progress = progress,
+                                    downloadedBytes = totalDownloaded,
+                                    speed = speed,
+                                    lastTimestamp = now,
+                                    lastBytes = totalDownloaded,
+                                )
                                 lastUpdate = now
                                 bytesSinceLastUpdate = 0
                             }
@@ -207,9 +207,7 @@ class LocalDownloadManager(
     }
 
     private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
-        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(state = state, stateDescription = error, speed = 0)
-        }
+        downloadRepository.updateFileState(taskId, fileLink, state, error)
     }
 
     fun enqueueDownload(work: DownloadWork) {

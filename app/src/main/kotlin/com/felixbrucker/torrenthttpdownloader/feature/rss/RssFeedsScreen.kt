@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +50,7 @@ fun RssFeedsScreen(
     syncFeeds: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
     downloadTracker: DownloadTracker,
+    rssRepository: RssRepository,
 ) {
     val feeds by downloadTracker.rssFeeds.collectAsState()
     val isSyncingAll by downloadTracker.isSyncingAll.collectAsState()
@@ -144,14 +146,7 @@ fun RssFeedsScreen(
                 feed = editingFeed,
                 onDismiss = { editFeedConfig = null },
                 onConfirm = { newFeed ->
-                    downloadTracker.updateRssFeed(newFeed.id) { feed ->
-                        val isResetState = feed.url != newFeed.url
-
-                        newFeed.copy(
-                            lastCheck = if (isResetState) 0 else newFeed.lastCheck,
-                            items = if (isResetState) listOf() else newFeed.items,
-                        )
-                    }
+                    rssRepository.updateFeedConfig(newFeed)
                     syncFeed(newFeed)
                     editFeedConfig = null
                 }

@@ -48,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
@@ -63,6 +64,7 @@ import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var downloadTracker: DownloadTracker
+    @Inject lateinit var rssRepository: RssRepository
     @Inject lateinit var providerFactory: ProviderFactory
     @Inject lateinit var pathFactory: PathFactory
     @Inject lateinit var torrentUriResolver: TorrentUriResolver
@@ -140,6 +142,7 @@ class MainActivity : ComponentActivity() {
                                 navigator.navigate(NavRoute.RssFeedDetail(feedId))
                             },
                             downloadTracker = downloadTracker,
+                            rssRepository = rssRepository,
                         )
                     }
                     entry<NavRoute.RssFeedDetail> { key ->
@@ -171,6 +174,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 downloadTracker = downloadTracker,
+                                rssRepository = rssRepository,
                             )
                         }
                     }
@@ -214,9 +218,7 @@ class MainActivity : ComponentActivity() {
                             startService(intent)
 
                             if (updatedConfig.feedId != null && updatedConfig.feedItemId != null) {
-                                downloadTracker.updateRssFeed(updatedConfig.feedId) { f ->
-                                    f.copy(items = f.items.map { if (it.id == updatedConfig.feedItemId) it.copy(isDownloaded = true) else it })
-                                }
+                                rssRepository.markItemAsDownloaded(updatedConfig.feedId, updatedConfig.feedItemId)
                             }
 
                             pendingConfig = null

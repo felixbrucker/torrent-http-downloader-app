@@ -45,6 +45,7 @@ class TorrentStateMachine(
     private val localDownloadManager: LocalDownloadManager,
     private val contentResolver: ContentResolver,
     private val downloadTracker: DownloadTracker,
+    private val downloadRepository: DownloadRepository,
     private val pathFactory: PathFactory,
     private val onTaskCompleted: (DownloadTask) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
@@ -100,26 +101,14 @@ class TorrentStateMachine(
         val task = downloadTracker.findTask(taskId) ?: return
         val providerId = task.providerId ?: return
         provider.pause(providerId)
-        downloadTracker.updateTask(task.id) {
-            it.copy(
-                providerTorrentInfo = it.providerTorrentInfo?.copy(
-                    state = ProviderTorrentState.PAUSED
-                )
-            )
-        }
+        downloadRepository.updateProviderTorrentState(task.id, ProviderTorrentState.PAUSED)
     }
 
     suspend fun resumeTaskOnProvider(taskId: String) {
         val task = downloadTracker.findTask(taskId) ?: return
         val providerId = task.providerId ?: return
         provider.resume(providerId)
-        downloadTracker.updateTask(task.id) {
-            it.copy(
-                providerTorrentInfo = it.providerTorrentInfo?.copy(
-                    state = ProviderTorrentState.DOWNLOADING
-                )
-            )
-        }
+        downloadRepository.updateProviderTorrentState(task.id, ProviderTorrentState.DOWNLOADING)
     }
 
     suspend fun setFilePriority(taskId: String, fileId: Int, priority: FilePriority) {
@@ -127,44 +116,15 @@ class TorrentStateMachine(
         val providerId = task.providerId ?: return
         provider.setFilePriority(providerId, fileId, priority)
 
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                if (file.id == fileId) {
-                    file.copy(priority = priority, isSelected = priority != FilePriority.IGNORE)
-                } else {
-                    file
-                }
-            } ?: listOf()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadRepository.setProviderFilePriority(taskId, fileId, priority)
     }
 
     fun toggleFileSelectionLocally(taskId: String, fileId: Int) {
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                if (file.id == fileId) {
-                    file.copy(isSelected = !file.isSelected)
-                } else {
-                    file
-                }
-            } ?: listOf()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadRepository.toggleProviderFileSelectionLocally(taskId, fileId)
     }
 
     fun toggleAllFilesSelectionLocally(taskId: String, selectAll: Boolean) {
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                file.copy(isSelected = selectAll)
-            } ?: listOf()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadRepository.toggleAllProviderFilesSelectionLocally(taskId, selectAll)
     }
 
     suspend fun confirmFileSelection(taskId: String) {
@@ -177,19 +137,17 @@ class TorrentStateMachine(
         try {
             val isSuccessful = provider.selectFiles(providerId, selectedFileIds)
             if (isSuccessful) {
-                downloadTracker.updateTask(taskId) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
+                downloadRepository.updateTaskState(taskId, TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD)
                 if (provider.supports(ProviderFeature.PauseResume)) {
                     provider.resume(providerId)
                 }
                 taskIdsToProcess.add(taskId)
             }
         } catch (e: Exception) {
-            downloadTracker.updateTask(taskId) {
-                it.copy(
-                    state = TorrentState.ERROR,
-                    errorMessage = "Failed to select files: ${e.message}"
-                )
-            }
+            downloadRepository.updateTaskError(
+                taskId,
+                "Failed to select files: ${e.message}"
+            )
         }
     }
 
@@ -199,12 +157,10 @@ class TorrentStateMachine(
             resetTorrent(task)
             taskIdsToProcess.add(task.id)
         } catch (e: Exception) {
-            downloadTracker.updateTask(task.id) {
-                it.copy(
-                    state = TorrentState.ERROR,
-                    errorMessage = "Failed to restart task: ${e.message}",
-                )
-            }
+            downloadRepository.updateTaskError(
+                task.id,
+                "Failed to restart task: ${e.message}"
+            )
         }
     }
 
@@ -243,13 +199,13 @@ class TorrentStateMachine(
             unrestrictLinkResponse.filename.cleanedForUseAsPath()
         ).absolutePath
 
-        downloadTracker.updateTaskFile(task.id, file.link) {
-            it.copy(
-                totalBytes = unrestrictLinkResponse.size,
-                filePath = filePath,
-                unrestrictedLink = unrestrictLinkResponse.downloadUrl,
-            )
-        }
+        downloadRepository.updateTaskFileInfo(
+            taskId = task.id,
+            fileLink = file.link,
+            totalBytes = unrestrictLinkResponse.size,
+            filePath = filePath,
+            unrestrictedLink = unrestrictLinkResponse.downloadUrl,
+        )
     }
 
     private suspend fun resumeDownloads() {
@@ -296,12 +252,11 @@ class TorrentStateMachine(
                             provider.addTorrent(it.readBytes(), task.name)
                         } ?: throw Exception("Could not open torrent file")
                     }
-                    downloadTracker.updateTask(task.id) {
-                        it.copy(
-                            providerId = providerId,
-                            state = TorrentState.WAITING_FOR_FILE_SELECTION
-                        )
-                    }
+                    downloadRepository.updateTaskProviderIdAndState(
+                        taskId = task.id,
+                        providerId = providerId,
+                        state = TorrentState.WAITING_FOR_FILE_SELECTION,
+                    )
 
                     return task.id
                 }
@@ -324,9 +279,7 @@ class TorrentStateMachine(
                             || torrentInfo.state == ProviderTorrentState.COMPLETED
                         )
                     ) {
-                        downloadTracker.updateTask(task.id) {
-                            it.copy(state = TorrentState.SELECTING_FILES)
-                        }
+                        downloadRepository.updateTaskState(task.id, TorrentState.SELECTING_FILES)
                     } else {
                         // Still processing, check again later
                         delay(delayBetweenInitialProviderUpdates)
@@ -346,14 +299,7 @@ class TorrentStateMachine(
                         if (provider.supports(ProviderFeature.PauseResume)) {
                             provider.pause(task.providerId)
                         }
-                        downloadTracker.updateTask(task.id) {
-                            it.copy(providerTorrentInfo = task.providerTorrentInfo?.copy(
-                                state = ProviderTorrentState.WAITING_FOR_FILE_SELECTION,
-                                status = "waiting_for_file_selection",
-                                downloadSpeed = 0,
-                                uploadSpeed = 0,
-                            ))
-                        }
+                        downloadRepository.setProviderTorrentInfoWaitingForFileSelection(task.id)
 
                         return null
                     }
@@ -368,17 +314,15 @@ class TorrentStateMachine(
                     try {
                         val isSuccessful = provider.selectFiles(task.providerId, fileIdsToSelect)
                         if (isSuccessful) {
-                            downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD) }
+                            downloadRepository.updateTaskState(task.id, TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD)
 
                             return task.id
                         }
                     } catch (e: Exception) {
-                        downloadTracker.updateTask(task.id) {
-                            it.copy(
-                                state = TorrentState.ERROR,
-                                errorMessage = "Failed to select files: ${e.message}"
-                            )
-                        }
+                        downloadRepository.updateTaskError(
+                            task.id,
+                            "Failed to select files: ${e.message}"
+                        )
                     }
                 }
 
@@ -395,12 +339,11 @@ class TorrentStateMachine(
 
                     if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
                         val files = torrentInfo.links.map { DownloadFile(it) }
-                        downloadTracker.updateTask(task.id) {
-                            it.copy(
-                                files = files,
-                                state = TorrentState.POPULATING_FILE_INFOS,
-                            )
-                        }
+                        downloadRepository.updateTaskFilesAndState(
+                            taskId = task.id,
+                            files = files,
+                            state = TorrentState.POPULATING_FILE_INFOS,
+                        )
                     } else {
                         // Still downloading on provider, check again later
                         delay(delayBetweenProviderUpdates)
@@ -414,24 +357,16 @@ class TorrentStateMachine(
                         updateFileInfo(task, file)
                     }
                     if (provider.isLocalProvider) {
-                        downloadTracker.updateTaskFiles(task.id) {
-                            it.copy(
-                                unrestrictedLink = null,
-                                state = LocalDownloadState.COMPLETED,
-                                progress = 100,
-                                downloadedBytes = it.totalBytes,
-                            )
-                        }
+                        downloadRepository.markAllTaskFilesCompletedLocally(task.id)
                     }
 
                     val updatedTask = downloadTracker.findTask(task.id) ?: return null
 
-                    downloadTracker.updateTask(task.id) { currentTask ->
-                        currentTask.copy(
-                            files = updatedTask.files.sortedBy { it.fileName },
-                            state = TorrentState.DOWNLOADING_LOCALLY,
-                        )
-                    }
+                    downloadRepository.updateTaskFilesAndState(
+                        taskId = task.id,
+                        files = updatedTask.files.sortedBy { it.fileName },
+                        state = TorrentState.DOWNLOADING_LOCALLY,
+                    )
 
                     return task.id
                 }
@@ -448,7 +383,7 @@ class TorrentStateMachine(
                     }
 
                     // All done, continue to next state
-                    downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.DELETING_FROM_PROVIDER) }
+                    downloadRepository.updateTaskState(task.id, TorrentState.DELETING_FROM_PROVIDER)
 
                     return task.id
                 }
@@ -459,7 +394,7 @@ class TorrentStateMachine(
                     if (isTorrentDeleted) {
                         task.removeTorrentFile()
                         task.removeResumeData(pathFactory)
-                        downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.CHECKING_FOR_ARCHIVES) }
+                        downloadRepository.updateTaskState(task.id, TorrentState.CHECKING_FOR_ARCHIVES)
                     } else {
                         delay(5.seconds)
                     }
@@ -469,9 +404,9 @@ class TorrentStateMachine(
 
                 TorrentState.CHECKING_FOR_ARCHIVES -> {
                     if (task.files.any { it.filePath?.endsWith(".rar", true) == true }) {
-                        downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.EXTRACTING_ARCHIVES) }
+                        downloadRepository.updateTaskState(task.id, TorrentState.EXTRACTING_ARCHIVES)
                     } else {
-                        downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.MOVING_TO_DESTINATION) }
+                        downloadRepository.updateTaskState(task.id, TorrentState.MOVING_TO_DESTINATION)
                     }
 
                     return task.id
@@ -488,7 +423,7 @@ class TorrentStateMachine(
                                 deleteArchiveAfterExtraction = true
                             )
                         }
-                    downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.MOVING_TO_DESTINATION) }
+                    downloadRepository.updateTaskState(task.id, TorrentState.MOVING_TO_DESTINATION)
 
                     return task.id
                 }
@@ -508,7 +443,7 @@ class TorrentStateMachine(
                         source.renameTo(destination)
                     }
 
-                    downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.COMPLETED) }
+                    downloadRepository.updateTaskState(task.id, TorrentState.COMPLETED)
 
                     return task.id
                 }
@@ -551,7 +486,7 @@ class TorrentStateMachine(
         } catch (_: ResourceNotFoundException) {
             removeTask(taskId)
         } catch (e: Exception) {
-            downloadTracker.updateTask(task.id) { it.copy(state = TorrentState.ERROR, errorMessage = e.message) }
+            downloadRepository.updateTaskError(task.id, e.message)
             e.printStackTrace()
         }
 
@@ -574,23 +509,10 @@ class TorrentStateMachine(
         if (task.providerId != null) {
             provider.deleteTorrent(task.providerId)
         }
-        downloadTracker.updateTask(task.id) {
-            it.copy(
-                providerId = null,
-                state = TorrentState.ADDING_TO_PROVIDER,
-                providerTorrentInfo = null,
-                files = listOf(),
-                errorMessage = null,
-            )
-        }
+        downloadRepository.resetTaskForRetry(task.id)
     }
 
     private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
-        downloadTracker.updateTask(taskId) {
-            it.copy(
-                name = if (it.name == it.torrent.uri) torrentInfo.name else it.name,
-                providerTorrentInfo = torrentInfo,
-            )
-        }
+        downloadRepository.updateTaskWithTorrentInfo(taskId, torrentInfo)
     }
 }
