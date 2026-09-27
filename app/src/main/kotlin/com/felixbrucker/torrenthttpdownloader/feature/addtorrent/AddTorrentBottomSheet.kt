@@ -55,25 +55,62 @@ data class AddTorrentConfig(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddTorrentBottomSheet(
-    onFinish: () -> Unit,
+fun AddTorrentContent(
+    onFinish: () -> Unit = {},
     viewModel: AddTorrentViewModel = viewModel()
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
+    val pendingConfig by viewModel.resolvedConfig.collectAsState()
     val name by viewModel.nameState.collectAsState()
     val selectedSubDir by viewModel.selectedSubDirState.collectAsState()
     val createSubfolderByName by viewModel.createSubfolderByNameState.collectAsState()
     val notifyOnCompletion by viewModel.notifyOnCompletionState.collectAsState()
     val fileSelectionMode by viewModel.fileSelectionModeState.collectAsState()
 
+    if (pendingConfig != null) {
+        AddTorrentBottomSheet(
+            name = name,
+            selectedSubDir = selectedSubDir,
+            createSubfolderByName = createSubfolderByName,
+            notifyOnCompletion = notifyOnCompletion,
+            fileSelectionMode = fileSelectionMode,
+            onNameChange = { viewModel.updateName(it) },
+            onSubdirectorySelected = { viewModel.updateSelectedSubDir(it) },
+            onCreateSubfolderByNameChanged = { viewModel.updateCreateSubfolderByName(it) },
+            onNotifyOnCompletionChanged = { viewModel.updateNotifyOnCompletion(it) },
+            onFileSelectionModeChanged = { viewModel.updateFileSelectionMode(it) },
+            onDismiss = {
+                viewModel.dismissAddTorrent()
+                onFinish()
+            },
+            onConfirm = {
+                viewModel.confirmAddTorrent()
+                onFinish()
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun AddTorrentBottomSheet(
+    name: String,
+    selectedSubDir: String?,
+    createSubfolderByName: Boolean,
+    notifyOnCompletion: Boolean,
+    fileSelectionMode: FileSelectionMode,
+    onNameChange: (String) -> Unit,
+    onSubdirectorySelected: (String?) -> Unit,
+    onCreateSubfolderByNameChanged: (Boolean) -> Unit,
+    onNotifyOnCompletionChanged: (Boolean) -> Unit,
+    onFileSelectionModeChanged: (FileSelectionMode) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
-        onDismissRequest = {
-            viewModel.dismissAddTorrent()
-            onFinish()
-        },
+        onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
         Column(
@@ -84,7 +121,7 @@ fun AddTorrentBottomSheet(
         ) {
             AddTorrentHeaderAndName(
                 name = name,
-                onNameChange = { viewModel.updateName(it) }
+                onNameChange = onNameChange
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -93,24 +130,18 @@ fun AddTorrentBottomSheet(
                 createSubfolderByName = createSubfolderByName,
                 notifyOnCompletion = notifyOnCompletion,
                 fileSelectionMode = fileSelectionMode,
-                onSubdirectorySelected = { viewModel.updateSelectedSubDir(it) },
-                onCreateSubfolderByNameChanged = { viewModel.updateCreateSubfolderByName(it) },
-                onNotifyOnCompletionChanged = { viewModel.updateNotifyOnCompletion(it) },
-                onFileSelectionModeChanged = { viewModel.updateFileSelectionMode(it) },
+                onSubdirectorySelected = onSubdirectorySelected,
+                onCreateSubfolderByNameChanged = onCreateSubfolderByNameChanged,
+                onNotifyOnCompletionChanged = onNotifyOnCompletionChanged,
+                onFileSelectionModeChanged = onFileSelectionModeChanged,
                 suggestedSubDirectoryName = name.cleanedForUseAsPath()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             AddTorrentBottomButtons(
-                onDismiss = {
-                    viewModel.dismissAddTorrent()
-                    onFinish()
-                },
-                onConfirm = {
-                    viewModel.confirmAddTorrent()
-                    onFinish()
-                }
+                onDismiss = onDismiss,
+                onConfirm = onConfirm
             )
             Spacer(modifier = Modifier.height(32.dp))
         }

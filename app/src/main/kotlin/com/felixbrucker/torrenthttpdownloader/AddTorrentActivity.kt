@@ -20,7 +20,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import dagger.hilt.android.AndroidEntryPoint
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 
 @AndroidEntryPoint
@@ -34,15 +34,12 @@ class AddTorrentActivity : ComponentActivity() {
 
         setContent {
             TorrentHttpDownloaderTheme {
-                val pendingConfig by viewModel.resolvedConfig.collectAsState()
                 val isResolvingTorrent by viewModel.isResolvingTorrent.collectAsState()
 
-                pendingConfig?.let {
-                    AddTorrentBottomSheet(
-                        onFinish = { finish() },
-                        viewModel = viewModel
-                    )
-                }
+                AddTorrentContent(
+                    onFinish = { finish() },
+                    viewModel = viewModel
+                )
 
                 if (isResolvingTorrent) {
                     Dialog(onDismissRequest = { finish() }) {

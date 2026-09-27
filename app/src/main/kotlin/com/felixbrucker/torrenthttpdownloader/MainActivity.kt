@@ -44,7 +44,7 @@ import androidx.work.workDataOf
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.TimeUnit
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
@@ -108,7 +108,6 @@ class MainActivity : ComponentActivity() {
                 )
                 val navigator = remember { Navigator(navigationState) }
 
-                val pendingConfig by addTorrentViewModel.resolvedConfig.collectAsState()
                 val isResolvingTorrent by addTorrentViewModel.isResolvingTorrent.collectAsState()
 
                 val entryProvider = entryProvider {
@@ -161,12 +160,9 @@ class MainActivity : ComponentActivity() {
                     onBack = { navigator.goBack() }
                 )
 
-                pendingConfig?.let {
-                    AddTorrentBottomSheet(
-                        onFinish = { },
-                        viewModel = addTorrentViewModel
-                    )
-                }
+                AddTorrentContent(
+                    viewModel = addTorrentViewModel
+                )
 
                 if (isResolvingTorrent) {
                     Dialog(onDismissRequest = { }) {
