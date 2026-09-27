@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.*
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.extensions.cleanedForUseAsPath
@@ -48,8 +49,6 @@ fun RssFeedItem(
     editFeed: () -> Unit,
     isSyncing: Boolean = false,
 ) {
-    var showMenu by remember { mutableStateOf(false) }
-
     val resources = LocalResources.current
     val haptic = LocalHapticFeedback.current
     val lastSyncedText = remember(feed.lastCheck) {
@@ -72,17 +71,6 @@ fun RssFeedItem(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 360f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
     ElevatedCard(
         modifier = Modifier.combinedClickable(
             onClick = onClick,
@@ -100,87 +88,127 @@ fun RssFeedItem(
         ListItem(
             headlineContent = { Text(feed.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
             supportingContent = {
-                Column {
-                    Text(
-                        feed.url,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        lastSyncedText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
+                RssFeedSupportingContent(url = feed.url, lastSyncedText = lastSyncedText)
             },
             leadingContent = {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.RssFeed,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                RssFeedLeadingIcon()
             },
             trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (feed.unreadCount > 0) {
-                        Badge(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ) {
-                            Text(feed.unreadCount.toString())
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    IconButton(onClick = syncFeed) {
-                        Icon(
-                            Icons.Default.Sync,
-                            contentDescription = "Sync",
-                            modifier = Modifier
-                                .size(20.dp)
-                                .rotate(if (isSyncing) rotation else 0f)
-                        )
-                    }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(20.dp))
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.edit_rss_feed)) },
-                                onClick = {
-                                    showMenu = false
-                                    editFeed()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    onDelete()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
-                            )
-                        }
-                    }
-                }
+                RssFeedTrailingContent(
+                    unreadCount = feed.unreadCount,
+                    isSyncing = isSyncing,
+                    onSync = syncFeed,
+                    onEdit = editFeed,
+                    onDelete = onDelete
+                )
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
+    }
+}
+
+@Composable
+private fun RssFeedSupportingContent(url: String, lastSyncedText: String) {
+    Column {
+        Text(
+            url,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            lastSyncedText,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
+private fun RssFeedLeadingIcon() {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.size(44.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Outlined.RssFeed,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RssFeedTrailingContent(
+    unreadCount: Int,
+    isSyncing: Boolean,
+    onSync: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (unreadCount > 0) {
+            Badge(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Text(unreadCount.toString())
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        IconButton(onClick = onSync) {
+            Icon(
+                Icons.Default.Sync,
+                contentDescription = "Sync",
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(if (isSyncing) rotation else 0f)
+            )
+        }
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.edit_rss_feed)) },
+                    onClick = {
+                        showMenu = false
+                        onEdit()
+                    },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    },
+                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                )
+            }
+        }
     }
 }
 
@@ -248,83 +276,105 @@ fun RssItemRow(item: RssItem, onClick: () -> Unit) {
                     )
                 },
                 supportingContent = {
-                    Column {
-                        if (!item.description.isNullOrBlank()) {
-                            Text(
-                                text = item.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                        if (formattedDate != null) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Schedule,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.6f)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = formattedDate,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.7f)
-                                )
-                            }
-                        }
-                    }
+                    RssItemSupportingContent(
+                        description = item.description,
+                        formattedDate = formattedDate,
+                        contentAlpha = contentAlpha
+                    )
                 },
                 trailingContent = {
-                    if (item.isDownloaded) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    } else {
-                        if (!item.isRead) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = CircleShape,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = "Download",
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier.size(36.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
+                    RssItemTrailingContent(
+                        isDownloaded = item.isDownloaded,
+                        isRead = item.isRead
+                    )
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RssItemSupportingContent(
+    description: String?,
+    formattedDate: String?,
+    contentAlpha: Float
+) {
+    Column {
+        if (!description.isNullOrBlank()) {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        if (formattedDate != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Schedule,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.6f)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = formattedDate,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha * 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RssItemTrailingContent(
+    isDownloaded: Boolean,
+    isRead: Boolean
+) {
+    if (isDownloaded) {
+        Surface(
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+            shape = CircleShape,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Downloaded",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    } else if (!isRead) {
+        Surface(
+            color = MaterialTheme.colorScheme.primary,
+            shape = CircleShape,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Download",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    } else {
+        Box(
+            modifier = Modifier.size(36.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Download,
+                contentDescription = "Download",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -338,14 +388,14 @@ fun EditRssFeedDialog(
     onConfirm: (RssFeed) -> Unit
 ) {
     val isNewFeed = feed == null
-    val feed = feed ?: RssFeed.make()
-    var name by remember { mutableStateOf(feed.name) }
-    var url by remember { mutableStateOf(feed.url) }
-    var autoDownload by remember { mutableStateOf(feed.autoDownload) }
-    var selectedSubDir by remember { mutableStateOf(feed.destinationSubdirectory) }
-    var createSubfolderByName by remember { mutableStateOf(feed.createSubfolderByName) }
-    var notifyOnCompletion by remember { mutableStateOf(feed.notifyOnCompletion) }
-    var fileSelectionMode by remember { mutableStateOf(feed.fileSelectionMode) }
+    val currentFeed = feed ?: RssFeed.make()
+    var name by remember { mutableStateOf(currentFeed.name) }
+    var url by remember { mutableStateOf(currentFeed.url) }
+    var autoDownload by remember { mutableStateOf(currentFeed.autoDownload) }
+    var selectedSubDir by remember { mutableStateOf(currentFeed.destinationSubdirectory) }
+    var createSubfolderByName by remember { mutableStateOf(currentFeed.createSubfolderByName) }
+    var notifyOnCompletion by remember { mutableStateOf(currentFeed.notifyOnCompletion) }
+    var fileSelectionMode by remember { mutableStateOf(currentFeed.fileSelectionMode) }
     val titleTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add_rss_feed else R.string.edit_rss_feed) }
     val confirmTextResource by remember { mutableIntStateOf(if (isNewFeed) R.string.add else R.string.save) }
 
@@ -353,44 +403,27 @@ fun EditRssFeedDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(titleTextResource)) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                TextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.rss_feed_name)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                TextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(stringResource(R.string.rss_feed_url)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                AddTorrentConfigFields(
-                    selectedSubDir = selectedSubDir,
-                    createSubfolderByName = createSubfolderByName,
-                    notifyOnCompletion = notifyOnCompletion,
-                    fileSelectionMode = fileSelectionMode,
-                    onSubdirectorySelected = { selectedSubDir = it },
-                    onCreateSubfolderByNameChanged = { createSubfolderByName = it },
-                    onNotifyOnCompletionChanged = { notifyOnCompletion = it },
-                    onFileSelectionModeChanged = { fileSelectionMode = it },
-                    suggestedSubDirectoryName = name.cleanedForUseAsPath(),
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { autoDownload = !autoDownload }) {
-                    Checkbox(checked = autoDownload, onCheckedChange = { autoDownload = it })
-                    Text(stringResource(R.string.auto_download))
-                }
-            }
+            EditRssFeedFields(
+                name = name,
+                onNameChange = { name = it },
+                url = url,
+                onUrlChange = { url = it },
+                selectedSubDir = selectedSubDir,
+                onSubdirectorySelected = { selectedSubDir = it },
+                createSubfolderByName = createSubfolderByName,
+                onCreateSubfolderByNameChanged = { createSubfolderByName = it },
+                notifyOnCompletion = notifyOnCompletion,
+                onNotifyOnCompletionChanged = { notifyOnCompletion = it },
+                fileSelectionMode = fileSelectionMode,
+                onFileSelectionModeChanged = { fileSelectionMode = it },
+                autoDownload = autoDownload,
+                onAutoDownloadChanged = { autoDownload = it }
+            )
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val newFeed = feed.copy(
+                    val newFeed = currentFeed.copy(
                         name = name,
                         url = url,
                         destinationSubdirectory = selectedSubDir,
@@ -412,4 +445,59 @@ fun EditRssFeedDialog(
             }
         }
     )
+}
+
+@Composable
+private fun EditRssFeedFields(
+    name: String,
+    onNameChange: (String) -> Unit,
+    url: String,
+    onUrlChange: (String) -> Unit,
+    selectedSubDir: String?,
+    onSubdirectorySelected: (String?) -> Unit,
+    createSubfolderByName: Boolean,
+    onCreateSubfolderByNameChanged: (Boolean) -> Unit,
+    notifyOnCompletion: Boolean,
+    onNotifyOnCompletionChanged: (Boolean) -> Unit,
+    fileSelectionMode: FileSelectionMode,
+    onFileSelectionModeChanged: (FileSelectionMode) -> Unit,
+    autoDownload: Boolean,
+    onAutoDownloadChanged: (Boolean) -> Unit
+) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        TextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { Text(stringResource(R.string.rss_feed_name)) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        TextField(
+            value = url,
+            onValueChange = onUrlChange,
+            label = { Text(stringResource(R.string.rss_feed_url)) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        AddTorrentConfigFields(
+            selectedSubDir = selectedSubDir,
+            createSubfolderByName = createSubfolderByName,
+            notifyOnCompletion = notifyOnCompletion,
+            fileSelectionMode = fileSelectionMode,
+            onSubdirectorySelected = onSubdirectorySelected,
+            onCreateSubfolderByNameChanged = onCreateSubfolderByNameChanged,
+            onNotifyOnCompletionChanged = onNotifyOnCompletionChanged,
+            onFileSelectionModeChanged = onFileSelectionModeChanged,
+            suggestedSubDirectoryName = name.cleanedForUseAsPath(),
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onAutoDownloadChanged(!autoDownload) }
+        ) {
+            Checkbox(checked = autoDownload, onCheckedChange = onAutoDownloadChanged)
+            Text(stringResource(R.string.auto_download))
+        }
+    }
 }

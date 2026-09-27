@@ -48,40 +48,14 @@ fun RssFeedDetailScreen(
     val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
     val isSyncing = syncingFeedIds.contains(feed.id)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 360f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(feed.name) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { syncFeed(feed) }) {
-                        Icon(
-                            Icons.Default.Sync,
-                            contentDescription = "Sync Feed",
-                            modifier = if (isSyncing) Modifier.rotate(rotation) else Modifier
-                        )
-                    }
-                    IconButton(onClick = {
-                        rssRepository.markAllItemsAsRead(feed.id)
-                    }) {
-                        Icon(Icons.Default.DoneAll, contentDescription = stringResource(R.string.mark_all_read))
-                    }
-                }
+            RssFeedDetailTopBar(
+                feedName = feed.name,
+                isSyncing = isSyncing,
+                onBack = onBack,
+                onSyncFeed = { syncFeed(feed) },
+                onMarkAllRead = { rssRepository.markAllItemsAsRead(feed.id) }
             )
         }
     ) { padding ->
@@ -93,14 +67,7 @@ fun RssFeedDetailScreen(
                 .padding(padding)
         ) {
             if (feed.items.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(stringResource(R.string.no_rss_items))
-                }
+                EmptyRssItemsView()
             } else {
                 RssItemsList(
                     feed = feed,
@@ -111,5 +78,59 @@ fun RssFeedDetailScreen(
                 )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RssFeedDetailTopBar(
+    feedName: String,
+    isSyncing: Boolean,
+    onBack: () -> Unit,
+    onSyncFeed: () -> Unit,
+    onMarkAllRead: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    TopAppBar(
+        title = { Text(feedName) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            IconButton(onClick = onSyncFeed) {
+                Icon(
+                    Icons.Default.Sync,
+                    contentDescription = "Sync Feed",
+                    modifier = if (isSyncing) Modifier.rotate(rotation) else Modifier
+                )
+            }
+            IconButton(onClick = onMarkAllRead) {
+                Icon(Icons.Default.DoneAll, contentDescription = stringResource(R.string.mark_all_read))
+            }
+        }
+    )
+}
+
+@Composable
+private fun EmptyRssItemsView() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(stringResource(R.string.no_rss_items))
     }
 }

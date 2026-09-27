@@ -82,7 +82,6 @@ fun AddTorrentConfigFields(
             depth = 2,
         )
 
-        // Reset to download directory if previously selected directory does not exist anymore
         if (selectedSubDir != null && !relativePaths.contains(selectedSubDir)) {
             onSubdirectorySelected(null)
         }
@@ -101,10 +100,82 @@ fun AddTorrentConfigFields(
         loadSubDirectories()
 
         onPauseOrDispose {
-            // Nothing to do
         }
     }
 
+    DestinationHeader(
+        isEditingDirectories = isEditingDirectories,
+        onToggleEditing = { isEditingDirectories = !isEditingDirectories }
+    )
+
+    if (subDirectories.isEmpty() && !isEditingDirectories) {
+        EmptySubdirectoriesNotice()
+    }
+
+    SubdirectoryChipsSection(
+        subDirectories = subDirectories,
+        selectedSubDir = selectedSubDir,
+        isEditingDirectories = isEditingDirectories,
+        onSubdirectorySelected = onSubdirectorySelected,
+        onDeleteDirectory = { directoryToDelete = it },
+        onCreateFolderClick = { showCreateFolderDialog = true }
+    )
+
+    if (showCreateFolderDialog) {
+        CreateFolderDialog(
+            suggestedSelectedParentDir = selectedSubDir,
+            suggestedDirectoryName = suggestedSubDirectoryName,
+            onDismiss = { showCreateFolderDialog = false },
+            onFolderCreated = { newPath ->
+                loadSubDirectories()
+                onSubdirectorySelected(newPath)
+                onCreateSubfolderByNameChanged(false)
+                showCreateFolderDialog = false
+            }
+        )
+    }
+
+    directoryToDelete?.let { dirPath ->
+        DeleteSubdirectoryDialog(
+            directoryPath = dirPath,
+            onDismiss = { directoryToDelete = null },
+            onConfirmDelete = {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val dirFile = File(downloadsDir, dirPath)
+                if (dirFile.exists()) {
+                    dirFile.deleteRecursively()
+                    if (selectedSubDir == dirPath) {
+                        onSubdirectorySelected(null)
+                    }
+                    loadSubDirectories()
+                }
+                directoryToDelete = null
+            }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    FileSelectionModeSection(
+        fileSelectionMode = fileSelectionMode,
+        onFileSelectionModeChanged = onFileSelectionModeChanged
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    AddTorrentCheckboxOptions(
+        createSubfolderByName = createSubfolderByName,
+        onCreateSubfolderByNameChanged = onCreateSubfolderByNameChanged,
+        notifyOnCompletion = notifyOnCompletion,
+        onNotifyOnCompletionChanged = onNotifyOnCompletionChanged
+    )
+}
+
+@Composable
+private fun DestinationHeader(
+    isEditingDirectories: Boolean,
+    onToggleEditing: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -114,7 +185,7 @@ fun AddTorrentConfigFields(
             text = stringResource(id = R.string.select_destination),
             style = MaterialTheme.typography.titleMedium
         )
-        IconButton(onClick = { isEditingDirectories = !isEditingDirectories }) {
+        IconButton(onClick = onToggleEditing) {
             Icon(
                 imageVector = if (isEditingDirectories) Icons.Default.Check else Icons.Default.Edit,
                 contentDescription = if (isEditingDirectories) "Done" else "Edit",
@@ -122,27 +193,39 @@ fun AddTorrentConfigFields(
             )
         }
     }
+}
 
-    if (subDirectories.isEmpty() && !isEditingDirectories) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = stringResource(id = R.string.no_subdirectories_found),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontStyle = FontStyle.Italic,
-            )
-        }
+@Composable
+private fun EmptySubdirectoriesNotice() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = stringResource(id = R.string.no_subdirectories_found),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontStyle = FontStyle.Italic,
+        )
     }
+}
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SubdirectoryChipsSection(
+    subDirectories: List<DirectoryItemInfo>,
+    selectedSubDir: String?,
+    isEditingDirectories: Boolean,
+    onSubdirectorySelected: (String?) -> Unit,
+    onDeleteDirectory: (String) -> Unit,
+    onCreateFolderClick: () -> Unit
+) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -173,7 +256,7 @@ fun AddTorrentConfigFields(
                             modifier = Modifier
                                 .size(FilterChipDefaults.IconSize)
                                 .clickable {
-                                    directoryToDelete = dirInfo.relativePath
+                                    onDeleteDirectory(dirInfo.relativePath)
                                 }
                         )
                     }
@@ -183,7 +266,7 @@ fun AddTorrentConfigFields(
         if (isEditingDirectories) {
             FilterChip(
                 selected = false,
-                onClick = { showCreateFolderDialog = true },
+                onClick = onCreateFolderClick,
                 label = { Icon(Icons.Default.Add, contentDescription = null) },
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -192,102 +275,94 @@ fun AddTorrentConfigFields(
             )
         }
     }
+}
 
-    if (showCreateFolderDialog) {
-        CreateFolderDialog(
-            suggestedSelectedParentDir = selectedSubDir,
-            suggestedDirectoryName = suggestedSubDirectoryName,
-            onDismiss = { showCreateFolderDialog = false },
-            onFolderCreated = { newPath ->
-                loadSubDirectories()
-                onSubdirectorySelected(newPath)
-                onCreateSubfolderByNameChanged(false)
-                showCreateFolderDialog = false
+@Composable
+private fun DeleteSubdirectoryDialog(
+    directoryPath: String,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete Subdirectory") },
+        text = { Text("Are you sure you want to delete '$directoryPath' and all its contents?") },
+        confirmButton = {
+            TextButton(onClick = onConfirmDelete) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
             }
-        )
-    }
-
-    if (directoryToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { directoryToDelete = null },
-            title = { Text("Delete Subdirectory") },
-            text = { Text("Are you sure you want to delete '$directoryToDelete' and all its contents?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                        val dirFile = File(downloadsDir, directoryToDelete!!)
-                        if (dirFile.exists()) {
-                            dirFile.deleteRecursively()
-                            if (selectedSubDir == directoryToDelete) {
-                                onSubdirectorySelected(null)
-                            }
-                            loadSubDirectories()
-                        }
-                        directoryToDelete = null
-                    }
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { directoryToDelete = null }) {
-                    Text("Cancel")
-                }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
-        )
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Text(
-        text = "File Selection Mode",
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(bottom = 8.dp)
+        }
     )
+}
 
-    FileSelectionMode.entries.forEach { mode ->
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onFileSelectionModeChanged(mode) }
-        ) {
-            RadioButton(
-                selected = fileSelectionMode == mode,
-                onClick = { onFileSelectionModeChanged(mode) }
-            )
-            val text = when (mode) {
-                FileSelectionMode.ALL -> "Download all files"
-                FileSelectionMode.BIGGEST -> "Only download the biggest file"
-                FileSelectionMode.MANUAL -> "Manual selection"
+@Composable
+private fun FileSelectionModeSection(
+    fileSelectionMode: FileSelectionMode,
+    onFileSelectionModeChanged: (FileSelectionMode) -> Unit
+) {
+    Column {
+        Text(
+            text = "File Selection Mode",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        FileSelectionMode.entries.forEach { mode ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onFileSelectionModeChanged(mode) }
+            ) {
+                RadioButton(
+                    selected = fileSelectionMode == mode,
+                    onClick = { onFileSelectionModeChanged(mode) }
+                )
+                val text = when (mode) {
+                    FileSelectionMode.ALL -> "Download all files"
+                    FileSelectionMode.BIGGEST -> "Only download the biggest file"
+                    FileSelectionMode.MANUAL -> "Manual selection"
+                }
+                Text(text = text)
             }
-            Text(text = text)
         }
     }
+}
 
-    Spacer(modifier = Modifier.height(8.dp))
+@Composable
+private fun AddTorrentCheckboxOptions(
+    createSubfolderByName: Boolean,
+    onCreateSubfolderByNameChanged: (Boolean) -> Unit,
+    notifyOnCompletion: Boolean,
+    onNotifyOnCompletionChanged: (Boolean) -> Unit
+) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onCreateSubfolderByNameChanged(!createSubfolderByName) }
+        ) {
+            Checkbox(
+                checked = createSubfolderByName,
+                onCheckedChange = { onCreateSubfolderByNameChanged(it) }
+            )
+            Text(text = stringResource(id = R.string.create_subfolder))
+        }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onCreateSubfolderByNameChanged(!createSubfolderByName) }
-    ) {
-        Checkbox(
-            checked = createSubfolderByName,
-            onCheckedChange = { onCreateSubfolderByNameChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.create_subfolder))
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { onNotifyOnCompletionChanged(!notifyOnCompletion) }
-    ) {
-        Checkbox(
-            checked = notifyOnCompletion,
-            onCheckedChange = { onNotifyOnCompletionChanged(it) }
-        )
-        Text(text = stringResource(id = R.string.notify_on_completion))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onNotifyOnCompletionChanged(!notifyOnCompletion) }
+        ) {
+            Checkbox(
+                checked = notifyOnCompletion,
+                onCheckedChange = { onNotifyOnCompletionChanged(it) }
+            )
+            Text(text = stringResource(id = R.string.notify_on_completion))
+        }
     }
 }
 
@@ -351,26 +426,11 @@ fun CreateFolderDialog(
         text = {
             Column {
                 if (subDirectories.isNotEmpty()) {
-                    Text(
-                        text = "Select Parent (optional)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.secondary
+                    ParentDirSelectionSection(
+                        subDirectories = subDirectories,
+                        selectedParentDir = selectedParentDir,
+                        onParentDirSelected = { selectedParentDir = it }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        subDirectories.forEach { dir ->
-                            FilterChip(
-                                selected = selectedParentDir == dir,
-                                onClick = {
-                                    selectedParentDir = if (selectedParentDir == dir) null else dir
-                                },
-                                label = { Text(dir) }
-                            )
-                        }
-                    }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
@@ -422,4 +482,35 @@ fun CreateFolderDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ParentDirSelectionSection(
+    subDirectories: List<String>,
+    selectedParentDir: String?,
+    onParentDirSelected: (String?) -> Unit
+) {
+    Column {
+        Text(
+            text = "Select Parent (optional)",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            subDirectories.forEach { dir ->
+                FilterChip(
+                    selected = selectedParentDir == dir,
+                    onClick = {
+                        onParentDirSelected(if (selectedParentDir == dir) null else dir)
+                    },
+                    label = { Text(dir) }
+                )
+            }
+        }
+    }
 }

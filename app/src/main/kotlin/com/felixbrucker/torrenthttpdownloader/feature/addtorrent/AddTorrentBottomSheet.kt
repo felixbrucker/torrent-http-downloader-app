@@ -92,17 +92,9 @@ fun AddTorrentBottomSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = stringResource(id = R.string.add_torrent),
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.name)) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            AddTorrentHeaderAndName(
+                name = name,
+                onNameChange = { name = it }
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -120,16 +112,9 @@ fun AddTorrentBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(id = R.string.cancel))
-                }
-                Button(onClick = {
-                    // Only persist last selection for regular adds
+            AddTorrentBottomButtons(
+                onDismiss = onDismiss,
+                onConfirm = {
                     if (config.feedId == null) {
                         sharedPreferences.edit {
                             putString("default_sub_dir", selectedSubDir)
@@ -145,11 +130,49 @@ fun AddTorrentBottomSheet(
                         notifyOnCompletion = notifyOnCompletion,
                         fileSelectionMode = fileSelectionMode,
                     ))
-                }) {
-                    Text(stringResource(id = R.string.add))
                 }
-            }
+            )
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddTorrentHeaderAndName(
+    name: String,
+    onNameChange: (String) -> Unit
+) {
+    Column {
+        Text(
+            text = stringResource(id = R.string.add_torrent),
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { Text(stringResource(R.string.name)) },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        )
+    }
+}
+
+@Composable
+private fun AddTorrentBottomButtons(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(id = R.string.cancel))
+        }
+        Button(onClick = onConfirm) {
+            Text(stringResource(id = R.string.add))
         }
     }
 }

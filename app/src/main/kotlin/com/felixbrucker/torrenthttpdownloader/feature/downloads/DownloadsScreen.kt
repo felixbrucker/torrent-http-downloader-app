@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -56,10 +57,9 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
-import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +106,6 @@ fun DownloadsScreen(
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }
 
-        // Auto-scroll logic
         val topBound = layoutInfo.viewportStartOffset + 50
         val bottomBound = layoutInfo.viewportEndOffset - 50
         if (draggedItem.offset + draggingOffset < topBound) {
@@ -160,78 +159,18 @@ fun DownloadsScreen(
             Column {
                 TopAppBar(
                     title = {
-                        if (isNarrowScreen) {
-                            Text(
-                                text = stringResource(id = R.string.app_name),
-                                maxLines = 1
-                            )
-                        } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(id = R.string.app_name),
-                                    maxLines = 1
-                                )
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    DownloadStatsBar(tasks = tasks)
-                                }
-                            }
-                        }
+                        DownloadsTopBarTitle(isNarrowScreen = isNarrowScreen, tasks = tasks)
                     },
                     actions = {
-                        if (anyPaused || anyPausedOnProvider) {
-                            IconButton(onClick = {
-                                context.startService(Intent(context, DownloadService::class.java).apply {
-                                    action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
-                                })
-                                context.startService(Intent(context, DownloadService::class.java).apply {
-                                    action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
-                                })
-                            }) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
-                            }
-                        }
-                        if (anyDownloading || anyDownloadingOnProvider) {
-                            IconButton(onClick = {
-                                context.startService(Intent(context, DownloadService::class.java).apply {
-                                    action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
-                                })
-                                context.startService(Intent(context, DownloadService::class.java).apply {
-                                    action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
-                                })
-                            }) {
-                                Icon(Icons.Default.Pause, contentDescription = "Pause All")
-                            }
-                        }
-
-                        Box {
-                            IconButton(onClick = { navigator.navigate(NavRoute.RssFeeds) }) {
-                                Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
-                            }
-                            if (unreadRssCount > 0) {
-                                Badge(
-                                    modifier = Modifier.align(Alignment.TopEnd),
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ) {
-                                    Text(unreadRssCount.toString())
-                                }
-                            }
-                        }
-
-                        IconButton(onClick = {
-                            navigator.navigate(NavRoute.Settings)
-                        }) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = stringResource(id = R.string.action_settings)
-                            )
-                        }
+                        DownloadsTopBarActions(
+                            anyPaused = anyPaused,
+                            anyPausedOnProvider = anyPausedOnProvider,
+                            anyDownloading = anyDownloading,
+                            anyDownloadingOnProvider = anyDownloadingOnProvider,
+                            unreadRssCount = unreadRssCount,
+                            onNavigateRss = { navigator.navigate(NavRoute.RssFeeds) },
+                            onNavigateSettings = { navigator.navigate(NavRoute.Settings) }
+                        )
                     }
                 )
                 if (isNarrowScreen) {
@@ -277,88 +216,212 @@ fun DownloadsScreen(
             ) {
                 itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
                     val isDragging = index == draggedItemIndex
-
-                    Box(
-                        modifier = Modifier
-                            .animateItem()
-                            .zIndex(if (isDragging) 1f else 0f)
-                            .graphicsLayer {
-                                translationY = if (isDragging) draggingOffset else 0f
-                                scaleX = if (isDragging) 1.05f else 1f
-                                scaleY = if (isDragging) 1.05f else 1f
-                                shadowElevation = if (isDragging) 8f else 0f
-                            }
-                    ) {
-                        DownloadItem(
-                            task = task,
-                            onRemove = {
-                                taskToRemove = task
-                                deleteFiles = true
-                                deleteTorrentFile = true
-                            },
-                            provider = provider
-                        )
-                    }
+                    DownloadTaskListItem(
+                        task = task,
+                        isDragging = isDragging,
+                        draggingOffset = draggingOffset,
+                        onRemove = {
+                            taskToRemove = task
+                            deleteFiles = true
+                            deleteTorrentFile = true
+                        },
+                        provider = provider
+                    )
                 }
             }
         }
 
         taskToRemove?.let { task ->
-            AlertDialog(
-                onDismissRequest = { taskToRemove = null },
-                title = { Text("Remove task") },
-                text = {
-                    Column {
-                        Text("Are you sure you want to remove ${task.name}?")
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { deleteFiles = !deleteFiles }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Checkbox(checked = deleteFiles, onCheckedChange = { deleteFiles = it })
-                            Text("Delete temporary files")
-                        }
-                        if (task.torrent.type == TorrentType.TORRENT_FILE) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { deleteTorrentFile = !deleteTorrentFile }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Checkbox(
-                                    checked = deleteTorrentFile,
-                                    onCheckedChange = { deleteTorrentFile = it })
-                                Text("Delete torrent file")
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            removeTask(
-                                task.id,
-                                deleteFiles = deleteFiles,
-                                deleteTorrentFile = deleteTorrentFile
-                            )
-                            taskToRemove = null
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Remove")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { taskToRemove = null }) {
-                        Text("Cancel")
-                    }
+            RemoveTaskDialog(
+                task = task,
+                deleteFiles = deleteFiles,
+                deleteTorrentFile = deleteTorrentFile,
+                onDeleteFilesChange = { deleteFiles = it },
+                onDeleteTorrentFileChange = { deleteTorrentFile = it },
+                onDismiss = { taskToRemove = null },
+                onConfirm = {
+                    removeTask(
+                        task.id,
+                        deleteFiles = deleteFiles,
+                        deleteTorrentFile = deleteTorrentFile
+                    )
+                    taskToRemove = null
                 }
             )
         }
     }
+}
+
+@Composable
+private fun DownloadsTopBarTitle(isNarrowScreen: Boolean, tasks: List<DownloadTask>) {
+    if (isNarrowScreen) {
+        Text(
+            text = stringResource(id = R.string.app_name),
+            maxLines = 1
+        )
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(id = R.string.app_name),
+                maxLines = 1
+            )
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                DownloadStatsBar(tasks = tasks)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadsTopBarActions(
+    anyPaused: Boolean,
+    anyPausedOnProvider: Boolean,
+    anyDownloading: Boolean,
+    anyDownloadingOnProvider: Boolean,
+    unreadRssCount: Int,
+    onNavigateRss: () -> Unit,
+    onNavigateSettings: () -> Unit
+) {
+    val context = LocalContext.current
+
+    if (anyPaused || anyPausedOnProvider) {
+        IconButton(onClick = {
+            context.startService(Intent(context, DownloadService::class.java).apply {
+                action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
+            })
+            context.startService(Intent(context, DownloadService::class.java).apply {
+                action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
+            })
+        }) {
+            Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
+        }
+    }
+    if (anyDownloading || anyDownloadingOnProvider) {
+        IconButton(onClick = {
+            context.startService(Intent(context, DownloadService::class.java).apply {
+                action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
+            })
+            context.startService(Intent(context, DownloadService::class.java).apply {
+                action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
+            })
+        }) {
+            Icon(Icons.Default.Pause, contentDescription = "Pause All")
+        }
+    }
+
+    Box {
+        IconButton(onClick = onNavigateRss) {
+            Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
+        }
+        if (unreadRssCount > 0) {
+            Badge(
+                modifier = Modifier.align(Alignment.TopEnd),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Text(unreadRssCount.toString())
+            }
+        }
+    }
+
+    IconButton(onClick = onNavigateSettings) {
+        Icon(
+            Icons.Default.Settings,
+            contentDescription = stringResource(id = R.string.action_settings)
+        )
+    }
+}
+
+@Composable
+private fun LazyItemScope.DownloadTaskListItem(
+    task: DownloadTask,
+    isDragging: Boolean,
+    draggingOffset: Float,
+    onRemove: () -> Unit,
+    provider: TorrentProvider?
+) {
+    Box(
+        modifier = Modifier
+            .animateItem()
+            .zIndex(if (isDragging) 1f else 0f)
+            .graphicsLayer {
+                translationY = if (isDragging) draggingOffset else 0f
+                scaleX = if (isDragging) 1.05f else 1f
+                scaleY = if (isDragging) 1.05f else 1f
+                shadowElevation = if (isDragging) 8f else 0f
+            }
+    ) {
+        DownloadItem(
+            task = task,
+            onRemove = onRemove,
+            provider = provider
+        )
+    }
+}
+
+@Composable
+private fun RemoveTaskDialog(
+    task: DownloadTask,
+    deleteFiles: Boolean,
+    deleteTorrentFile: Boolean,
+    onDeleteFilesChange: (Boolean) -> Unit,
+    onDeleteTorrentFileChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remove task") },
+        text = {
+            Column {
+                Text("Are you sure you want to remove ${task.name}?")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onDeleteFilesChange(!deleteFiles) }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(checked = deleteFiles, onCheckedChange = onDeleteFilesChange)
+                    Text("Delete temporary files")
+                }
+                if (task.torrent.type == TorrentType.TORRENT_FILE) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onDeleteTorrentFileChange(!deleteTorrentFile) }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = deleteTorrentFile,
+                            onCheckedChange = onDeleteTorrentFileChange
+                        )
+                        Text("Delete torrent file")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Remove")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private data class TaskStateFlags(

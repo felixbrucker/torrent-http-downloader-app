@@ -66,8 +66,6 @@ fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
     var libTorrentParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString()) }
     var libTorrentRequireVpnConnection by remember { mutableStateOf(sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)) }
 
-    var expanded by remember { mutableStateOf(false) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -91,75 +89,28 @@ fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(text = stringResource(id = R.string.provider), modifier = Modifier.padding(bottom = 8.dp))
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = selectedProvider,
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
-                            .fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        providers.forEach { provider ->
-                            DropdownMenuItem(
-                                text = { Text(provider) },
-                                onClick = {
-                                    selectedProvider = provider
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
+                ProviderSelectionDropdown(
+                    providers = providers,
+                    selectedProvider = selectedProvider,
+                    onProviderSelected = { selectedProvider = it }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (selectedProvider == RealDebridProvider.NAME) {
-                    TextField(
-                        value = realDebridApiToken,
-                        onValueChange = { realDebridApiToken = it },
-                        label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
-                        modifier = Modifier.fillMaxWidth()
+                    RealDebridSettingsSection(
+                        apiToken = realDebridApiToken,
+                        onApiTokenChange = { realDebridApiToken = it },
+                        parallelDownloads = localParallelDownloads,
+                        onParallelDownloadsChange = { localParallelDownloads = it }
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TextField(
-                        value = localParallelDownloads,
-                        onValueChange = { localParallelDownloads = it },
-                        label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
                 } else if (selectedProvider == LibTorrentProvider.NAME) {
-                    TextField(
-                        value = libTorrentParallelDownloads,
-                        onValueChange = { libTorrentParallelDownloads = it },
-                        label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
+                    LibTorrentSettingsSection(
+                        parallelDownloads = libTorrentParallelDownloads,
+                        onParallelDownloadsChange = { libTorrentParallelDownloads = it },
+                        requireVpn = libTorrentRequireVpnConnection,
+                        onRequireVpnChange = { libTorrentRequireVpnConnection = it }
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { libTorrentRequireVpnConnection = !libTorrentRequireVpnConnection }
-                    ) {
-                        Checkbox(
-                            checked = libTorrentRequireVpnConnection,
-                            onCheckedChange = { newValue -> libTorrentRequireVpnConnection = newValue }
-                        )
-                        Text(text = stringResource(id = R.string.require_vpn_connection))
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 Button(onClick = {
@@ -181,21 +132,131 @@ fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
             val lastBackupTime = sharedPreferences.getLong("last_backup_time", 0L)
             val lastBackupSize = sharedPreferences.getLong("last_backup_size", 0L)
             if (lastBackupTime > 0) {
-                val timeStr = DateUtils.getRelativeTimeSpanString(
-                    lastBackupTime,
-                    System.currentTimeMillis(),
-                    DateUtils.MINUTE_IN_MILLIS
-                ).toString()
-                val sizeStr = Formatter.formatBytes(lastBackupSize)
-                Text(
-                    text = stringResource(id = R.string.last_backup, timeStr, sizeStr),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(top = 16.dp)
+                LastBackupInfo(
+                    lastBackupTime = lastBackupTime,
+                    lastBackupSize = lastBackupSize,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProviderSelectionDropdown(
+    providers: List<String>,
+    selectedProvider: String,
+    onProviderSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text(text = stringResource(id = R.string.provider), modifier = Modifier.padding(bottom = 8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedProvider,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                providers.forEach { provider ->
+                    DropdownMenuItem(
+                        text = { Text(provider) },
+                        onClick = {
+                            onProviderSelected(provider)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RealDebridSettingsSection(
+    apiToken: String,
+    onApiTokenChange: (String) -> Unit,
+    parallelDownloads: String,
+    onParallelDownloadsChange: (String) -> Unit
+) {
+    Column {
+        TextField(
+            value = apiToken,
+            onValueChange = onApiTokenChange,
+            label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        TextField(
+            value = parallelDownloads,
+            onValueChange = onParallelDownloadsChange,
+            label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun LibTorrentSettingsSection(
+    parallelDownloads: String,
+    onParallelDownloadsChange: (String) -> Unit,
+    requireVpn: Boolean,
+    onRequireVpnChange: (Boolean) -> Unit
+) {
+    Column {
+        TextField(
+            value = parallelDownloads,
+            onValueChange = onParallelDownloadsChange,
+            label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onRequireVpnChange(!requireVpn) }
+        ) {
+            Checkbox(
+                checked = requireVpn,
+                onCheckedChange = onRequireVpnChange
+            )
+            Text(text = stringResource(id = R.string.require_vpn_connection))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun LastBackupInfo(
+    lastBackupTime: Long,
+    lastBackupSize: Long,
+    modifier: Modifier = Modifier
+) {
+    val timeStr = DateUtils.getRelativeTimeSpanString(
+        lastBackupTime,
+        System.currentTimeMillis(),
+        DateUtils.MINUTE_IN_MILLIS
+    ).toString()
+    val sizeStr = Formatter.formatBytes(lastBackupSize)
+    Text(
+        text = stringResource(id = R.string.last_backup, timeStr, sizeStr),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(top = 16.dp)
+    )
 }
