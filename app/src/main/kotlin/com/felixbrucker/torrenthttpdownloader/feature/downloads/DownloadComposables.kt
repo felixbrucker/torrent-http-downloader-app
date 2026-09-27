@@ -82,26 +82,22 @@ import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.extensions.asStateText
 import com.felixbrucker.torrenthttpdownloader.extensions.capitalized
 
-data class TaskActionsHandler(
-    val onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit = { _, _ -> },
-    val onConfirmFileSelection: (taskId: String) -> Unit = {},
-    val onPauseTaskOnProvider: (taskId: String) -> Unit = {},
-    val onResumeTaskOnProvider: (taskId: String) -> Unit = {},
-    val onPauseTaskLocalDownloads: (taskId: String) -> Unit = {},
-    val onResumeTaskLocalDownloads: (taskId: String) -> Unit = {},
-    val onRestartTask: (taskId: String) -> Unit = {},
-    val onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
-    val onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
-    val onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit = { _, _ -> },
-    val onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit = { _, _, _ -> }
-)
-
 @Composable
 fun DownloadItem(
     task: DownloadTask,
     onRemove: () -> Unit,
     provider: TorrentProvider? = null,
-    actionsHandler: TaskActionsHandler = TaskActionsHandler()
+    onToggleAllSelection: (taskId: String, selectAll: Boolean) -> Unit = { _, _ -> },
+    onConfirmFileSelection: (taskId: String) -> Unit = {},
+    onPauseTaskOnProvider: (taskId: String) -> Unit = {},
+    onResumeTaskOnProvider: (taskId: String) -> Unit = {},
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit = {},
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit = {},
+    onRestartTask: (taskId: String) -> Unit = {},
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit = { _, _ -> },
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit = { _, _, _ -> }
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val isLocal = task.location == TaskLocation.LOCAL
@@ -134,7 +130,7 @@ fun DownloadItem(
                         TaskSelectionOrStateIcon(
                             task = task,
                             isExpanded = isExpanded,
-                            onToggleAllSelection = actionsHandler.onToggleAllProviderFileSelection
+                            onToggleAllSelection = onToggleAllSelection
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -143,7 +139,7 @@ fun DownloadItem(
                             task = task,
                             isNarrow = isNarrow,
                             isExpanded = isExpanded,
-                            onToggleAllSelection = actionsHandler.onToggleAllProviderFileSelection
+                            onToggleAllSelection = onToggleAllSelection
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         TaskProgressBar(progress = task.overallProgress)
@@ -163,7 +159,12 @@ fun DownloadItem(
                                 onRemove = onRemove,
                                 isExpandable = isExpandable,
                                 isExpanded = isExpanded,
-                                actionsHandler = actionsHandler
+                                onConfirmFileSelection = onConfirmFileSelection,
+                                onPauseTaskOnProvider = onPauseTaskOnProvider,
+                                onResumeTaskOnProvider = onResumeTaskOnProvider,
+                                onPauseTaskLocalDownloads = onPauseTaskLocalDownloads,
+                                onResumeTaskLocalDownloads = onResumeTaskLocalDownloads,
+                                onRestartTask = onRestartTask
                             )
                         }
                     }
@@ -173,7 +174,12 @@ fun DownloadItem(
                             task = task,
                             provider = provider,
                             onRemove = onRemove,
-                            actionsHandler = actionsHandler
+                            onConfirmFileSelection = onConfirmFileSelection,
+                            onPauseTaskOnProvider = onPauseTaskOnProvider,
+                            onResumeTaskOnProvider = onResumeTaskOnProvider,
+                            onPauseTaskLocalDownloads = onPauseTaskLocalDownloads,
+                            onResumeTaskLocalDownloads = onResumeTaskLocalDownloads,
+                            onRestartTask = onRestartTask
                         )
                         if (isExpandable) {
                             Icon(
@@ -189,7 +195,10 @@ fun DownloadItem(
                         task = task,
                         provider = provider,
                         isManualSelectionMode = isManualSelectionMode,
-                        actionsHandler = actionsHandler
+                        onResumeLocalFileDownload = onResumeLocalFileDownload,
+                        onPauseLocalFileDownload = onPauseLocalFileDownload,
+                        onToggleProviderFileSelection = onToggleProviderFileSelection,
+                        onSetProviderFilePriority = onSetProviderFilePriority
                     )
                 }
             }
@@ -309,7 +318,12 @@ fun NarrowTaskActionRow(
     onRemove: () -> Unit,
     isExpandable: Boolean,
     isExpanded: Boolean,
-    actionsHandler: TaskActionsHandler
+    onConfirmFileSelection: (taskId: String) -> Unit,
+    onPauseTaskOnProvider: (taskId: String) -> Unit,
+    onResumeTaskOnProvider: (taskId: String) -> Unit,
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit,
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit,
+    onRestartTask: (taskId: String) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -322,7 +336,12 @@ fun NarrowTaskActionRow(
             task = task,
             provider = provider,
             onRemove = onRemove,
-            actionsHandler = actionsHandler
+            onConfirmFileSelection = onConfirmFileSelection,
+            onPauseTaskOnProvider = onPauseTaskOnProvider,
+            onResumeTaskOnProvider = onResumeTaskOnProvider,
+            onPauseTaskLocalDownloads = onPauseTaskLocalDownloads,
+            onResumeTaskLocalDownloads = onResumeTaskLocalDownloads,
+            onRestartTask = onRestartTask
         )
         if (isExpandable) {
             Icon(
@@ -338,24 +357,29 @@ fun TaskActions(
     task: DownloadTask,
     provider: TorrentProvider?,
     onRemove: () -> Unit,
-    actionsHandler: TaskActionsHandler
+    onConfirmFileSelection: (taskId: String) -> Unit,
+    onPauseTaskOnProvider: (taskId: String) -> Unit,
+    onResumeTaskOnProvider: (taskId: String) -> Unit,
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit,
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit,
+    onRestartTask: (taskId: String) -> Unit
 ) {
     val isDownloading = task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING }
     val isPaused = task.files.any { it.state == LocalDownloadState.PAUSED }
 
     if (task.state == TorrentState.SELECTING_FILES && task.fileSelectionMode == FileSelectionMode.MANUAL) {
-        IconButton(onClick = { actionsHandler.onConfirmFileSelection(task.id) }) {
+        IconButton(onClick = { onConfirmFileSelection(task.id) }) {
             Icon(Icons.Default.CheckCircle, contentDescription = "Confirm selection", tint = MaterialTheme.colorScheme.primary)
         }
     }
 
     if (task.location == TaskLocation.PROVIDER && provider?.supports(ProviderFeature.PauseResume) == true) {
         if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
-            IconButton(onClick = { actionsHandler.onPauseTaskOnProvider(task.id) }) {
+            IconButton(onClick = { onPauseTaskOnProvider(task.id) }) {
                 Icon(Icons.Default.Pause, contentDescription = "Pause")
             }
         } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
-            IconButton(onClick = { actionsHandler.onResumeTaskOnProvider(task.id) }) {
+            IconButton(onClick = { onResumeTaskOnProvider(task.id) }) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
             }
         }
@@ -363,18 +387,18 @@ fun TaskActions(
 
     if (task.state == TorrentState.DOWNLOADING_LOCALLY) {
         if (isDownloading) {
-            IconButton(onClick = { actionsHandler.onPauseTaskLocalDownloads(task.id) }) {
+            IconButton(onClick = { onPauseTaskLocalDownloads(task.id) }) {
                 Icon(Icons.Default.Pause, contentDescription = "Pause")
             }
         } else if (isPaused) {
-            IconButton(onClick = { actionsHandler.onResumeTaskLocalDownloads(task.id) }) {
+            IconButton(onClick = { onResumeTaskLocalDownloads(task.id) }) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
             }
         }
     }
 
     if (task.state == TorrentState.ERROR) {
-        IconButton(onClick = { actionsHandler.onRestartTask(task.id) }) {
+        IconButton(onClick = { onRestartTask(task.id) }) {
             Icon(Icons.Default.Replay, contentDescription = "Restart")
         }
     }
@@ -389,7 +413,10 @@ fun TaskExpandedFilesList(
     task: DownloadTask,
     provider: TorrentProvider?,
     isManualSelectionMode: Boolean,
-    actionsHandler: TaskActionsHandler
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit,
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         if (task.location == TaskLocation.LOCAL) {
@@ -398,8 +425,8 @@ fun TaskExpandedFilesList(
                     SubDownloadItem(
                         task = task,
                         file = file,
-                        onResumeFile = actionsHandler.onResumeLocalFileDownload,
-                        onPauseFile = actionsHandler.onPauseLocalFileDownload
+                        onResumeFile = onResumeLocalFileDownload,
+                        onPauseFile = onPauseLocalFileDownload
                     )
                 }
             }
@@ -411,8 +438,8 @@ fun TaskExpandedFilesList(
                     supportsPriorities = provider?.supports(ProviderFeature.FilePriorities) == true,
                     isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED,
                     isManualSelectionMode = isManualSelectionMode,
-                    onToggleSelection = actionsHandler.onToggleProviderFileSelection,
-                    onSetPriority = actionsHandler.onSetProviderFilePriority
+                    onToggleSelection = onToggleProviderFileSelection,
+                    onSetPriority = onSetProviderFilePriority
                 )
             }
         }

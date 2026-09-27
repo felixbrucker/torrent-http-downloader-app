@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 import com.felixbrucker.torrenthttpdownloader.NavRoute
 import com.felixbrucker.torrenthttpdownloader.Navigator
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
@@ -69,22 +70,6 @@ fun DownloadsScreen(
     val tasks by viewModel.tasks.collectAsState()
     val unreadRssCount by viewModel.totalUnreadRssCount.collectAsState(initial = 0)
     val provider = remember { viewModel.getProvider() }
-
-    val actionsHandler = remember(viewModel) {
-        TaskActionsHandler(
-            onToggleAllProviderFileSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
-            onConfirmFileSelection = { taskId -> viewModel.confirmFileSelection(taskId) },
-            onPauseTaskOnProvider = { taskId -> viewModel.pauseTaskOnProvider(taskId) },
-            onResumeTaskOnProvider = { taskId -> viewModel.resumeTaskOnProvider(taskId) },
-            onPauseTaskLocalDownloads = { taskId -> viewModel.pauseTaskLocalDownloads(taskId) },
-            onResumeTaskLocalDownloads = { taskId -> viewModel.resumeTaskLocalDownloads(taskId) },
-            onRestartTask = { taskId -> viewModel.restartTask(taskId) },
-            onResumeLocalFileDownload = { taskId, fileLink -> viewModel.resumeLocalFileDownload(taskId, fileLink) },
-            onPauseLocalFileDownload = { taskId, fileLink -> viewModel.pauseLocalFileDownload(taskId, fileLink) },
-            onToggleProviderFileSelection = { taskId, fileId -> viewModel.toggleProviderFileSelection(taskId, fileId) },
-            onSetProviderFilePriority = { taskId, fileId, priority -> viewModel.setProviderFilePriority(taskId, fileId, priority) }
-        )
-    }
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -199,7 +184,17 @@ fun DownloadsScreen(
                             deleteTorrentFile = true
                         },
                         provider = provider,
-                        actionsHandler = actionsHandler
+                        onToggleAllSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
+                        onConfirmFileSelection = { taskId -> viewModel.confirmFileSelection(taskId) },
+                        onPauseTaskOnProvider = { taskId -> viewModel.pauseTaskOnProvider(taskId) },
+                        onResumeTaskOnProvider = { taskId -> viewModel.resumeTaskOnProvider(taskId) },
+                        onPauseTaskLocalDownloads = { taskId -> viewModel.pauseTaskLocalDownloads(taskId) },
+                        onResumeTaskLocalDownloads = { taskId -> viewModel.resumeTaskLocalDownloads(taskId) },
+                        onRestartTask = { taskId -> viewModel.restartTask(taskId) },
+                        onResumeLocalFileDownload = { taskId, fileLink -> viewModel.resumeLocalFileDownload(taskId, fileLink) },
+                        onPauseLocalFileDownload = { taskId, fileLink -> viewModel.pauseLocalFileDownload(taskId, fileLink) },
+                        onToggleProviderFileSelection = { taskId, fileId -> viewModel.toggleProviderFileSelection(taskId, fileId) },
+                        onSetProviderFilePriority = { taskId, fileId, priority -> viewModel.setProviderFilePriority(taskId, fileId, priority) }
                     )
                 }
             }
@@ -338,7 +333,17 @@ private fun LazyItemScope.DownloadTaskListItem(
     draggingOffset: Float,
     onRemove: () -> Unit,
     provider: TorrentProvider?,
-    actionsHandler: TaskActionsHandler
+    onToggleAllSelection: (taskId: String, selectAll: Boolean) -> Unit,
+    onConfirmFileSelection: (taskId: String) -> Unit,
+    onPauseTaskOnProvider: (taskId: String) -> Unit,
+    onResumeTaskOnProvider: (taskId: String) -> Unit,
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit,
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit,
+    onRestartTask: (taskId: String) -> Unit,
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit,
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -355,7 +360,17 @@ private fun LazyItemScope.DownloadTaskListItem(
             task = task,
             onRemove = onRemove,
             provider = provider,
-            actionsHandler = actionsHandler
+            onToggleAllSelection = onToggleAllSelection,
+            onConfirmFileSelection = onConfirmFileSelection,
+            onPauseTaskOnProvider = onPauseTaskOnProvider,
+            onResumeTaskOnProvider = onResumeTaskOnProvider,
+            onPauseTaskLocalDownloads = onPauseTaskLocalDownloads,
+            onResumeTaskLocalDownloads = onResumeTaskLocalDownloads,
+            onRestartTask = onRestartTask,
+            onResumeLocalFileDownload = onResumeLocalFileDownload,
+            onPauseLocalFileDownload = onPauseLocalFileDownload,
+            onToggleProviderFileSelection = onToggleProviderFileSelection,
+            onSetProviderFilePriority = onSetProviderFilePriority
         )
     }
 }
