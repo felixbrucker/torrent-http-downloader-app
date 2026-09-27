@@ -70,6 +70,22 @@ fun DownloadsScreen(
     val unreadRssCount by viewModel.totalUnreadRssCount.collectAsState(initial = 0)
     val provider = remember { viewModel.getProvider() }
 
+    val actionsHandler = remember(viewModel) {
+        TaskActionsHandler(
+            onToggleAllProviderFileSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
+            onConfirmFileSelection = { taskId -> viewModel.confirmFileSelection(taskId) },
+            onPauseTaskOnProvider = { taskId -> viewModel.pauseTaskOnProvider(taskId) },
+            onResumeTaskOnProvider = { taskId -> viewModel.resumeTaskOnProvider(taskId) },
+            onPauseTaskLocalDownloads = { taskId -> viewModel.pauseTaskLocalDownloads(taskId) },
+            onResumeTaskLocalDownloads = { taskId -> viewModel.resumeTaskLocalDownloads(taskId) },
+            onRestartTask = { taskId -> viewModel.restartTask(taskId) },
+            onResumeLocalFileDownload = { taskId, fileLink -> viewModel.resumeLocalFileDownload(taskId, fileLink) },
+            onPauseLocalFileDownload = { taskId, fileLink -> viewModel.pauseLocalFileDownload(taskId, fileLink) },
+            onToggleProviderFileSelection = { taskId, fileId -> viewModel.toggleProviderFileSelection(taskId, fileId) },
+            onSetProviderFilePriority = { taskId, fileId, priority -> viewModel.setProviderFilePriority(taskId, fileId, priority) }
+        )
+    }
+
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
@@ -181,7 +197,8 @@ fun DownloadsScreen(
                             deleteFiles = true
                             deleteTorrentFile = true
                         },
-                        provider = provider
+                        provider = provider,
+                        actionsHandler = actionsHandler
                     )
                 }
             }
@@ -319,7 +336,8 @@ private fun LazyItemScope.DownloadTaskListItem(
     isDragging: Boolean,
     draggingOffset: Float,
     onRemove: () -> Unit,
-    provider: TorrentProvider?
+    provider: TorrentProvider?,
+    actionsHandler: TaskActionsHandler
 ) {
     Box(
         modifier = Modifier
@@ -335,7 +353,8 @@ private fun LazyItemScope.DownloadTaskListItem(
         DownloadItem(
             task = task,
             onRemove = onRemove,
-            provider = provider
+            provider = provider,
+            actionsHandler = actionsHandler
         )
     }
 }

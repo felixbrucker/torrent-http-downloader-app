@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.feature.addtorrent
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -27,11 +26,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
@@ -64,21 +62,23 @@ data class AddTorrentConfig(
 fun AddTorrentBottomSheet(
     config: AddTorrentConfig,
     onDismiss: () -> Unit,
-    onConfirm: (AddTorrentConfig) -> Unit
+    onConfirm: (AddTorrentConfig) -> Unit,
+    viewModel: AddTorrentViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val defaultPreferences = remember { viewModel.getDefaultPreferences() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedSubDir by remember { mutableStateOf(config.destinationSubdirectory ?: sharedPreferences.getString("default_sub_dir", null)) }
-    var createSubfolderByName by remember { mutableStateOf(config.createSubfolderByName ?: sharedPreferences.getBoolean("default_create_subfolder", true)) }
-    var notifyOnCompletion by remember { mutableStateOf(config.notifyOnCompletion ?: sharedPreferences.getBoolean("default_notify_on_completion", false)) }
+
+    var selectedSubDir by remember {
+        mutableStateOf(config.destinationSubdirectory ?: defaultPreferences.defaultSubDir)
+    }
+    var createSubfolderByName by remember {
+        mutableStateOf(config.createSubfolderByName ?: defaultPreferences.defaultCreateSubfolder)
+    }
+    var notifyOnCompletion by remember {
+        mutableStateOf(config.notifyOnCompletion ?: defaultPreferences.defaultNotifyOnCompletion)
+    }
     var fileSelectionMode by remember {
-        mutableStateOf(
-            config.fileSelectionMode ?: FileSelectionMode.valueOf(
-                sharedPreferences.getString("default_file_selection_mode", FileSelectionMode.ALL.name)
-                    ?: FileSelectionMode.ALL.name
-            )
-        )
+        mutableStateOf(config.fileSelectionMode ?: defaultPreferences.defaultFileSelectionMode)
     }
     var name by remember { mutableStateOf(config.name ?: "") }
 
@@ -115,14 +115,6 @@ fun AddTorrentBottomSheet(
             AddTorrentBottomButtons(
                 onDismiss = onDismiss,
                 onConfirm = {
-                    if (config.feedId == null) {
-                        sharedPreferences.edit {
-                            putString("default_sub_dir", selectedSubDir)
-                            putBoolean("default_create_subfolder", createSubfolderByName)
-                            putBoolean("default_notify_on_completion", notifyOnCompletion)
-                            putString("default_file_selection_mode", fileSelectionMode.name)
-                        }
-                    }
                     onConfirm(config.copy(
                         name = name.takeIf { it.isNotBlank() },
                         destinationSubdirectory = selectedSubDir,

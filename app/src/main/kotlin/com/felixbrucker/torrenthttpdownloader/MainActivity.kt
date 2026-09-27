@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,18 +43,9 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfig
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
@@ -62,15 +54,8 @@ import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    @Inject lateinit var downloadTracker: DownloadTracker
-    @Inject lateinit var rssRepository: RssRepository
-    @Inject lateinit var pathFactory: PathFactory
-    @Inject lateinit var torrentUriResolver: TorrentUriResolver
-
-    private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-    private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
-    private var isResolvingTorrent by mutableStateOf(false)
+    private val mainViewModel: MainViewModel by viewModels()
+    private val addTorrentViewModel: AddTorrentViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,6 +108,9 @@ class MainActivity : ComponentActivity() {
                 )
                 val navigator = remember { Navigator(navigationState) }
 
+                val pendingConfig by addTorrentViewModel.resolvedConfig.collectAsState()
+                val isResolvingTorrent by addTorrentViewModel.isResolvingTorrent.collectAsState()
+
                 val entryProvider = entryProvider {
                     entry<NavRoute.Downloads> {
                         DownloadsScreen(
@@ -140,35 +128,20 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     entry<NavRoute.RssFeedDetail> { key ->
-                        val feeds by downloadTracker.rssFeeds.collectAsState()
-                        val feed = feeds.find { it.id == key.feedId }
-                        feed?.let { feed ->
-                            RssFeedDetailScreen(
-                                feed = feed,
-                                onBack = { navigator.goBack() },
-                                syncFeed = { runRssSyncOnce(it.id) },
-                                addTorrentFromFeed = { feedItem, item ->
-                                    serviceScope.launch {
-                                        isResolvingTorrent = true
-                                        try {
-                                            val resolvedTorrent = torrentUriResolver.resolve(item.link.toUri())
-                                            pendingConfig = AddTorrentConfig(
-                                                id = resolvedTorrent.id,
-                                                uri = resolvedTorrent.uri.toString(),
-                                                type = resolvedTorrent.type,
-                                                name = resolvedTorrent.name,
-                                                createSubfolderByName = feedItem.createSubfolderByName,
-                                                destinationSubdirectory = feedItem.destinationSubdirectory,
-                                                feedId = feedItem.id,
-                                                feedItemId = item.id,
-                                            )
-                                        } finally {
-                                            isResolvingTorrent = false
-                                        }
-                                    }
-                                }
-                            )
-                        }
+                        RssFeedDetailScreen(
+                            feedId = key.feedId,
+                            onBack = { navigator.goBack() },
+                            syncFeed = { runRssSyncOnce(it.id) },
+                            addTorrentFromFeed = { feedItem, item ->
+                                addTorrentViewModel.resolveTorrentUri(
+                                    uri = item.link.toUri(),
+                                    createSubfolderByName = feedItem.createSubfolderByName,
+                                    destinationSubdirectory = feedItem.destinationSubdirectory,
+                                    feedId = feedItem.id,
+                                    feedItemId = item.id
+                                )
+                            }
+                        )
                     }
                     entry<NavRoute.Settings> {
                         SettingsScreen(
@@ -191,30 +164,8 @@ class MainActivity : ComponentActivity() {
                 pendingConfig?.let { config ->
                     AddTorrentBottomSheet(
                         config = config,
-                        onDismiss = {
-                            pendingConfig?.cleanupTemporaryTorrentFile()
-                            pendingConfig = null
-                        },
-                        onConfirm = { updatedConfig ->
-                            val intent = Intent(this, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_ADD_TASK
-                                putExtra(DownloadService.EXTRA_TORRENT_ID, updatedConfig.id)
-                                putExtra(DownloadService.EXTRA_TORRENT_URI, updatedConfig.uri)
-                                putExtra(DownloadService.EXTRA_TORRENT_TYPE, updatedConfig.type.name)
-                                putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, updatedConfig.destinationSubdirectory)
-                                putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, updatedConfig.createSubfolderByName)
-                                putExtra(DownloadService.EXTRA_NOTIFY_ON_COMPLETION, updatedConfig.notifyOnCompletion)
-                                putExtra(DownloadService.EXTRA_FILE_SELECTION_MODE, updatedConfig.fileSelectionMode?.name)
-                                putExtra(DownloadService.EXTRA_TORRENT_NAME, updatedConfig.name)
-                            }
-                            startService(intent)
-
-                            if (updatedConfig.feedId != null && updatedConfig.feedItemId != null) {
-                                rssRepository.markItemAsDownloaded(updatedConfig.feedId, updatedConfig.feedItemId)
-                            }
-
-                            pendingConfig = null
-                        }
+                        onDismiss = { addTorrentViewModel.dismissAddTorrent() },
+                        onConfirm = { updatedConfig -> addTorrentViewModel.confirmAddTorrent(updatedConfig) }
                     )
                 }
 
@@ -240,9 +191,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
 
-        if (downloadTracker.hasTasksWhichNeedProcessing()) {
-            startService(Intent(this, DownloadService::class.java))
-        }
+        mainViewModel.checkAndStartDownloadService(this)
         ensureRssSyncIsScheduled()
     }
 
@@ -270,5 +219,4 @@ class MainActivity : ComponentActivity() {
             .build()
         WorkManager.getInstance(this).enqueue(rssSyncRequest)
     }
-
 }
