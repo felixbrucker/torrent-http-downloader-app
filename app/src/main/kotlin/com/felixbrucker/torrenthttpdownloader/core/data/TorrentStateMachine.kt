@@ -362,7 +362,7 @@ class TorrentStateMachine(
 
                     val updatedTask = downloadTracker.findTask(task.id) ?: return null
 
-                    downloadRepository.updateTaskSortedFilesAndState(
+                    downloadRepository.updateTaskFilesAndState(
                         taskId = task.id,
                         files = updatedTask.files.sortedBy { it.fileName },
                         state = TorrentState.DOWNLOADING_LOCALLY,

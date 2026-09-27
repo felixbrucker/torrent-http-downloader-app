@@ -183,19 +183,6 @@ class DownloadRepository @Inject constructor(
         }
     }
 
-    fun updateTaskSortedFilesAndState(
-        taskId: String,
-        files: List<DownloadFile>,
-        state: TorrentState,
-    ) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                files = files,
-                state = state,
-            )
-        }
-    }
-
     fun resetTaskForRetry(taskId: String) {
         downloadTracker.updateTask(taskId) { task ->
             task.copy(
