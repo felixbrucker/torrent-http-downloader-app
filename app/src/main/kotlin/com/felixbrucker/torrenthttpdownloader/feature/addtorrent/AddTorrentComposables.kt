@@ -82,6 +82,7 @@ fun AddTorrentConfigFields(
             depth = 2,
         )
 
+        // Reset to download directory if previously selected directory does not exist anymore
         if (selectedSubDir != null && !relativePaths.contains(selectedSubDir)) {
             onSubdirectorySelected(null)
         }
@@ -100,6 +101,7 @@ fun AddTorrentConfigFields(
         loadSubDirectories()
 
         onPauseOrDispose {
+            // Nothing to do
         }
     }
 
