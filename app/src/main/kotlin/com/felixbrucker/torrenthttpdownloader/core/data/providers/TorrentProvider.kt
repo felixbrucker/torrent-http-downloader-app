@@ -96,6 +96,7 @@ interface TorrentProvider {
     suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink
     suspend fun pause(id: String)
     suspend fun resume(id: String)
+    fun start()
     fun stop()
     fun reloadSettings()
 }

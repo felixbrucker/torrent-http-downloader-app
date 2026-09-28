@@ -7,7 +7,6 @@ import javax.inject.Singleton
 import kotlin.math.min
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
 import com.felixbrucker.torrenthttpdownloader.core.network.ResourceNotFoundException
 
@@ -133,6 +132,10 @@ class RealDebridProvider @Inject constructor(
 
     override suspend fun resume(id: String) {
         throw Exception("Unsupported operation: resume")
+    }
+
+    override fun start() {
+        // Nothing to do
     }
 
     override fun stop() {

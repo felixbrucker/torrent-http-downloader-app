@@ -33,7 +33,6 @@ import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.swig.torrent_flags_t
 import org.libtorrent4j.swig.torrent_handle
-import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.extensions.makeAddTorrentParams
@@ -122,12 +121,6 @@ class LibTorrentProvider @Inject constructor(
             sessionSettings.portRangeSecond = range.second
         }
         sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
-
-        val params = loadSessionParams()
-        params.settings = settingsToSettingsPack(sessionSettings)
-        sessionManager.addListener(libTorrentListener)
-        sessionManager.start(params)
-        connectivityManager.registerDefaultNetworkCallback(networkCallback)
     }
 
     private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {
@@ -135,6 +128,14 @@ class LibTorrentProvider @Inject constructor(
             return true
         }
         return capabilities.hasTransport(TRANSPORT_VPN)
+    }
+
+    override fun start() {
+        val params = loadSessionParams()
+        params.settings = settingsToSettingsPack(sessionSettings)
+        sessionManager.addListener(libTorrentListener)
+        sessionManager.start(params)
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
     }
 
     override fun stop() {
