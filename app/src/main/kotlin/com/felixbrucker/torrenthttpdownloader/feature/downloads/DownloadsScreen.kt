@@ -93,12 +93,20 @@ fun DownloadsScreen(
         val visibleItems = layoutInfo.visibleItemsInfo
         val draggedItem = visibleItems.firstOrNull { it.index == currentDraggedIndex } ?: return
 
-        val draggedItemCenter = draggedItem.offset + draggedItem.size / 2 + draggingOffset
+        val draggedTop = draggedItem.offset + draggingOffset
+        val draggedBottom = draggedItem.offset + draggedItem.size + draggingOffset
 
-        val targetItem = visibleItems.firstOrNull { item ->
-            item.index != currentDraggedIndex &&
-                    draggedItemCenter.toInt() in item.offset..(item.offset + item.size)
-        }
+        val targetItemAbove = visibleItems
+            .lastOrNull { item ->
+                item.index < currentDraggedIndex && draggedTop < item.offset + item.size / 2
+            }
+
+        val targetItemBelow = visibleItems
+            .firstOrNull { item ->
+                item.index > currentDraggedIndex && draggedBottom > item.offset + item.size / 2
+            }
+
+        val targetItem = targetItemAbove ?: targetItemBelow
 
         if (targetItem != null) {
             downloadTracker.moveTask(currentDraggedIndex, targetItem.index)
@@ -106,12 +114,12 @@ fun DownloadsScreen(
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }
 
-        // Auto-scroll logic
+        // Auto-scroll logic: only auto-scroll in the direction of the drag gesture
         val topBound = layoutInfo.viewportStartOffset + 50
         val bottomBound = layoutInfo.viewportEndOffset - 50
-        if (draggedItem.offset + draggingOffset < topBound) {
+        if (draggedTop < topBound && dragAmount.y < 0 && lazyListState.canScrollBackward) {
             coroutineScope.launch { lazyListState.scrollBy(-10f) }
-        } else if (draggedItem.offset + draggingOffset + draggedItem.size > bottomBound) {
+        } else if (draggedBottom > bottomBound && dragAmount.y > 0 && lazyListState.canScrollForward) {
             coroutineScope.launch { lazyListState.scrollBy(10f) }
         }
     }
@@ -194,7 +202,7 @@ fun DownloadsScreen(
                             onDragStart = { offset ->
                                 lazyListState.layoutInfo.visibleItemsInfo
                                     .firstOrNull { item ->
-                                        offset.y.toInt() in item.offset..(item.offset + item.size)
+                                        offset.y.toInt() in item.offset until (item.offset + item.size)
                                     }?.also {
                                         draggedItemIndex = it.index
                                     }
