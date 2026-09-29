@@ -4,6 +4,7 @@ import android.app.backup.BackupManager
 import android.content.Context
 import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -16,6 +17,7 @@ import org.junit.Test
 class SettingsViewModelTest {
     private val sharedPreferences = mockk<SharedPreferences>()
     private val context = mockk<Context>(relaxed = true)
+    private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -30,7 +32,9 @@ class SettingsViewModelTest {
         every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 4
         every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 5
         every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns true
-        val viewModel = SettingsViewModel(sharedPreferences, context)
+        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
+        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 6
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher)
 
         val state = viewModel.loadSettings()
 
@@ -39,21 +43,25 @@ class SettingsViewModelTest {
         assertEquals("4", state.localParallelDownloads)
         assertEquals("5", state.libTorrentParallelDownloads)
         assertEquals(true, state.libTorrentRequireVpnConnection)
+        assertEquals(true, state.rssSyncEnabled)
+        assertEquals(6, state.rssSyncIntervalHours)
     }
 
     @Test
-    fun testSaveSettingsEditsSharedPreferences() {
+    fun testSaveSettingsEditsSharedPreferencesAndUpdatesSyncSchedule() {
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
         every { sharedPreferences.edit() } returns editor
         every { context.packageName } returns "com.felixbrucker.torrenthttpdownloader"
-        val viewModel = SettingsViewModel(sharedPreferences, context)
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher)
 
         viewModel.saveSettings(
             selectedProvider = LibTorrentProvider.NAME,
             realDebridApiToken = "token-123",
             localParallelDownloads = "3",
             libTorrentParallelDownloads = "4",
-            libTorrentRequireVpnConnection = true
+            libTorrentRequireVpnConnection = true,
+            rssSyncEnabled = true,
+            rssSyncIntervalHours = 6
         )
 
         verify { editor.putString("provider", LibTorrentProvider.NAME) }
@@ -61,6 +69,9 @@ class SettingsViewModelTest {
         verify { editor.putInt("local_parallel_downloads", 3) }
         verify { editor.putInt("libtorrent_parallel_downloads", 4) }
         verify { editor.putBoolean("libtorrent_require_vpn_connection", true) }
+        verify { editor.putBoolean("rss_sync_enabled", true) }
+        verify { editor.putInt("rss_sync_interval_hours", 6) }
         verify { BackupManager.dataChanged("com.felixbrucker.torrenthttpdownloader") }
+        verify { rssSyncLauncher.updateRssSyncSchedule(enabled = true, intervalHours = 6L) }
     }
 }

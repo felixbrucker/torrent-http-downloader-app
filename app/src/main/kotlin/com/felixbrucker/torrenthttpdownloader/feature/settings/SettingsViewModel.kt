@@ -11,19 +11,23 @@ import javax.inject.Inject
 import javax.inject.Named
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 
 data class SettingsUiState(
     val selectedProvider: String = LibTorrentProvider.NAME,
     val realDebridApiToken: String = "",
     val localParallelDownloads: String = "2",
     val libTorrentParallelDownloads: String = "3",
-    val libTorrentRequireVpnConnection: Boolean = false
+    val libTorrentRequireVpnConnection: Boolean = false,
+    val rssSyncEnabled: Boolean = true,
+    val rssSyncIntervalHours: Int = 3
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @param:Named("settings") private val sharedPreferences: SharedPreferences,
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val rssSyncLauncher: RssSyncLauncher
 ) : ViewModel() {
 
     val availableProviders: List<String> = listOf(
@@ -37,7 +41,9 @@ class SettingsViewModel @Inject constructor(
             realDebridApiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: "",
             localParallelDownloads = sharedPreferences.getInt("local_parallel_downloads", 2).toString(),
             libTorrentParallelDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString(),
-            libTorrentRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+            libTorrentRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false),
+            rssSyncEnabled = sharedPreferences.getBoolean("rss_sync_enabled", true),
+            rssSyncIntervalHours = sharedPreferences.getInt("rss_sync_interval_hours", 3)
         )
     }
 
@@ -46,7 +52,9 @@ class SettingsViewModel @Inject constructor(
         realDebridApiToken: String,
         localParallelDownloads: String,
         libTorrentParallelDownloads: String,
-        libTorrentRequireVpnConnection: Boolean
+        libTorrentRequireVpnConnection: Boolean,
+        rssSyncEnabled: Boolean = true,
+        rssSyncIntervalHours: Int = 3
     ) {
         sharedPreferences.edit {
             putString("provider", selectedProvider)
@@ -54,7 +62,10 @@ class SettingsViewModel @Inject constructor(
             putInt("local_parallel_downloads", localParallelDownloads.toIntOrNull() ?: 2)
             putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
             putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
+            putBoolean("rss_sync_enabled", rssSyncEnabled)
+            putInt("rss_sync_interval_hours", rssSyncIntervalHours)
         }
         BackupManager.dataChanged(context.packageName)
+        rssSyncLauncher.updateRssSyncSchedule(enabled = rssSyncEnabled, intervalHours = rssSyncIntervalHours.toLong())
     }
 }

@@ -29,4 +29,7 @@
     <string name="never_synced">Never synced</string>
     <string name="just_now">Just now</string>
     <string name="no_subdirectories_found">No Subdirectories found</string>
+    <string name="rss_sync_settings">RSS Synchronization</string>
+    <string name="enable_rss_sync">Enable RSS Sync</string>
+    <string name="rss_sync_interval_hours">Sync Interval: %d hours</string>
 </resources>
