@@ -22,7 +22,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
-import timber.log.Timber
 
 @AndroidEntryPoint
 class AddTorrentActivity : ComponentActivity() {
@@ -30,7 +29,6 @@ class AddTorrentActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Timber.d("AddTorrentActivity created")
 
         handleIntent(intent)
 
@@ -100,10 +98,5 @@ class AddTorrentActivity : ComponentActivity() {
         } else {
             finish()
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Timber.d("AddTorrentActivity destroyed")
     }
 }
