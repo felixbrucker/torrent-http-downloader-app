@@ -1,21 +1,22 @@
 package com.felixbrucker.torrenthttpdownloader.feature.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -25,10 +26,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,27 +39,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onSave: () -> Unit,
     viewModel: SettingsViewModel = viewModel()
 ) {
-    val initialState = remember { viewModel.loadSettings() }
-
-    var selectedProvider by remember { mutableStateOf(initialState.selectedProvider) }
-    var realDebridApiToken by remember { mutableStateOf(initialState.realDebridApiToken) }
-    var localParallelDownloads by remember { mutableStateOf(initialState.localParallelDownloads) }
-    var libTorrentParallelDownloads by remember { mutableStateOf(initialState.libTorrentParallelDownloads) }
-    var libTorrentRequireVpnConnection by remember { mutableStateOf(initialState.libTorrentRequireVpnConnection) }
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = { SettingsTopBar(onBack = onBack) }
@@ -65,47 +64,44 @@ fun SettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                ProviderSelectionDropdown(
-                    providers = viewModel.availableProviders,
-                    selectedProvider = selectedProvider,
-                    onProviderSelected = { selectedProvider = it }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ProviderConfigSection(
-                    selectedProvider = selectedProvider,
-                    realDebridApiToken = realDebridApiToken,
-                    onApiTokenChange = { realDebridApiToken = it },
-                    localParallelDownloads = localParallelDownloads,
-                    onLocalParallelDownloadsChange = { localParallelDownloads = it },
-                    libTorrentParallelDownloads = libTorrentParallelDownloads,
-                    onLibTorrentParallelDownloadsChange = { libTorrentParallelDownloads = it },
-                    libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
-                    onLibTorrentRequireVpnChange = { libTorrentRequireVpnConnection = it }
-                )
-
-                Button(onClick = {
-                    viewModel.saveSettings(
-                        selectedProvider = selectedProvider,
-                        realDebridApiToken = realDebridApiToken,
-                        localParallelDownloads = localParallelDownloads,
-                        libTorrentParallelDownloads = libTorrentParallelDownloads,
-                        libTorrentRequireVpnConnection = libTorrentRequireVpnConnection
-                    )
-                    onSave()
-                    onBack()
-                }) {
-                    Text("Save")
+            ProviderConfigCard(
+                providers = viewModel.availableProviders,
+                selectedProvider = uiState.selectedProvider,
+                onProviderSelected = { provider ->
+                    viewModel.updateSelectedProvider(provider)
+                },
+                realDebridApiToken = uiState.realDebridApiToken,
+                onRealDebridApiTokenChange = { token ->
+                    viewModel.updateRealDebridApiToken(token)
+                },
+                localParallelDownloads = uiState.localParallelDownloads,
+                onLocalParallelDownloadsChange = { localParallel ->
+                    viewModel.updateLocalParallelDownloads(localParallel)
+                },
+                libTorrentParallelDownloads = uiState.libTorrentParallelDownloads,
+                onLibTorrentParallelDownloadsChange = { libParallel ->
+                    viewModel.updateLibTorrentParallelDownloads(libParallel)
+                },
+                libTorrentRequireVpnConnection = uiState.libTorrentRequireVpnConnection,
+                onLibTorrentRequireVpnChange = { vpn ->
+                    viewModel.updateLibTorrentRequireVpnConnection(vpn)
                 }
-            }
+            )
+
+            RssSyncConfigCard(
+                rssSyncEnabled = uiState.rssSyncEnabled,
+                onRssSyncEnabledChange = { enabled ->
+                    viewModel.updateRssSyncEnabled(enabled)
+                },
+                rssSyncIntervalHours = uiState.rssSyncIntervalHours,
+                onRssSyncIntervalHoursChange = { interval ->
+                    viewModel.updateRssSyncIntervalHours(interval)
+                }
+            )
         }
     }
 }
@@ -123,11 +119,14 @@ private fun SettingsTopBar(onBack: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProviderConfigSection(
+private fun ProviderConfigCard(
+    providers: List<String>,
     selectedProvider: String,
+    onProviderSelected: (String) -> Unit,
     realDebridApiToken: String,
-    onApiTokenChange: (String) -> Unit,
+    onRealDebridApiTokenChange: (String) -> Unit,
     localParallelDownloads: String,
     onLocalParallelDownloadsChange: (String) -> Unit,
     libTorrentParallelDownloads: String,
@@ -135,119 +134,158 @@ private fun ProviderConfigSection(
     libTorrentRequireVpnConnection: Boolean,
     onLibTorrentRequireVpnChange: (Boolean) -> Unit
 ) {
-    if (selectedProvider == RealDebridProvider.NAME) {
-        RealDebridSettingsSection(
-            apiToken = realDebridApiToken,
-            onApiTokenChange = onApiTokenChange,
-            parallelDownloads = localParallelDownloads,
-            onParallelDownloadsChange = onLocalParallelDownloadsChange
-        )
-    } else if (selectedProvider == LibTorrentProvider.NAME) {
-        LibTorrentSettingsSection(
-            parallelDownloads = libTorrentParallelDownloads,
-            onParallelDownloadsChange = onLibTorrentParallelDownloadsChange,
-            requireVpn = libTorrentRequireVpnConnection,
-            onRequireVpnChange = onLibTorrentRequireVpnChange
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ProviderSelectionDropdown(
-    providers: List<String>,
-    selectedProvider: String,
-    onProviderSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column {
-        Text(text = stringResource(id = R.string.provider), modifier = Modifier.padding(bottom = 8.dp))
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.fillMaxWidth()
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedTextField(
-                value = selectedProvider,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
-                    .fillMaxWidth()
+            Text(
+                text = stringResource(id = R.string.provider_settings),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                providers.forEach { provider ->
-                    DropdownMenuItem(
-                        text = { Text(provider) },
-                        onClick = {
-                            onProviderSelected(provider)
-                            expanded = false
-                        }
+
+            ProviderDropdown(
+                providers = providers,
+                selectedProvider = selectedProvider,
+                onProviderSelected = onProviderSelected
+            )
+
+            if (selectedProvider == RealDebridProvider.NAME) {
+                OutlinedTextField(
+                    value = realDebridApiToken,
+                    onValueChange = onRealDebridApiTokenChange,
+                    label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = localParallelDownloads,
+                    onValueChange = onLocalParallelDownloadsChange,
+                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else if (selectedProvider == LibTorrentProvider.NAME) {
+                OutlinedTextField(
+                    value = libTorrentParallelDownloads,
+                    onValueChange = onLibTorrentParallelDownloadsChange,
+                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onLibTorrentRequireVpnChange(!libTorrentRequireVpnConnection) }
+                ) {
+                    Checkbox(
+                        checked = libTorrentRequireVpnConnection,
+                        onCheckedChange = onLibTorrentRequireVpnChange
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = stringResource(id = R.string.require_vpn_connection))
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RealDebridSettingsSection(
-    apiToken: String,
-    onApiTokenChange: (String) -> Unit,
-    parallelDownloads: String,
-    onParallelDownloadsChange: (String) -> Unit
+private fun ProviderDropdown(
+    providers: List<String>,
+    selectedProvider: String,
+    onProviderSelected: (String) -> Unit
 ) {
-    Column {
-        TextField(
-            value = apiToken,
-            onValueChange = onApiTokenChange,
-            label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        TextField(
-            value = parallelDownloads,
-            onValueChange = onParallelDownloadsChange,
-            label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-}
+    var expanded by remember { mutableStateOf(false) }
 
-@Composable
-private fun LibTorrentSettingsSection(
-    parallelDownloads: String,
-    onParallelDownloadsChange: (String) -> Unit,
-    requireVpn: Boolean,
-    onRequireVpnChange: (Boolean) -> Unit
-) {
-    Column {
-        TextField(
-            value = parallelDownloads,
-            onValueChange = onParallelDownloadsChange,
-            label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedProvider,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(id = R.string.provider)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                .fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { onRequireVpnChange(!requireVpn) }
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
         ) {
-            Checkbox(
-                checked = requireVpn,
-                onCheckedChange = onRequireVpnChange
-            )
-            Text(text = stringResource(id = R.string.require_vpn_connection))
+            providers.forEach { provider ->
+                DropdownMenuItem(
+                    text = { Text(provider) },
+                    onClick = {
+                        onProviderSelected(provider)
+                        expanded = false
+                    }
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
+@Composable
+private fun RssSyncConfigCard(
+    rssSyncEnabled: Boolean,
+    onRssSyncEnabledChange: (Boolean) -> Unit,
+    rssSyncIntervalHours: Int,
+    onRssSyncIntervalHoursChange: (Int) -> Unit
+) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.rss_sync_settings),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onRssSyncEnabledChange(!rssSyncEnabled) }
+            ) {
+                Text(
+                    text = stringResource(id = R.string.enable_rss_sync),
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = rssSyncEnabled,
+                    onCheckedChange = onRssSyncEnabledChange
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(id = R.string.rss_sync_interval_hours, rssSyncIntervalHours),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (rssSyncEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+                Slider(
+                    value = rssSyncIntervalHours.toFloat(),
+                    onValueChange = { onRssSyncIntervalHoursChange(it.roundToInt()) },
+                    valueRange = 1f..24f,
+                    steps = 22,
+                    enabled = rssSyncEnabled
+                )
+            }
+        }
+    }
+}

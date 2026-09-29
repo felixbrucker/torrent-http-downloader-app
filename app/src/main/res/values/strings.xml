@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Torrent-Downloader</string>
     <string name="settings">Settings</string>
+    <string name="provider_settings">Provider Settings</string>
     <string name="provider">Provider</string>
     <string name="real_debrid_api_token">Real-Debrid API Token</string>
     <string name="parallel_downloads_limit">Parallel Downloads Limit</string>
@@ -29,4 +30,7 @@
     <string name="never_synced">Never synced</string>
     <string name="just_now">Just now</string>
     <string name="no_subdirectories_found">No Subdirectories found</string>
+    <string name="rss_sync_settings">Periodic RSS Synchronization</string>
+    <string name="enable_rss_sync">Enable Periodic RSS Sync</string>
+    <string name="rss_sync_interval_hours">Sync Interval: %d hours</string>
 </resources>

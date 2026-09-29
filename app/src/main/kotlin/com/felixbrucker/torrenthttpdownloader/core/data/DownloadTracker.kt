@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.core.data
 
-import android.app.backup.BackupManager
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
@@ -74,7 +73,6 @@ class DownloadTracker @Inject constructor(
     private fun saveRssFeeds() {
         val json = gson.toJson(_rssFeeds.value)
         settingsSharedPreferences.edit { putString("rss_feeds", json) }
-        BackupManager.dataChanged(context.packageName)
     }
 
     fun getTasks(): List<DownloadTask> {
