@@ -34,6 +34,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import timber.log.Timber
 
 @AndroidEntryPoint
 class DownloadService : Service() {
@@ -97,6 +98,7 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Timber.i("DownloadService created")
         provider = providerFactory.getProvider()
 
         localDownloadManager = LocalDownloadManager(
@@ -122,7 +124,7 @@ class DownloadService : Service() {
                         val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
                         sendBroadcast(intent)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        Timber.e(e, "Error sending completion intent for task id=%s", task.id)
                     }
                 }
                 updateNotification()
@@ -331,6 +333,7 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Timber.d("DownloadService onStartCommand action=%s", intent?.action)
         when (intent?.action) {
             ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) {
                 removeTask(
@@ -552,6 +555,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        Timber.i("DownloadService destroyed")
         torrentStateMachine.stop()
         localDownloadManager.stop()
         provider.stop()

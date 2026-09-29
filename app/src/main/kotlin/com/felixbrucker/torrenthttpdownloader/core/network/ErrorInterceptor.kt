@@ -4,11 +4,13 @@ import java.io.IOException
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.json.JSONObject
+import timber.log.Timber
 
 class ErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         if (!response.isSuccessful) {
+            Timber.w("HTTP error code=%d for url=%s", response.code, response.request.url)
             if (response.code == 429) {
                 throw RateLimitExceededException()
             }

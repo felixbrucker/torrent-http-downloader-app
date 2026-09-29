@@ -16,6 +16,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.core.network.RssParser
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import timber.log.Timber
 
 @HiltWorker
 class RssSyncWorker @AssistedInject constructor(
@@ -32,6 +33,7 @@ class RssSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val feedId = inputData.getString("feedId")
+        Timber.i("Starting RSS sync worker feedId=%s", feedId)
         try {
             if (feedId == null) {
                 syncRssFeeds()
@@ -42,11 +44,12 @@ class RssSyncWorker @AssistedInject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Error in RssSyncWorker feedId=%s", feedId)
 
             return Result.retry()
         }
 
+        Timber.i("Completed RSS sync worker feedId=%s", feedId)
         return Result.success()
     }
 
@@ -83,7 +86,7 @@ class RssSyncWorker @AssistedInject constructor(
                 rssRepository.updateLastCheck(feed.id)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to sync RSS feed id=%s", feed.id)
         } finally {
             rssRepository.setFeedSyncing(feed.id, false)
         }
