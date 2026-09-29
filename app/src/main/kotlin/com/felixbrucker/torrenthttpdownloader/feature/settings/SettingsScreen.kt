@@ -31,8 +31,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,39 +52,10 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onSave: () -> Unit = {},
+    onSave: () -> Unit,
     viewModel: SettingsViewModel = viewModel()
 ) {
-    val initialState = remember { viewModel.loadSettings() }
-
-    var selectedProvider by remember { mutableStateOf(initialState.selectedProvider) }
-    var realDebridApiToken by remember { mutableStateOf(initialState.realDebridApiToken) }
-    var localParallelDownloads by remember { mutableStateOf(initialState.localParallelDownloads) }
-    var libTorrentParallelDownloads by remember { mutableStateOf(initialState.libTorrentParallelDownloads) }
-    var libTorrentRequireVpnConnection by remember { mutableStateOf(initialState.libTorrentRequireVpnConnection) }
-    var rssSyncEnabled by remember { mutableStateOf(initialState.rssSyncEnabled) }
-    var rssSyncIntervalHours by remember { mutableIntStateOf(initialState.rssSyncIntervalHours) }
-
-    fun autoSave(
-        provider: String = selectedProvider,
-        token: String = realDebridApiToken,
-        localParallel: String = localParallelDownloads,
-        libParallel: String = libTorrentParallelDownloads,
-        vpn: Boolean = libTorrentRequireVpnConnection,
-        rssEnabled: Boolean = rssSyncEnabled,
-        rssInterval: Int = rssSyncIntervalHours
-    ) {
-        viewModel.saveSettings(
-            selectedProvider = provider,
-            realDebridApiToken = token,
-            localParallelDownloads = localParallel,
-            libTorrentParallelDownloads = libParallel,
-            libTorrentRequireVpnConnection = vpn,
-            rssSyncEnabled = rssEnabled,
-            rssSyncIntervalHours = rssInterval
-        )
-        onSave()
-    }
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = { SettingsTopBar(onBack = onBack) }
@@ -99,45 +70,43 @@ fun SettingsScreen(
         ) {
             ProviderConfigCard(
                 providers = viewModel.availableProviders,
-                selectedProvider = selectedProvider,
+                selectedProvider = uiState.selectedProvider,
                 onProviderSelected = { provider ->
-                    selectedProvider = provider
-                    autoSave(provider = provider)
+                    viewModel.updateSelectedProvider(provider)
+                    onSave()
                 },
-                realDebridApiToken = realDebridApiToken,
+                realDebridApiToken = uiState.realDebridApiToken,
                 onRealDebridApiTokenChange = { token ->
-                    realDebridApiToken = token
-                    autoSave(token = token)
+                    viewModel.updateRealDebridApiToken(token)
+                    onSave()
                 },
-                localParallelDownloads = localParallelDownloads,
+                localParallelDownloads = uiState.localParallelDownloads,
                 onLocalParallelDownloadsChange = { localParallel ->
-                    val filtered = localParallel.filter { it.isDigit() }
-                    localParallelDownloads = filtered
-                    autoSave(localParallel = filtered)
+                    viewModel.updateLocalParallelDownloads(localParallel)
+                    onSave()
                 },
-                libTorrentParallelDownloads = libTorrentParallelDownloads,
+                libTorrentParallelDownloads = uiState.libTorrentParallelDownloads,
                 onLibTorrentParallelDownloadsChange = { libParallel ->
-                    val filtered = libParallel.filter { it.isDigit() }
-                    libTorrentParallelDownloads = filtered
-                    autoSave(libParallel = filtered)
+                    viewModel.updateLibTorrentParallelDownloads(libParallel)
+                    onSave()
                 },
-                libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
+                libTorrentRequireVpnConnection = uiState.libTorrentRequireVpnConnection,
                 onLibTorrentRequireVpnChange = { vpn ->
-                    libTorrentRequireVpnConnection = vpn
-                    autoSave(vpn = vpn)
+                    viewModel.updateLibTorrentRequireVpnConnection(vpn)
+                    onSave()
                 }
             )
 
             RssSyncConfigCard(
-                rssSyncEnabled = rssSyncEnabled,
+                rssSyncEnabled = uiState.rssSyncEnabled,
                 onRssSyncEnabledChange = { enabled ->
-                    rssSyncEnabled = enabled
-                    autoSave(rssEnabled = enabled)
+                    viewModel.updateRssSyncEnabled(enabled)
+                    onSave()
                 },
-                rssSyncIntervalHours = rssSyncIntervalHours,
+                rssSyncIntervalHours = uiState.rssSyncIntervalHours,
                 onRssSyncIntervalHoursChange = { interval ->
-                    rssSyncIntervalHours = interval
-                    autoSave(rssInterval = interval)
+                    viewModel.updateRssSyncIntervalHours(interval)
+                    onSave()
                 }
             )
         }
