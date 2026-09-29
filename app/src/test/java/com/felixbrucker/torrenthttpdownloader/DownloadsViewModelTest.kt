@@ -48,7 +48,7 @@ class DownloadsViewModelTest {
 
     @Test
     fun testRemoveTaskDelegatesToServiceLauncher() {
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
+        val viewModel = DownloadsViewModel(downloadRepository, rssRepository, providerFactory, serviceLauncher)
 
         viewModel.removeTask("task-1", deleteFiles = true, deleteTorrentFile = false)
 
@@ -57,7 +57,7 @@ class DownloadsViewModelTest {
 
     @Test
     fun testResumeAllLocalDownloadsDelegatesToServiceLauncher() {
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
+        val viewModel = DownloadsViewModel(downloadRepository, rssRepository, providerFactory, serviceLauncher)
 
         viewModel.resumeAllLocalDownloads()
 
@@ -66,7 +66,7 @@ class DownloadsViewModelTest {
 
     @Test
     fun testPauseAllLocalDownloadsDelegatesToServiceLauncher() {
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
+        val viewModel = DownloadsViewModel(downloadRepository, rssRepository, providerFactory, serviceLauncher)
 
         viewModel.pauseAllLocalDownloads()
 
