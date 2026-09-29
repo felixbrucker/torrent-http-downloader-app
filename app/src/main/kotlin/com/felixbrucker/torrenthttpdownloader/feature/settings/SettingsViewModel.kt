@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.feature.settings
 
-import android.app.backup.BackupManager
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
@@ -104,7 +103,6 @@ class SettingsViewModel @Inject constructor(
             putBoolean("rss_sync_enabled", currentState.rssSyncEnabled)
             putInt("rss_sync_interval_hours", currentState.rssSyncIntervalHours)
         }
-        BackupManager.dataChanged(context.packageName)
         rssSyncLauncher.updateRssSyncSchedule(
             enabled = currentState.rssSyncEnabled,
             intervalHours = currentState.rssSyncIntervalHours.toLong()

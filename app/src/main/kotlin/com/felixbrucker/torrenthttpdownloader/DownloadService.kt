@@ -386,6 +386,7 @@ class DownloadService : Service() {
 
     private fun reloadSettings() {
         provider.reloadSettings()
+        stopSelfIfIdle()
     }
 
     private fun stopSelfIfIdle() {

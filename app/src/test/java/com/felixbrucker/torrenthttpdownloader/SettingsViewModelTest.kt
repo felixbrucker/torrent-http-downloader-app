@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.app.backup.BackupManager
 import android.content.Context
 import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
@@ -10,10 +9,8 @@ import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.verify
 import org.junit.Assert.assertEquals
-import org.junit.Before
 import org.junit.Test
 
 class SettingsViewModelTest {
@@ -21,12 +18,6 @@ class SettingsViewModelTest {
     private val context = mockk<Context>(relaxed = true)
     private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
     private val serviceLauncher = mockk<DownloadServiceLauncher>(relaxed = true)
-
-    @Before
-    fun setUp() {
-        mockkStatic(BackupManager::class)
-        every { BackupManager.dataChanged(any()) } returns Unit
-    }
 
     @Test
     fun testInitialUiStateLoadsSavedValues() {
