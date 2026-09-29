@@ -14,7 +14,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -41,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
@@ -52,7 +52,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onSave: () -> Unit,
+    onSave: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
     val initialState = remember { viewModel.loadSettings() }
@@ -64,6 +64,27 @@ fun SettingsScreen(
     var libTorrentRequireVpnConnection by remember { mutableStateOf(initialState.libTorrentRequireVpnConnection) }
     var rssSyncEnabled by remember { mutableStateOf(initialState.rssSyncEnabled) }
     var rssSyncIntervalHours by remember { mutableIntStateOf(initialState.rssSyncIntervalHours) }
+
+    fun autoSave(
+        provider: String = selectedProvider,
+        token: String = realDebridApiToken,
+        localParallel: String = localParallelDownloads,
+        libParallel: String = libTorrentParallelDownloads,
+        vpn: Boolean = libTorrentRequireVpnConnection,
+        rssEnabled: Boolean = rssSyncEnabled,
+        rssInterval: Int = rssSyncIntervalHours
+    ) {
+        viewModel.saveSettings(
+            selectedProvider = provider,
+            realDebridApiToken = token,
+            localParallelDownloads = localParallel,
+            libTorrentParallelDownloads = libParallel,
+            libTorrentRequireVpnConnection = vpn,
+            rssSyncEnabled = rssEnabled,
+            rssSyncIntervalHours = rssInterval
+        )
+        onSave()
+    }
 
     Scaffold(
         topBar = { SettingsTopBar(onBack = onBack) }
@@ -79,42 +100,46 @@ fun SettingsScreen(
             ProviderConfigCard(
                 providers = viewModel.availableProviders,
                 selectedProvider = selectedProvider,
-                onProviderSelected = { selectedProvider = it },
+                onProviderSelected = { provider ->
+                    selectedProvider = provider
+                    autoSave(provider = provider)
+                },
                 realDebridApiToken = realDebridApiToken,
-                onRealDebridApiTokenChange = { realDebridApiToken = it },
+                onRealDebridApiTokenChange = { token ->
+                    realDebridApiToken = token
+                    autoSave(token = token)
+                },
                 localParallelDownloads = localParallelDownloads,
-                onLocalParallelDownloadsChange = { localParallelDownloads = it },
+                onLocalParallelDownloadsChange = { localParallel ->
+                    val filtered = localParallel.filter { it.isDigit() }
+                    localParallelDownloads = filtered
+                    autoSave(localParallel = filtered)
+                },
                 libTorrentParallelDownloads = libTorrentParallelDownloads,
-                onLibTorrentParallelDownloadsChange = { libTorrentParallelDownloads = it },
+                onLibTorrentParallelDownloadsChange = { libParallel ->
+                    val filtered = libParallel.filter { it.isDigit() }
+                    libTorrentParallelDownloads = filtered
+                    autoSave(libParallel = filtered)
+                },
                 libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
-                onLibTorrentRequireVpnChange = { libTorrentRequireVpnConnection = it }
+                onLibTorrentRequireVpnChange = { vpn ->
+                    libTorrentRequireVpnConnection = vpn
+                    autoSave(vpn = vpn)
+                }
             )
 
             RssSyncConfigCard(
                 rssSyncEnabled = rssSyncEnabled,
-                onRssSyncEnabledChange = { rssSyncEnabled = it },
-                rssSyncIntervalHours = rssSyncIntervalHours,
-                onRssSyncIntervalHoursChange = { rssSyncIntervalHours = it }
-            )
-
-            Button(
-                onClick = {
-                    viewModel.saveSettings(
-                        selectedProvider = selectedProvider,
-                        realDebridApiToken = realDebridApiToken,
-                        localParallelDownloads = localParallelDownloads,
-                        libTorrentParallelDownloads = libTorrentParallelDownloads,
-                        libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
-                        rssSyncEnabled = rssSyncEnabled,
-                        rssSyncIntervalHours = rssSyncIntervalHours
-                    )
-                    onSave()
-                    onBack()
+                onRssSyncEnabledChange = { enabled ->
+                    rssSyncEnabled = enabled
+                    autoSave(rssEnabled = enabled)
                 },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = stringResource(id = R.string.save))
-            }
+                rssSyncIntervalHours = rssSyncIntervalHours,
+                onRssSyncIntervalHoursChange = { interval ->
+                    rssSyncIntervalHours = interval
+                    autoSave(rssInterval = interval)
+                }
+            )
         }
     }
 }
@@ -168,12 +193,16 @@ private fun ProviderConfigCard(
                     value = realDebridApiToken,
                     onValueChange = onRealDebridApiTokenChange,
                     label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = localParallelDownloads,
                     onValueChange = onLocalParallelDownloadsChange,
                     label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -182,6 +211,7 @@ private fun ProviderConfigCard(
                     value = libTorrentParallelDownloads,
                     onValueChange = onLibTorrentParallelDownloadsChange,
                     label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -275,19 +305,19 @@ private fun RssSyncConfigCard(
                 )
             }
 
-            if (rssSyncEnabled) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = stringResource(id = R.string.rss_sync_interval_hours, rssSyncIntervalHours),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Slider(
-                        value = rssSyncIntervalHours.toFloat(),
-                        onValueChange = { onRssSyncIntervalHoursChange(it.roundToInt()) },
-                        valueRange = 1f..24f,
-                        steps = 22
-                    )
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(id = R.string.rss_sync_interval_hours, rssSyncIntervalHours),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (rssSyncEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+                Slider(
+                    value = rssSyncIntervalHours.toFloat(),
+                    onValueChange = { onRssSyncIntervalHoursChange(it.roundToInt()) },
+                    valueRange = 1f..24f,
+                    steps = 22,
+                    enabled = rssSyncEnabled
+                )
             }
         }
     }
