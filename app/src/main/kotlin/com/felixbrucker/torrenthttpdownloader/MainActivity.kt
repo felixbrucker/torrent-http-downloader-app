@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,46 +34,19 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import dagger.hilt.android.AndroidEntryPoint
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfig
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
-import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    @Inject lateinit var downloadTracker: DownloadTracker
-    @Inject lateinit var rssRepository: RssRepository
-    @Inject lateinit var providerFactory: ProviderFactory
-    @Inject lateinit var pathFactory: PathFactory
-    @Inject lateinit var torrentUriResolver: TorrentUriResolver
-
-    private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-    private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
-    private var isResolvingTorrent by mutableStateOf(false)
+    private val mainViewModel: MainViewModel by viewModels()
+    private val addTorrentViewModel: AddTorrentViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,58 +99,36 @@ class MainActivity : ComponentActivity() {
                 )
                 val navigator = remember { Navigator(navigationState) }
 
+                val isResolvingTorrent by addTorrentViewModel.isResolvingTorrent.collectAsState()
+
                 val entryProvider = entryProvider {
                     entry<NavRoute.Downloads> {
                         DownloadsScreen(
-                            navigator = navigator,
-                            downloadTracker = downloadTracker,
-                            providerFactory = providerFactory,
+                            navigator = navigator
                         )
                     }
                     entry<NavRoute.RssFeeds> {
                         RssFeedsScreen(
                             onBack = { navigator.goBack() },
-                            syncFeed = { runRssSyncOnce(it.id) },
-                            syncFeeds = { runRssSyncOnce() },
                             onNavigateToDetail = { feedId ->
                                 navigator.navigate(NavRoute.RssFeedDetail(feedId))
-                            },
-                            downloadTracker = downloadTracker,
-                            rssRepository = rssRepository,
+                            }
                         )
                     }
                     entry<NavRoute.RssFeedDetail> { key ->
-                        val feeds by downloadTracker.rssFeeds.collectAsState()
-                        val feed = feeds.find { it.id == key.feedId }
-                        feed?.let { feed ->
-                            RssFeedDetailScreen(
-                                feed = feed,
-                                onBack = { navigator.goBack() },
-                                syncFeed = { runRssSyncOnce(it.id) },
-                                addTorrentFromFeed = { feed, item ->
-                                    serviceScope.launch {
-                                        isResolvingTorrent = true
-                                        try {
-                                            val resolvedTorrent = torrentUriResolver.resolve(item.link.toUri())
-                                            pendingConfig = AddTorrentConfig(
-                                                id = resolvedTorrent.id,
-                                                uri = resolvedTorrent.uri.toString(),
-                                                type = resolvedTorrent.type,
-                                                name = resolvedTorrent.name,
-                                                createSubfolderByName = feed.createSubfolderByName,
-                                                destinationSubdirectory = feed.destinationSubdirectory,
-                                                feedId = feed.id,
-                                                feedItemId = item.id,
-                                            )
-                                        } finally {
-                                            isResolvingTorrent = false
-                                        }
-                                    }
-                                },
-                                downloadTracker = downloadTracker,
-                                rssRepository = rssRepository,
-                            )
-                        }
+                        RssFeedDetailScreen(
+                            feedId = key.feedId,
+                            onBack = { navigator.goBack() },
+                            addTorrentFromFeed = { feedItem, item ->
+                                addTorrentViewModel.resolveTorrentUri(
+                                    uri = item.link.toUri(),
+                                    createSubfolderByName = feedItem.createSubfolderByName,
+                                    destinationSubdirectory = feedItem.destinationSubdirectory,
+                                    feedId = feedItem.id,
+                                    feedItemId = item.id
+                                )
+                            }
+                        )
                     }
                     entry<NavRoute.Settings> {
                         SettingsScreen(
@@ -196,35 +148,10 @@ class MainActivity : ComponentActivity() {
                     onBack = { navigator.goBack() }
                 )
 
-                pendingConfig?.let { config ->
-                    AddTorrentBottomSheet(
-                        config = config,
-                        onDismiss = {
-                            pendingConfig?.cleanupTemporaryTorrentFile()
-                            pendingConfig = null
-                        },
-                        onConfirm = { updatedConfig ->
-                            val intent = Intent(this, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_ADD_TASK
-                                putExtra(DownloadService.EXTRA_TORRENT_ID, updatedConfig.id)
-                                putExtra(DownloadService.EXTRA_TORRENT_URI, updatedConfig.uri)
-                                putExtra(DownloadService.EXTRA_TORRENT_TYPE, updatedConfig.type.name)
-                                putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, updatedConfig.destinationSubdirectory)
-                                putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, updatedConfig.createSubfolderByName)
-                                putExtra(DownloadService.EXTRA_NOTIFY_ON_COMPLETION, updatedConfig.notifyOnCompletion)
-                                putExtra(DownloadService.EXTRA_FILE_SELECTION_MODE, updatedConfig.fileSelectionMode?.name)
-                                putExtra(DownloadService.EXTRA_TORRENT_NAME, updatedConfig.name)
-                            }
-                            startService(intent)
-
-                            if (updatedConfig.feedId != null && updatedConfig.feedItemId != null) {
-                                rssRepository.markItemAsDownloaded(updatedConfig.feedId, updatedConfig.feedItemId)
-                            }
-
-                            pendingConfig = null
-                        }
-                    )
-                }
+                AddTorrentContent(
+                    onFinish = { },
+                    viewModel = addTorrentViewModel
+                )
 
                 if (isResolvingTorrent) {
                     Dialog(onDismissRequest = { }) {
@@ -248,35 +175,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
 
-        if (downloadTracker.hasTasksWhichNeedProcessing()) {
-            startService(Intent(this, DownloadService::class.java))
-        }
-        ensureRssSyncIsScheduled()
+        mainViewModel.checkAndStartDownloadService(this)
+        mainViewModel.ensureRssSyncIsScheduled()
     }
-
-    private fun ensureRssSyncIsScheduled() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val rssSyncRequest = PeriodicWorkRequestBuilder<RssSyncWorker>(3, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "RssSyncRequest",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            rssSyncRequest,
-        )
-    }
-
-    private fun runRssSyncOnce(feedId: String? = null) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val rssSyncRequest = OneTimeWorkRequestBuilder<RssSyncWorker>()
-            .setConstraints(constraints)
-            .setInputData(workDataOf("feedId" to feedId))
-            .build()
-        WorkManager.getInstance(this).enqueue(rssSyncRequest)
-    }
-
 }

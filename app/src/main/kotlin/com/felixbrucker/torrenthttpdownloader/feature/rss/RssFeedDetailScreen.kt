@@ -29,51 +29,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RssFeedDetailScreen(
-    feed: RssFeed,
+    feedId: String,
     onBack: () -> Unit,
-    syncFeed: (RssFeed) -> Unit,
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
-    downloadTracker: DownloadTracker,
-    rssRepository: RssRepository,
+    viewModel: RssFeedDetailViewModel = viewModel(),
 ) {
-    val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
-    val isSyncing = syncingFeedIds.contains(feed.id)
+    val feed by viewModel.getFeedFlow(feedId).collectAsState(initial = null)
+    val syncingFeedIds by viewModel.syncingFeedIds.collectAsState()
+    val currentFeed = feed ?: return
+    val isSyncing = syncingFeedIds.contains(currentFeed.id)
 
     Scaffold(
         topBar = {
             RssFeedDetailTopBar(
-                feedName = feed.name,
+                feedName = currentFeed.name,
                 isSyncing = isSyncing,
                 onBack = onBack,
-                onSyncFeed = { syncFeed(feed) },
-                onMarkAllRead = { rssRepository.markAllItemsAsRead(feed.id) }
+                onSyncFeed = { viewModel.syncFeed(currentFeed) },
+                onMarkAllRead = { viewModel.markAllItemsAsRead(currentFeed.id) }
             )
         }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isSyncing,
-            onRefresh = { syncFeed(feed) },
+            onRefresh = { viewModel.syncFeed(currentFeed) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (feed.items.isEmpty()) {
+            if (currentFeed.items.isEmpty()) {
                 EmptyRssItemsView()
             } else {
                 RssItemsList(
-                    feed = feed,
+                    feed = currentFeed,
                     onItemClick = { item ->
-                        rssRepository.markItemAsRead(feed.id, item.id)
-                        addTorrentFromFeed(feed, item)
+                        viewModel.markItemAsRead(currentFeed.id, item.id)
+                        addTorrentFromFeed(currentFeed, item)
                     }
                 )
             }

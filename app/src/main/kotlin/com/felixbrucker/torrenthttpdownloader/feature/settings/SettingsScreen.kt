@@ -1,7 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.feature.settings
 
-import android.app.backup.BackupManager
-import android.content.Context
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -38,11 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
@@ -50,33 +47,21 @@ import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
-    val context = LocalContext.current
-    val sharedPreferences = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onSave: () -> Unit,
+    viewModel: SettingsViewModel = viewModel()
+) {
+    val initialState = remember { viewModel.loadSettings() }
 
-    val providers = listOf(
-        LibTorrentProvider.NAME,
-        RealDebridProvider.NAME,
-    )
-    var selectedProvider by remember {
-        mutableStateOf(sharedPreferences.getString("provider", providers[0]) ?: providers[0])
-    }
-    var realDebridApiToken by remember { mutableStateOf(sharedPreferences.getString("real_debrid_api_token", "") ?: "") }
-    var localParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("local_parallel_downloads", 2).toString()) }
-    var libTorrentParallelDownloads by remember { mutableStateOf(sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString()) }
-    var libTorrentRequireVpnConnection by remember { mutableStateOf(sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)) }
+    var selectedProvider by remember { mutableStateOf(initialState.selectedProvider) }
+    var realDebridApiToken by remember { mutableStateOf(initialState.realDebridApiToken) }
+    var localParallelDownloads by remember { mutableStateOf(initialState.localParallelDownloads) }
+    var libTorrentParallelDownloads by remember { mutableStateOf(initialState.libTorrentParallelDownloads) }
+    var libTorrentRequireVpnConnection by remember { mutableStateOf(initialState.libTorrentRequireVpnConnection) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(id = R.string.settings)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
+        topBar = { SettingsTopBar(onBack = onBack) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -90,55 +75,90 @@ fun SettingsScreen(onBack: () -> Unit, onSave: () -> Unit) {
                     .verticalScroll(rememberScrollState())
             ) {
                 ProviderSelectionDropdown(
-                    providers = providers,
+                    providers = viewModel.availableProviders,
                     selectedProvider = selectedProvider,
                     onProviderSelected = { selectedProvider = it }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                if (selectedProvider == RealDebridProvider.NAME) {
-                    RealDebridSettingsSection(
-                        apiToken = realDebridApiToken,
-                        onApiTokenChange = { realDebridApiToken = it },
-                        parallelDownloads = localParallelDownloads,
-                        onParallelDownloadsChange = { localParallelDownloads = it }
-                    )
-                } else if (selectedProvider == LibTorrentProvider.NAME) {
-                    LibTorrentSettingsSection(
-                        parallelDownloads = libTorrentParallelDownloads,
-                        onParallelDownloadsChange = { libTorrentParallelDownloads = it },
-                        requireVpn = libTorrentRequireVpnConnection,
-                        onRequireVpnChange = { libTorrentRequireVpnConnection = it }
-                    )
-                }
+                ProviderConfigSection(
+                    selectedProvider = selectedProvider,
+                    realDebridApiToken = realDebridApiToken,
+                    onApiTokenChange = { realDebridApiToken = it },
+                    localParallelDownloads = localParallelDownloads,
+                    onLocalParallelDownloadsChange = { localParallelDownloads = it },
+                    libTorrentParallelDownloads = libTorrentParallelDownloads,
+                    onLibTorrentParallelDownloadsChange = { libTorrentParallelDownloads = it },
+                    libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
+                    onLibTorrentRequireVpnChange = { libTorrentRequireVpnConnection = it }
+                )
 
                 Button(onClick = {
-                    sharedPreferences.edit {
-                        putString("provider", selectedProvider)
-                        putString("real_debrid_api_token", realDebridApiToken.trim())
-                        putInt("local_parallel_downloads", localParallelDownloads.toIntOrNull() ?: 2)
-                        putInt("libtorrent_parallel_downloads", libTorrentParallelDownloads.toIntOrNull() ?: 3)
-                        putBoolean("libtorrent_require_vpn_connection", libTorrentRequireVpnConnection)
-                    }
+                    viewModel.saveSettings(
+                        selectedProvider = selectedProvider,
+                        realDebridApiToken = realDebridApiToken,
+                        localParallelDownloads = localParallelDownloads,
+                        libTorrentParallelDownloads = libTorrentParallelDownloads,
+                        libTorrentRequireVpnConnection = libTorrentRequireVpnConnection
+                    )
                     onSave()
-                    BackupManager.dataChanged(context.packageName)
                     onBack()
                 }) {
                     Text("Save")
                 }
             }
 
-            val lastBackupTime = sharedPreferences.getLong("last_backup_time", 0L)
-            val lastBackupSize = sharedPreferences.getLong("last_backup_size", 0L)
-            if (lastBackupTime > 0) {
+            if (initialState.lastBackupTime > 0) {
                 LastBackupInfo(
-                    lastBackupTime = lastBackupTime,
-                    lastBackupSize = lastBackupSize,
+                    lastBackupTime = initialState.lastBackupTime,
+                    lastBackupSize = initialState.lastBackupSize,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsTopBar(onBack: () -> Unit) {
+    TopAppBar(
+        title = { Text(stringResource(id = R.string.settings)) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ProviderConfigSection(
+    selectedProvider: String,
+    realDebridApiToken: String,
+    onApiTokenChange: (String) -> Unit,
+    localParallelDownloads: String,
+    onLocalParallelDownloadsChange: (String) -> Unit,
+    libTorrentParallelDownloads: String,
+    onLibTorrentParallelDownloadsChange: (String) -> Unit,
+    libTorrentRequireVpnConnection: Boolean,
+    onLibTorrentRequireVpnChange: (Boolean) -> Unit
+) {
+    if (selectedProvider == RealDebridProvider.NAME) {
+        RealDebridSettingsSection(
+            apiToken = realDebridApiToken,
+            onApiTokenChange = onApiTokenChange,
+            parallelDownloads = localParallelDownloads,
+            onParallelDownloadsChange = onLocalParallelDownloadsChange
+        )
+    } else if (selectedProvider == LibTorrentProvider.NAME) {
+        LibTorrentSettingsSection(
+            parallelDownloads = libTorrentParallelDownloads,
+            onParallelDownloadsChange = onLibTorrentParallelDownloadsChange,
+            requireVpn = libTorrentRequireVpnConnection,
+            onRequireVpnChange = onLibTorrentRequireVpnChange
+        )
     }
 }
 

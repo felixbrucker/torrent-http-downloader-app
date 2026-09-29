@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.feature.downloads
 
-import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -44,18 +43,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
-import com.felixbrucker.torrenthttpdownloader.DownloadService
 import com.felixbrucker.torrenthttpdownloader.NavRoute
 import com.felixbrucker.torrenthttpdownloader.Navigator
 import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
@@ -66,15 +63,13 @@ import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 @Composable
 fun DownloadsScreen(
     navigator: Navigator,
-    downloadTracker: DownloadTracker,
-    providerFactory: ProviderFactory,
+    viewModel: DownloadsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val windowInfo = LocalWindowInfo.current
     val isNarrowScreen = windowInfo.containerSize.width.dp < 1400.dp
-    val tasks by downloadTracker.tasks.collectAsState()
-    val unreadRssCount by downloadTracker.totalUnreadRssCount.collectAsState(initial = 0)
-    val provider = remember { providerFactory.getProvider() }
+    val tasks by viewModel.tasks.collectAsState()
+    val unreadRssCount by viewModel.totalUnreadRssCount.collectAsState(initial = 0)
+    val provider = remember { viewModel.getProvider() }
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -109,7 +104,7 @@ fun DownloadsScreen(
         val targetItem = targetItemAbove ?: targetItemBelow
 
         if (targetItem != null) {
-            downloadTracker.moveTask(currentDraggedIndex, targetItem.index)
+            viewModel.moveTask(currentDraggedIndex, targetItem.index)
             draggedItemIndex = targetItem.index
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }
@@ -124,44 +119,7 @@ fun DownloadsScreen(
         }
     }
 
-    val (anyDownloading, anyPaused, anyDownloadingOnProvider, anyPausedOnProvider) = remember(tasks) {
-        var downloading = false
-        var paused = false
-        var downloadingOnProvider = false
-        var pausedOnProvider = false
-
-        for (task in tasks) {
-            if (!downloading || !paused) {
-                for (file in task.files) {
-                    if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
-                        downloading = true
-                    } else if (file.state == LocalDownloadState.PAUSED) {
-                        paused = true
-                    }
-                }
-            }
-            if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
-                downloadingOnProvider = true
-            } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
-                pausedOnProvider = true
-            }
-        }
-        TaskStateFlags(downloading, paused, downloadingOnProvider, pausedOnProvider)
-    }
-
-    fun removeTask(
-        taskId: String,
-        deleteFiles: Boolean,
-        deleteTorrentFile: Boolean
-    ) {
-        val intent = Intent(context, DownloadService::class.java).apply {
-            action = DownloadService.ACTION_REMOVE_TASK
-            putExtra(DownloadService.EXTRA_TASK_ID, taskId)
-            putExtra(DownloadService.EXTRA_DELETE_FILES, deleteFiles)
-            putExtra(DownloadService.EXTRA_DELETE_TORRENT_FILE, deleteTorrentFile)
-        }
-        context.startService(intent)
-    }
+    val taskStateFlags = remember(tasks) { computeTaskStateFlags(tasks) }
 
     Scaffold(
         topBar = {
@@ -172,11 +130,12 @@ fun DownloadsScreen(
                     },
                     actions = {
                         DownloadsTopBarActions(
-                            anyPaused = anyPaused,
-                            anyPausedOnProvider = anyPausedOnProvider,
-                            anyDownloading = anyDownloading,
-                            anyDownloadingOnProvider = anyDownloadingOnProvider,
+                            taskStateFlags = taskStateFlags,
                             unreadRssCount = unreadRssCount,
+                            onResumeAllLocalDownloads = { viewModel.resumeAllLocalDownloads() },
+                            onResumeAllOnProvider = { viewModel.resumeAllOnProvider() },
+                            onPauseAllLocalDownloads = { viewModel.pauseAllLocalDownloads() },
+                            onPauseAllOnProvider = { viewModel.pauseAllOnProvider() },
                             onNavigateRss = { navigator.navigate(NavRoute.RssFeeds) },
                             onNavigateSettings = { navigator.navigate(NavRoute.Settings) }
                         )
@@ -234,7 +193,18 @@ fun DownloadsScreen(
                             deleteFiles = true
                             deleteTorrentFile = true
                         },
-                        provider = provider
+                        provider = provider,
+                        onToggleAllProviderFileSelection = { taskId, selectAll -> viewModel.toggleAllProviderFileSelection(taskId, selectAll) },
+                        onConfirmFileSelection = { taskId -> viewModel.confirmFileSelection(taskId) },
+                        onPauseTaskOnProvider = { taskId -> viewModel.pauseTaskOnProvider(taskId) },
+                        onResumeTaskOnProvider = { taskId -> viewModel.resumeTaskOnProvider(taskId) },
+                        onPauseTaskLocalDownloads = { taskId -> viewModel.pauseTaskLocalDownloads(taskId) },
+                        onResumeTaskLocalDownloads = { taskId -> viewModel.resumeTaskLocalDownloads(taskId) },
+                        onRestartTask = { taskId -> viewModel.restartTask(taskId) },
+                        onResumeLocalFileDownload = { taskId, fileLink -> viewModel.resumeLocalFileDownload(taskId, fileLink) },
+                        onPauseLocalFileDownload = { taskId, fileLink -> viewModel.pauseLocalFileDownload(taskId, fileLink) },
+                        onToggleProviderFileSelection = { taskId, fileId -> viewModel.toggleProviderFileSelection(taskId, fileId) },
+                        onSetProviderFilePriority = { taskId, fileId, priority -> viewModel.setProviderFilePriority(taskId, fileId, priority) }
                     )
                 }
             }
@@ -249,8 +219,8 @@ fun DownloadsScreen(
                 onDeleteTorrentFileChange = { deleteTorrentFile = it },
                 onDismiss = { taskToRemove = null },
                 onConfirm = {
-                    removeTask(
-                        task.id,
+                    viewModel.removeTask(
+                        taskId = task.id,
                         deleteFiles = deleteFiles,
                         deleteTorrentFile = deleteTorrentFile
                     )
@@ -259,6 +229,31 @@ fun DownloadsScreen(
             )
         }
     }
+}
+
+private fun computeTaskStateFlags(tasks: List<DownloadTask>): TaskStateFlags {
+    var downloading = false
+    var paused = false
+    var downloadingOnProvider = false
+    var pausedOnProvider = false
+
+    for (task in tasks) {
+        if (!downloading || !paused) {
+            for (file in task.files) {
+                if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
+                    downloading = true
+                } else if (file.state == LocalDownloadState.PAUSED) {
+                    paused = true
+                }
+            }
+        }
+        if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
+            downloadingOnProvider = true
+        } else if (task.providerTorrentInfo?.state == ProviderTorrentState.PAUSED) {
+            pausedOnProvider = true
+        }
+    }
+    return TaskStateFlags(downloading, paused, downloadingOnProvider, pausedOnProvider)
 }
 
 @Composable
@@ -289,41 +284,50 @@ private fun DownloadsTopBarTitle(isNarrowScreen: Boolean, tasks: List<DownloadTa
 
 @Composable
 private fun DownloadsTopBarActions(
-    anyPaused: Boolean,
-    anyPausedOnProvider: Boolean,
-    anyDownloading: Boolean,
-    anyDownloadingOnProvider: Boolean,
+    taskStateFlags: TaskStateFlags,
     unreadRssCount: Int,
+    onResumeAllLocalDownloads: () -> Unit,
+    onResumeAllOnProvider: () -> Unit,
+    onPauseAllLocalDownloads: () -> Unit,
+    onPauseAllOnProvider: () -> Unit,
     onNavigateRss: () -> Unit,
     onNavigateSettings: () -> Unit
 ) {
-    val context = LocalContext.current
-
-    if (anyPaused || anyPausedOnProvider) {
+    if (taskStateFlags.anyPaused || taskStateFlags.anyPausedOnProvider) {
         IconButton(onClick = {
-            context.startService(Intent(context, DownloadService::class.java).apply {
-                action = DownloadService.ACTION_RESUME_ALL_LOCAL_DOWNLOADS
-            })
-            context.startService(Intent(context, DownloadService::class.java).apply {
-                action = DownloadService.ACTION_RESUME_ALL_ON_PROVIDER
-            })
+            onResumeAllLocalDownloads()
+            onResumeAllOnProvider()
         }) {
             Icon(Icons.Default.PlayArrow, contentDescription = "Resume All")
         }
     }
-    if (anyDownloading || anyDownloadingOnProvider) {
+    if (taskStateFlags.anyDownloading || taskStateFlags.anyDownloadingOnProvider) {
         IconButton(onClick = {
-            context.startService(Intent(context, DownloadService::class.java).apply {
-                action = DownloadService.ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
-            })
-            context.startService(Intent(context, DownloadService::class.java).apply {
-                action = DownloadService.ACTION_PAUSE_ALL_ON_PROVIDER
-            })
+            onPauseAllLocalDownloads()
+            onPauseAllOnProvider()
         }) {
             Icon(Icons.Default.Pause, contentDescription = "Pause All")
         }
     }
 
+    RssNavigationAction(
+        unreadRssCount = unreadRssCount,
+        onNavigateRss = onNavigateRss
+    )
+
+    IconButton(onClick = onNavigateSettings) {
+        Icon(
+            Icons.Default.Settings,
+            contentDescription = stringResource(id = R.string.action_settings)
+        )
+    }
+}
+
+@Composable
+private fun RssNavigationAction(
+    unreadRssCount: Int,
+    onNavigateRss: () -> Unit
+) {
     Box {
         IconButton(onClick = onNavigateRss) {
             Icon(Icons.Default.RssFeed, contentDescription = "RSS Feeds")
@@ -338,13 +342,6 @@ private fun DownloadsTopBarActions(
             }
         }
     }
-
-    IconButton(onClick = onNavigateSettings) {
-        Icon(
-            Icons.Default.Settings,
-            contentDescription = stringResource(id = R.string.action_settings)
-        )
-    }
 }
 
 @Composable
@@ -353,7 +350,18 @@ private fun LazyItemScope.DownloadTaskListItem(
     isDragging: Boolean,
     draggingOffset: Float,
     onRemove: () -> Unit,
-    provider: TorrentProvider?
+    provider: TorrentProvider?,
+    onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit,
+    onConfirmFileSelection: (taskId: String) -> Unit,
+    onPauseTaskOnProvider: (taskId: String) -> Unit,
+    onResumeTaskOnProvider: (taskId: String) -> Unit,
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit,
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit,
+    onRestartTask: (taskId: String) -> Unit,
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit,
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -369,7 +377,18 @@ private fun LazyItemScope.DownloadTaskListItem(
         DownloadItem(
             task = task,
             onRemove = onRemove,
-            provider = provider
+            provider = provider,
+            onToggleAllProviderFileSelection = onToggleAllProviderFileSelection,
+            onConfirmFileSelection = onConfirmFileSelection,
+            onPauseTaskOnProvider = onPauseTaskOnProvider,
+            onResumeTaskOnProvider = onResumeTaskOnProvider,
+            onPauseTaskLocalDownloads = onPauseTaskLocalDownloads,
+            onResumeTaskLocalDownloads = onResumeTaskLocalDownloads,
+            onRestartTask = onRestartTask,
+            onResumeLocalFileDownload = onResumeLocalFileDownload,
+            onPauseLocalFileDownload = onPauseLocalFileDownload,
+            onToggleProviderFileSelection = onToggleProviderFileSelection,
+            onSetProviderFilePriority = onSetProviderFilePriority
         )
     }
 }
@@ -388,34 +407,14 @@ private fun RemoveTaskDialog(
         onDismissRequest = onDismiss,
         title = { Text("Remove task") },
         text = {
-            Column {
-                Text("Are you sure you want to remove ${task.name}?")
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onDeleteFilesChange(!deleteFiles) }
-                        .padding(vertical = 4.dp)
-                ) {
-                    Checkbox(checked = deleteFiles, onCheckedChange = onDeleteFilesChange)
-                    Text("Delete temporary files")
-                }
-                if (task.torrent.type == TorrentType.TORRENT_FILE) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onDeleteTorrentFileChange(!deleteTorrentFile) }
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Checkbox(
-                            checked = deleteTorrentFile,
-                            onCheckedChange = onDeleteTorrentFileChange
-                        )
-                        Text("Delete torrent file")
-                    }
-                }
-            }
+            RemoveTaskDialogContent(
+                taskName = task.name,
+                isTorrentFile = task.torrent.type == TorrentType.TORRENT_FILE,
+                deleteFiles = deleteFiles,
+                deleteTorrentFile = deleteTorrentFile,
+                onDeleteFilesChange = onDeleteFilesChange,
+                onDeleteTorrentFileChange = onDeleteTorrentFileChange
+            )
         },
         confirmButton = {
             TextButton(
@@ -431,6 +430,45 @@ private fun RemoveTaskDialog(
             }
         }
     )
+}
+
+@Composable
+private fun RemoveTaskDialogContent(
+    taskName: String,
+    isTorrentFile: Boolean,
+    deleteFiles: Boolean,
+    deleteTorrentFile: Boolean,
+    onDeleteFilesChange: (Boolean) -> Unit,
+    onDeleteTorrentFileChange: (Boolean) -> Unit
+) {
+    Column {
+        Text("Are you sure you want to remove $taskName?")
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDeleteFilesChange(!deleteFiles) }
+                .padding(vertical = 4.dp)
+        ) {
+            Checkbox(checked = deleteFiles, onCheckedChange = onDeleteFilesChange)
+            Text("Delete temporary files")
+        }
+        if (isTorrentFile) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onDeleteTorrentFileChange(!deleteTorrentFile) }
+                    .padding(vertical = 4.dp)
+            ) {
+                Checkbox(
+                    checked = deleteTorrentFile,
+                    onCheckedChange = onDeleteTorrentFileChange
+                )
+                Text("Delete torrent file")
+            }
+        }
+    }
 }
 
 private data class TaskStateFlags(

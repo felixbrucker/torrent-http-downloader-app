@@ -37,24 +37,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RssFeedsScreen(
     onBack: () -> Unit,
-    syncFeed: (RssFeed) -> Unit,
-    syncFeeds: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
-    downloadTracker: DownloadTracker,
-    rssRepository: RssRepository,
+    viewModel: RssFeedsViewModel = viewModel(),
 ) {
-    val feeds by downloadTracker.rssFeeds.collectAsState()
-    val isSyncingAll by downloadTracker.isSyncingAll.collectAsState()
-    val syncingFeedIds by downloadTracker.syncingFeedIds.collectAsState()
+    val feeds by viewModel.feeds.collectAsState()
+    val isSyncingAll by viewModel.isSyncingAll.collectAsState()
+    val syncingFeedIds by viewModel.syncingFeedIds.collectAsState()
 
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var editFeedConfig by remember { mutableStateOf<RssFeed?>(null) }
@@ -64,14 +60,14 @@ fun RssFeedsScreen(
             RssFeedsTopBar(
                 isSyncingAll = isSyncingAll,
                 onBack = onBack,
-                onSyncFeeds = syncFeeds,
+                onSyncFeeds = { viewModel.syncFeeds() },
                 onAddFeedClick = { showAddFeedDialog = true }
             )
         }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isSyncingAll,
-            onRefresh = syncFeeds,
+            onRefresh = { viewModel.syncFeeds() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -79,22 +75,14 @@ fun RssFeedsScreen(
             if (feeds.isEmpty()) {
                 EmptyRssFeedsView()
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(feeds, key = { it.id }) { feed ->
-                        RssFeedItem(
-                            feed = feed,
-                            onClick = { onNavigateToDetail(feed.id) },
-                            onDelete = { downloadTracker.removeRssFeed(feed.id) },
-                            syncFeed = { syncFeed(feed) },
-                            editFeed = { editFeedConfig = feed },
-                            isSyncing = syncingFeedIds.contains(feed.id)
-                        )
-                    }
-                }
+                RssFeedsList(
+                    feeds = feeds,
+                    syncingFeedIds = syncingFeedIds,
+                    onNavigateToDetail = onNavigateToDetail,
+                    onDeleteFeed = { viewModel.removeRssFeed(it) },
+                    syncFeed = { viewModel.syncFeed(it) },
+                    onEditFeed = { editFeedConfig = it }
+                )
             }
         }
 
@@ -102,9 +90,9 @@ fun RssFeedsScreen(
             EditRssFeedDialog(
                 onDismiss = { showAddFeedDialog = false },
                 onConfirm = { newFeed ->
-                    downloadTracker.addRssFeed(newFeed)
+                    viewModel.addRssFeed(newFeed)
                     showAddFeedDialog = false
-                    syncFeed(newFeed)
+                    viewModel.syncFeed(newFeed)
                 }
             )
         }
@@ -114,10 +102,37 @@ fun RssFeedsScreen(
                 feed = editingFeed,
                 onDismiss = { editFeedConfig = null },
                 onConfirm = { newFeed ->
-                    rssRepository.updateFeedConfig(newFeed)
-                    syncFeed(newFeed)
+                    viewModel.updateFeedConfig(newFeed)
+                    viewModel.syncFeed(newFeed)
                     editFeedConfig = null
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RssFeedsList(
+    feeds: List<RssFeed>,
+    syncingFeedIds: Set<String>,
+    onNavigateToDetail: (String) -> Unit,
+    onDeleteFeed: (String) -> Unit,
+    syncFeed: (RssFeed) -> Unit,
+    onEditFeed: (RssFeed) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(feeds, key = { it.id }) { feed ->
+            RssFeedItem(
+                feed = feed,
+                onClick = { onNavigateToDetail(feed.id) },
+                onDelete = { onDeleteFeed(feed.id) },
+                syncFeed = { syncFeed(feed) },
+                editFeed = { onEditFeed(feed) },
+                isSyncing = syncingFeedIds.contains(feed.id)
             )
         }
     }

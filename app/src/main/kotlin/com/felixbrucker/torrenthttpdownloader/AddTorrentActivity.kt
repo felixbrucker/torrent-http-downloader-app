@@ -5,38 +5,27 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHttpDownloaderTheme
-import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentBottomSheet
-import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfig
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
+import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 
 @AndroidEntryPoint
 class AddTorrentActivity : ComponentActivity() {
-    @Inject lateinit var torrentUriResolver: TorrentUriResolver
-
-    private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-    private var pendingConfig by mutableStateOf<AddTorrentConfig?>(null)
-    private var isResolvingTorrent by mutableStateOf(false)
+    private val viewModel: AddTorrentViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,32 +34,12 @@ class AddTorrentActivity : ComponentActivity() {
 
         setContent {
             TorrentHttpDownloaderTheme {
-                pendingConfig?.let { config ->
-                    AddTorrentBottomSheet(
-                        config = config,
-                        onDismiss = {
-                            pendingConfig?.cleanupTemporaryTorrentFile()
-                            pendingConfig = null
-                            finish()
-                        },
-                        onConfirm = { updatedConfig ->
-                            val intent = Intent(this, DownloadService::class.java).apply {
-                                action = DownloadService.ACTION_ADD_TASK
-                                putExtra(DownloadService.EXTRA_TORRENT_ID, updatedConfig.id)
-                                putExtra(DownloadService.EXTRA_TORRENT_URI, updatedConfig.uri)
-                                putExtra(DownloadService.EXTRA_TORRENT_TYPE, updatedConfig.type.name)
-                                putExtra(DownloadService.EXTRA_DESTINATION_SUBDIRECTORY, updatedConfig.destinationSubdirectory)
-                                putExtra(DownloadService.EXTRA_CREATE_SUBFOLDER_BY_NAME, updatedConfig.createSubfolderByName)
-                                putExtra(DownloadService.EXTRA_NOTIFY_ON_COMPLETION, updatedConfig.notifyOnCompletion)
-                                putExtra(DownloadService.EXTRA_FILE_SELECTION_MODE, updatedConfig.fileSelectionMode?.name)
-                                putExtra(DownloadService.EXTRA_TORRENT_NAME, updatedConfig.name)
-                            }
-                            startService(intent)
-                            pendingConfig = null
-                            finish()
-                        }
-                    )
-                }
+                val isResolvingTorrent by viewModel.isResolvingTorrent.collectAsState()
+
+                AddTorrentContent(
+                    onFinish = { finish() },
+                    viewModel = viewModel
+                )
 
                 if (isResolvingTorrent) {
                     Dialog(onDismissRequest = { finish() }) {
@@ -122,30 +91,12 @@ class AddTorrentActivity : ComponentActivity() {
         }
 
         if (data != null) {
-            serviceScope.launch {
-                isResolvingTorrent = true
-                try {
-                    val resolvedTorrent = torrentUriResolver.resolve(data)
-                    pendingConfig = AddTorrentConfig(
-                        id = resolvedTorrent.id,
-                        uri = resolvedTorrent.uri.toString(),
-                        type = resolvedTorrent.type,
-                        name = resolvedTorrent.name,
-                    )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    finish()
-                } finally {
-                    isResolvingTorrent = false
-                }
-            }
+            viewModel.resolveTorrentUri(
+                uri = data,
+                onFailure = { finish() }
+            )
         } else {
             finish()
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        serviceJob.cancel()
     }
 }

@@ -28,6 +28,8 @@ class DownloadTracker @Inject constructor(
     private val gson: Gson,
 ) {
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
+
+    @get:JvmName("getTasksFlow")
     val tasks = _tasks.asStateFlow()
 
     private val _rssFeeds = MutableStateFlow<List<RssFeed>>(emptyList())
