@@ -76,7 +76,7 @@ class LocalDownloadManager(
             if (file.unrestrictedLink == null) {
                 val task = downloadRepository.findTask(work.taskId) ?: return
                 onLinkExpired(task, file)
-                file = downloadRepository.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+                file = downloadRepository.findTaskFile(work.taskId, file.link) ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
 

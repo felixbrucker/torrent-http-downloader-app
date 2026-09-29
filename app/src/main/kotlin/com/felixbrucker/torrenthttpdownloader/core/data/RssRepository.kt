@@ -7,6 +7,7 @@ import javax.inject.Singleton
 import kotlin.math.max
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 @Singleton
 class RssRepository @Inject constructor(
@@ -28,8 +29,10 @@ class RssRepository @Inject constructor(
         downloadTracker.addRssFeed(feed)
     }
 
-    fun updateRssFeed(id: String, update: (RssFeed) -> RssFeed) {
-        downloadTracker.updateRssFeed(id, update)
+    fun findRssFeed(id: String): RssFeed? = downloadTracker.rssFeeds.value.find { it.id == id }
+
+    fun getFeedFlow(id: String): Flow<RssFeed?> {
+        return downloadTracker.rssFeeds.map { feeds -> feeds.find { it.id == id } }
     }
 
     fun removeRssFeed(id: String) {

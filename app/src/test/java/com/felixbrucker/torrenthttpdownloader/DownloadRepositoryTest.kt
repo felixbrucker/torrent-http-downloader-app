@@ -102,42 +102,42 @@ class DownloadRepositoryTest {
     }
 
     @Test
+    fun testHasTaskReturnsTrueWhenFound() {
+        val task = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+        )
+        every { downloadTracker.getTasks() } returns listOf(task)
+
+        val result = repository.hasTask("task-1")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun testFindTaskFileReturnsFileWhenFound() {
+        val file = DownloadFile(link = "link-1")
+        val task = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
+            files = listOf(file)
+        )
+        every { downloadTracker.findTask("task-1") } returns task
+
+        val result = repository.findTaskFile("task-1", "link-1")
+
+        assertEquals(file, result)
+    }
+
+    @Test
     fun testRemoveTaskDelegatesToTracker() {
         every { downloadTracker.removeTask("task-1") } returns Unit
 
         repository.removeTask("task-1")
 
         verify { downloadTracker.removeTask("task-1") }
-    }
-
-    @Test
-    fun testUpdateTaskDelegatesToTracker() {
-        val updateLambda: (DownloadTask) -> DownloadTask = { it }
-        every { downloadTracker.updateTask("task-1", updateLambda) } returns Unit
-
-        repository.updateTask("task-1", updateLambda)
-
-        verify { downloadTracker.updateTask("task-1", updateLambda) }
-    }
-
-    @Test
-    fun testUpdateTaskFileDelegatesToTracker() {
-        val updateLambda: (DownloadFile) -> DownloadFile = { it }
-        every { downloadTracker.updateTaskFile("task-1", "link-1", updateLambda) } returns Unit
-
-        repository.updateTaskFile("task-1", "link-1", updateLambda)
-
-        verify { downloadTracker.updateTaskFile("task-1", "link-1", updateLambda) }
-    }
-
-    @Test
-    fun testUpdateTaskFilesDelegatesToTracker() {
-        val updateLambda: (DownloadFile) -> DownloadFile = { it }
-        every { downloadTracker.updateTaskFiles("task-1", updateLambda) } returns Unit
-
-        repository.updateTaskFiles("task-1", updateLambda)
-
-        verify { downloadTracker.updateTaskFiles("task-1", updateLambda) }
     }
 
     @Test

@@ -33,20 +33,14 @@ class DownloadRepository @Inject constructor(
 
     fun findTask(id: String): DownloadTask? = downloadTracker.findTask(id)
 
+    fun hasTask(id: String): Boolean = downloadTracker.getTasks().any { it.id == id }
+
+    fun findTaskFile(taskId: String, fileLink: String): DownloadFile? {
+        return downloadTracker.findTask(taskId)?.files?.find { it.link == fileLink }
+    }
+
     fun removeTask(id: String) {
         downloadTracker.removeTask(id)
-    }
-
-    fun updateTask(id: String, update: (DownloadTask) -> DownloadTask) {
-        downloadTracker.updateTask(id, update)
-    }
-
-    fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) {
-        downloadTracker.updateTaskFile(taskId, fileLink, update)
-    }
-
-    fun updateTaskFiles(taskId: String, update: (DownloadFile) -> DownloadFile) {
-        downloadTracker.updateTaskFiles(taskId, update)
     }
 
     fun updateFileDownloadingState(

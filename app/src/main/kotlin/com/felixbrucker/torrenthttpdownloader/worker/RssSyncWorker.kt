@@ -36,7 +36,7 @@ class RssSyncWorker @AssistedInject constructor(
             if (feedId == null) {
                 syncRssFeeds()
             } else {
-                val feed = rssRepository.rssFeeds.value.find { it.id == feedId }
+                val feed = rssRepository.findRssFeed(feedId)
                 if (feed != null) {
                     syncFeed(feed)
                 }

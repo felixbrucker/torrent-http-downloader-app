@@ -20,7 +20,7 @@ class RssFeedDetailViewModelTest {
     @Test
     fun testGetFeedFlowReturnsMatchingFeed() = runTest {
         val feed = RssFeed("feed-1", "Name", "http://example.com")
-        every { rssRepository.rssFeeds } returns MutableStateFlow(listOf(feed))
+        every { rssRepository.getFeedFlow("feed-1") } returns MutableStateFlow(feed)
         every { rssRepository.syncingFeedIds } returns MutableStateFlow(emptySet())
         val viewModel = RssFeedDetailViewModel(rssRepository, rssSyncLauncher)
 

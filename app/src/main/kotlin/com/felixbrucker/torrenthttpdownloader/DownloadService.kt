@@ -60,7 +60,7 @@ class DownloadService : Service() {
                     val name = params.name ?: resolved.name ?: uri
                     val type = resolved.type
 
-                    if (downloadRepository.getTasks().any { it.id == id }) {
+                    if (downloadRepository.hasTask(id)) {
                         callback.onFailure("Torrent already added")
                         return@launch
                     }
@@ -85,7 +85,7 @@ class DownloadService : Service() {
         }
 
         override fun getProgress(taskId: String): TorrentProgressStats? {
-            val task = downloadRepository.getTasks().find { it.id == taskId } ?: return null
+            val task = downloadRepository.findTask(taskId) ?: return null
 
             return TorrentProgressStats().apply {
                 bytesDownloaded = task.downloadedBytes
@@ -478,7 +478,7 @@ class DownloadService : Service() {
         val onCompletionIntentUri = intent.getStringExtra(EXTRA_ON_COMPLETION_INTENT_URI)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (downloadRepository.getTasks().any { it.id == id }) {
+        if (downloadRepository.hasTask(id)) {
             postNotification(
                 title = "Torrent already added",
                 message = "Torrent $torrentName was not added as it is already in the list of active torrents",

@@ -72,13 +72,13 @@ class RssRepositoryTest {
     }
 
     @Test
-    fun testUpdateRssFeedDelegatesToTracker() {
-        val updateLambda: (RssFeed) -> RssFeed = { it }
-        every { downloadTracker.updateRssFeed("feed-1", updateLambda) } returns Unit
+    fun testFindRssFeedReturnsFeedWhenFound() {
+        val feed = RssFeed(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        every { downloadTracker.rssFeeds } returns MutableStateFlow(listOf(feed))
 
-        repository.updateRssFeed("feed-1", updateLambda)
+        val result = repository.findRssFeed("feed-1")
 
-        verify { downloadTracker.updateRssFeed("feed-1", updateLambda) }
+        assertEquals(feed, result)
     }
 
     @Test
