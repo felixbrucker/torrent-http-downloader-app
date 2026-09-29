@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 class DownloadRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
 ) {
-    val tasks: StateFlow<List<DownloadTask>> = downloadTracker.tasks
+    @get:JvmName("getTasksFlow")
+    val tasks: StateFlow<List<DownloadTask>>
+        get() = downloadTracker.tasks
 
     fun getTasks(): List<DownloadTask> = downloadTracker.getTasks()
 

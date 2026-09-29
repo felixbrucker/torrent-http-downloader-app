@@ -12,13 +12,17 @@ import kotlinx.coroutines.flow.StateFlow
 class RssRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
 ) {
-    val rssFeeds: StateFlow<List<RssFeed>> = downloadTracker.rssFeeds
+    val rssFeeds: StateFlow<List<RssFeed>>
+        get() = downloadTracker.rssFeeds
 
-    val syncingFeedIds: StateFlow<Set<String>> = downloadTracker.syncingFeedIds
+    val syncingFeedIds: StateFlow<Set<String>>
+        get() = downloadTracker.syncingFeedIds
 
-    val isSyncingAll: StateFlow<Boolean> = downloadTracker.isSyncingAll
+    val isSyncingAll: StateFlow<Boolean>
+        get() = downloadTracker.isSyncingAll
 
-    val totalUnreadRssCount: Flow<Int> = downloadTracker.totalUnreadRssCount
+    val totalUnreadRssCount: Flow<Int>
+        get() = downloadTracker.totalUnreadRssCount
 
     fun addRssFeed(feed: RssFeed) {
         downloadTracker.addRssFeed(feed)
