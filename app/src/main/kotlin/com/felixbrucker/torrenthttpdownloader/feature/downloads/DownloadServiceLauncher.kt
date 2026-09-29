@@ -154,10 +154,4 @@ class DownloadServiceLauncher @Inject constructor(
         context.startService(intent)
     }
 
-    fun reloadSettings() {
-        val intent = Intent(context, DownloadService::class.java).apply {
-            action = DownloadService.ACTION_RELOAD_SETTINGS
-        }
-        context.startService(intent)
-    }
 }

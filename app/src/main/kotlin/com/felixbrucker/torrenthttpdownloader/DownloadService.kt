@@ -350,7 +350,6 @@ class DownloadService : Service() {
             ACTION_RESUME_TASK_LOCAL_DOWNLOADS -> resumeTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
             ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_RELOAD_SETTINGS -> reloadSettings()
             ACTION_PAUSE_ALL_LOCAL_DOWNLOADS -> pauseAllLocalDownloads()
             ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
             ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> resumeAllLocalDownloads()
@@ -382,11 +381,6 @@ class DownloadService : Service() {
         }
 
         return START_STICKY
-    }
-
-    private fun reloadSettings() {
-        provider.reloadSettings()
-        stopSelfIfIdle()
     }
 
     private fun stopSelfIfIdle() {
@@ -587,7 +581,6 @@ class DownloadService : Service() {
         const val ACTION_ADD_TASK = "ACTION_ADD_TASK"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val ACTION_RESTART_TASK = "ACTION_RESTART_TASK"
-        const val ACTION_RELOAD_SETTINGS = "ACTION_RELOAD_SETTINGS"
         const val ACTION_SET_PROVIDER_FILE_PRIORITY = "ACTION_SET_PROVIDER_FILE_PRIORITY"
         const val ACTION_TOGGLE_PROVIDER_FILE_SELECTION = "ACTION_TOGGLE_PROVIDER_FILE_SELECTION"
         const val ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION = "ACTION_TOGGLE_ALL_PROVIDER_FILE_SELECTION"

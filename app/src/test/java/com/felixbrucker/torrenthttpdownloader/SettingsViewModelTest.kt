@@ -3,8 +3,9 @@ package com.felixbrucker.torrenthttpdownloader
 import android.content.Context
 import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
-import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
 import io.mockk.every
@@ -17,7 +18,10 @@ class SettingsViewModelTest {
     private val sharedPreferences = mockk<SharedPreferences>()
     private val context = mockk<Context>(relaxed = true)
     private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
-    private val serviceLauncher = mockk<DownloadServiceLauncher>(relaxed = true)
+    private val provider = mockk<TorrentProvider>(relaxed = true)
+    private val providerFactory = mockk<ProviderFactory> {
+        every { getProvider() } returns provider
+    }
 
     @Test
     fun testInitialUiStateLoadsSavedValues() {
@@ -29,7 +33,7 @@ class SettingsViewModelTest {
         every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
         every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 6
 
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, serviceLauncher)
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
 
         val state = viewModel.uiState.value
 
@@ -54,7 +58,7 @@ class SettingsViewModelTest {
         every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
         every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
         every { context.packageName } returns "com.felixbrucker.torrenthttpdownloader"
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, serviceLauncher)
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
 
         viewModel.updateSelectedProvider(RealDebridProvider.NAME)
         viewModel.updateRealDebridApiToken("token-123")
@@ -80,6 +84,6 @@ class SettingsViewModelTest {
         verify { editor.putBoolean("rss_sync_enabled", false) }
         verify { editor.putInt("rss_sync_interval_hours", 12) }
         verify { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 12L) }
-        verify(atLeast = 1) { serviceLauncher.reloadSettings() }
+        verify(atLeast = 1) { provider.reloadSettings() }
     }
 }

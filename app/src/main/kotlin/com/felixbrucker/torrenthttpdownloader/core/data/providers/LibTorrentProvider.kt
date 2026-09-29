@@ -338,9 +338,17 @@ class LibTorrentProvider @Inject constructor(
     }
 
     override fun reloadSettings() {
-        requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
-        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
-        sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
+        val newRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+        val newActiveDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
+
+        val vpnChanged = requireVpnConnection != newRequireVpnConnection
+        val activeDownloadsChanged = sessionSettings.activeDownloads != newActiveDownloads
+
+        if (vpnChanged || activeDownloadsChanged) {
+            requireVpnConnection = newRequireVpnConnection
+            sessionSettings.activeDownloads = newActiveDownloads
+            sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
+        }
     }
 
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
