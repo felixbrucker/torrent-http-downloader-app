@@ -15,6 +15,7 @@ import javax.inject.Inject
 import javax.inject.Named
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
+import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 
 data class SettingsUiState(
@@ -31,7 +32,8 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     @param:Named("settings") private val sharedPreferences: SharedPreferences,
     @param:ApplicationContext private val context: Context,
-    private val rssSyncLauncher: RssSyncLauncher
+    private val rssSyncLauncher: RssSyncLauncher,
+    private val serviceLauncher: DownloadServiceLauncher
 ) : ViewModel() {
 
     val availableProviders: List<String> = listOf(
@@ -107,5 +109,6 @@ class SettingsViewModel @Inject constructor(
             enabled = currentState.rssSyncEnabled,
             intervalHours = currentState.rssSyncIntervalHours.toLong()
         )
+        serviceLauncher.reloadSettings()
     }
 }

@@ -52,7 +52,6 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onSave: () -> Unit,
     viewModel: SettingsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -73,27 +72,22 @@ fun SettingsScreen(
                 selectedProvider = uiState.selectedProvider,
                 onProviderSelected = { provider ->
                     viewModel.updateSelectedProvider(provider)
-                    onSave()
                 },
                 realDebridApiToken = uiState.realDebridApiToken,
                 onRealDebridApiTokenChange = { token ->
                     viewModel.updateRealDebridApiToken(token)
-                    onSave()
                 },
                 localParallelDownloads = uiState.localParallelDownloads,
                 onLocalParallelDownloadsChange = { localParallel ->
                     viewModel.updateLocalParallelDownloads(localParallel)
-                    onSave()
                 },
                 libTorrentParallelDownloads = uiState.libTorrentParallelDownloads,
                 onLibTorrentParallelDownloadsChange = { libParallel ->
                     viewModel.updateLibTorrentParallelDownloads(libParallel)
-                    onSave()
                 },
                 libTorrentRequireVpnConnection = uiState.libTorrentRequireVpnConnection,
                 onLibTorrentRequireVpnChange = { vpn ->
                     viewModel.updateLibTorrentRequireVpnConnection(vpn)
-                    onSave()
                 }
             )
 
@@ -101,12 +95,10 @@ fun SettingsScreen(
                 rssSyncEnabled = uiState.rssSyncEnabled,
                 onRssSyncEnabledChange = { enabled ->
                     viewModel.updateRssSyncEnabled(enabled)
-                    onSave()
                 },
                 rssSyncIntervalHours = uiState.rssSyncIntervalHours,
                 onRssSyncIntervalHoursChange = { interval ->
                     viewModel.updateRssSyncIntervalHours(interval)
-                    onSave()
                 }
             )
         }
