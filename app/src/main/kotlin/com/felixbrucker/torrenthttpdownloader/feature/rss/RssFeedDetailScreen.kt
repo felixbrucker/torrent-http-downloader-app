@@ -42,9 +42,9 @@ fun RssFeedDetailScreen(
     addTorrentFromFeed: (RssFeed, RssItem) -> Unit,
     viewModel: RssFeedDetailViewModel = viewModel(),
 ) {
-    val feeds by viewModel.feeds.collectAsState()
+    val feed by viewModel.getFeedFlow(feedId).collectAsState(initial = null)
     val syncingFeedIds by viewModel.syncingFeedIds.collectAsState()
-    val currentFeed = feeds.find { it.id == feedId } ?: return
+    val currentFeed = feed ?: return
     val isSyncing = syncingFeedIds.contains(currentFeed.id)
 
     Scaffold(
