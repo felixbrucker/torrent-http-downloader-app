@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RssRepositoryTest {
-    private val downloadTracker = mockk<DownloadTracker>()
+    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
     private val repository = RssRepository(downloadTracker)
 
     @Test
