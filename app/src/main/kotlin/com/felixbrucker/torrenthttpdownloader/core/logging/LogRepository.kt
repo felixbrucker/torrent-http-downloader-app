@@ -3,10 +3,8 @@ package com.felixbrucker.torrenthttpdownloader.core.logging
 import android.content.Context
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,8 +30,7 @@ class LogRepository @Inject constructor(
     val logsFlow: StateFlow<List<LogEntry>> = _logsFlow.asStateFlow()
 
     private var logFile: File? = null
-    var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-    var initJob: Job? = null
+    var scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 
     init {
         val logDir = File(context.filesDir, "logs")
@@ -43,11 +40,7 @@ class LogRepository @Inject constructor(
         val file = File(logDir, "app_logs.jsonl")
         logFile = file
 
-        initJob = CoroutineScope(ioDispatcher).launch {
-            mutex.withLock {
-                loadInitialLogsLocked()
-            }
-        }
+        loadInitialLogsLocked()
     }
 
     internal fun loadInitialLogsLocked() {
@@ -79,7 +72,7 @@ class LogRepository @Inject constructor(
     }
 
     fun addLog(entry: LogEntry) {
-        CoroutineScope(ioDispatcher).launch {
+        scope.launch {
             mutex.withLock {
                 val current = _logsFlow.value.toMutableList()
                 current.add(entry)
@@ -106,7 +99,7 @@ class LogRepository @Inject constructor(
     }
 
     fun clearLogs() {
-        CoroutineScope(ioDispatcher).launch {
+        scope.launch {
             mutex.withLock {
                 _logsFlow.value = emptyList()
                 val file = logFile

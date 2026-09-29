@@ -37,7 +37,6 @@ class LogRepositoryTest {
         file.writeText("{\"timestamp\":$now,\"priority\":3,\"tag\":\"Test\",\"message\":\"Msg 1\"}\n")
 
         val repository = LogRepository(context)
-        repository.initJob?.join()
         val logs = repository.logsFlow.value
 
         assertTrue(logs.isNotEmpty())
@@ -47,8 +46,7 @@ class LogRepositoryTest {
     @Test
     fun testAddLogAppendsEntryAndUpdatesFlow() = runTest(testDispatcher) {
         val repository = LogRepository(context)
-        repository.initJob?.join()
-        repository.ioDispatcher = testDispatcher
+        repository.scope = this
         val entry = LogEntry(timestamp = System.currentTimeMillis(), message = "Test Log")
 
         repository.addLog(entry)
@@ -62,8 +60,7 @@ class LogRepositoryTest {
     @Test
     fun testClearLogsEmptiesFlowAndFile() = runTest(testDispatcher) {
         val repository = LogRepository(context)
-        repository.initJob?.join()
-        repository.ioDispatcher = testDispatcher
+        repository.scope = this
         repository.addLog(LogEntry(message = "Log to clear"))
         testScheduler.advanceUntilIdle()
 
