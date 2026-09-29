@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 AddTorrentContent(
+                    onFinish = { },
                     viewModel = addTorrentViewModel
                 )
 

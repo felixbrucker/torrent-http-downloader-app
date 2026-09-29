@@ -57,7 +57,7 @@ data class AddTorrentConfig(
 
 @Composable
 fun AddTorrentContent(
-    onFinish: () -> Unit = {},
+    onFinish: () -> Unit,
     viewModel: AddTorrentViewModel = viewModel()
 ) {
     val pendingConfig by viewModel.resolvedConfig.collectAsState()

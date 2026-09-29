@@ -86,18 +86,18 @@ import com.felixbrucker.torrenthttpdownloader.extensions.capitalized
 fun DownloadItem(
     task: DownloadTask,
     onRemove: () -> Unit,
-    provider: TorrentProvider? = null,
-    onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit = { _, _ -> },
-    onConfirmFileSelection: (taskId: String) -> Unit = {},
-    onPauseTaskOnProvider: (taskId: String) -> Unit = {},
-    onResumeTaskOnProvider: (taskId: String) -> Unit = {},
-    onPauseTaskLocalDownloads: (taskId: String) -> Unit = {},
-    onResumeTaskLocalDownloads: (taskId: String) -> Unit = {},
-    onRestartTask: (taskId: String) -> Unit = {},
-    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
-    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit = { _, _ -> },
-    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit = { _, _ -> },
-    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit = { _, _, _ -> }
+    provider: TorrentProvider?,
+    onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit,
+    onConfirmFileSelection: (taskId: String) -> Unit,
+    onPauseTaskOnProvider: (taskId: String) -> Unit,
+    onResumeTaskOnProvider: (taskId: String) -> Unit,
+    onPauseTaskLocalDownloads: (taskId: String) -> Unit,
+    onResumeTaskLocalDownloads: (taskId: String) -> Unit,
+    onRestartTask: (taskId: String) -> Unit,
+    onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
+    onToggleProviderFileSelection: (taskId: String, fileId: Int) -> Unit,
+    onSetProviderFilePriority: (taskId: String, fileId: Int, priority: FilePriority) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val isLocal = task.location == TaskLocation.LOCAL
