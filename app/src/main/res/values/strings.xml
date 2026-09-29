@@ -31,6 +31,6 @@
     <string name="just_now">Just now</string>
     <string name="no_subdirectories_found">No Subdirectories found</string>
     <string name="rss_sync_settings">Periodic RSS Synchronization</string>
-    <string name="enable_rss_sync">Enable Periodic Sync</string>
+    <string name="enable_rss_sync">Enable Periodic RSS Sync</string>
     <string name="rss_sync_interval_hours">Sync Interval: %d hours</string>
 </resources>
