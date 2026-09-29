@@ -30,8 +30,6 @@ class SettingsViewModelTest {
         every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 4
         every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 5
         every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns true
-        every { sharedPreferences.getLong("last_backup_time", 0L) } returns 1000L
-        every { sharedPreferences.getLong("last_backup_size", 0L) } returns 2000L
         val viewModel = SettingsViewModel(sharedPreferences, context)
 
         val state = viewModel.loadSettings()
@@ -41,8 +39,6 @@ class SettingsViewModelTest {
         assertEquals("4", state.localParallelDownloads)
         assertEquals("5", state.libTorrentParallelDownloads)
         assertEquals(true, state.libTorrentRequireVpnConnection)
-        assertEquals(1000L, state.lastBackupTime)
-        assertEquals(2000L, state.lastBackupSize)
     }
 
     @Test

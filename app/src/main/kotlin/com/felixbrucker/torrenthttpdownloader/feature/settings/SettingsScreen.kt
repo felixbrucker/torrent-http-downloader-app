@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.feature.settings
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,7 +42,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
-import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,14 +105,6 @@ fun SettingsScreen(
                 }) {
                     Text("Save")
                 }
-            }
-
-            if (initialState.lastBackupTime > 0) {
-                LastBackupInfo(
-                    lastBackupTime = initialState.lastBackupTime,
-                    lastBackupSize = initialState.lastBackupSize,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
             }
         }
     }
@@ -261,22 +251,3 @@ private fun LibTorrentSettingsSection(
     }
 }
 
-@Composable
-private fun LastBackupInfo(
-    lastBackupTime: Long,
-    lastBackupSize: Long,
-    modifier: Modifier = Modifier
-) {
-    val timeStr = DateUtils.getRelativeTimeSpanString(
-        lastBackupTime,
-        System.currentTimeMillis(),
-        DateUtils.MINUTE_IN_MILLIS
-    ).toString()
-    val sizeStr = Formatter.formatBytes(lastBackupSize)
-    Text(
-        text = stringResource(id = R.string.last_backup, timeStr, sizeStr),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(top = 16.dp)
-    )
-}

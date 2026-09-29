@@ -17,9 +17,7 @@ data class SettingsUiState(
     val realDebridApiToken: String = "",
     val localParallelDownloads: String = "2",
     val libTorrentParallelDownloads: String = "3",
-    val libTorrentRequireVpnConnection: Boolean = false,
-    val lastBackupTime: Long = 0L,
-    val lastBackupSize: Long = 0L
+    val libTorrentRequireVpnConnection: Boolean = false
 )
 
 @HiltViewModel
@@ -39,9 +37,7 @@ class SettingsViewModel @Inject constructor(
             realDebridApiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: "",
             localParallelDownloads = sharedPreferences.getInt("local_parallel_downloads", 2).toString(),
             libTorrentParallelDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 3).toString(),
-            libTorrentRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false),
-            lastBackupTime = sharedPreferences.getLong("last_backup_time", 0L),
-            lastBackupSize = sharedPreferences.getLong("last_backup_size", 0L)
+            libTorrentRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
         )
     }
 
