@@ -39,6 +39,7 @@ import com.felixbrucker.torrenthttpdownloader.core.designsystem.theme.TorrentHtt
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentContent
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentViewModel
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
+import com.felixbrucker.torrenthttpdownloader.feature.logs.LogViewerScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
@@ -132,7 +133,13 @@ class MainActivity : ComponentActivity() {
                     }
                     entry<NavRoute.Settings> {
                         SettingsScreen(
-                            onBack = { navigator.goBack() }
+                            onBack = { navigator.goBack() },
+                            onNavigateToLogs = { navigator.navigate(NavRoute.LogViewer) }
+                        )
+                    }
+                    entry<NavRoute.LogViewer> {
+                        LogViewerScreen(
+                            onNavigateBack = { navigator.goBack() }
                         )
                     }
                 }
