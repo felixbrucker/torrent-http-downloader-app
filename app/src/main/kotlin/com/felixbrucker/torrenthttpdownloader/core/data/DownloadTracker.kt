@@ -64,12 +64,12 @@ class DownloadTracker @Inject constructor(
         }
     }
 
-    fun saveTasks() {
+    private fun saveTasks() {
         val json = gson.toJson(_tasks.value)
         downloadsSharedPreferences.edit { putString("tasks", json) }
     }
 
-    fun saveRssFeeds() {
+    private fun saveRssFeeds() {
         val json = gson.toJson(_rssFeeds.value)
         settingsSharedPreferences.edit { putString("rss_feeds", json) }
         BackupManager.dataChanged(context.packageName)
