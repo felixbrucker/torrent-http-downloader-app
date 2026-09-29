@@ -139,7 +139,7 @@ private fun ProviderConfigCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = stringResource(id = R.string.provider),
+                text = stringResource(id = R.string.provider_settings),
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -211,6 +211,7 @@ private fun ProviderDropdown(
             value = selectedProvider,
             onValueChange = {},
             readOnly = true,
+            label = { Text(stringResource(id = R.string.provider)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
