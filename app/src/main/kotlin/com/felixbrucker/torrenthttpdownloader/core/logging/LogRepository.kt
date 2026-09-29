@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.core.logging
 
 import android.content.Context
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -17,7 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class LogRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val scope: CoroutineScope
+    @param:ApplicationScope private val scope: CoroutineScope
 ) {
     private val maxEntries = 3000
     private val pruneThreshold = 3500

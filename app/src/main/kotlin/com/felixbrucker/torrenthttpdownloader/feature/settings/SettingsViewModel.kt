@@ -95,7 +95,16 @@ class SettingsViewModel @Inject constructor(
 
     private fun saveSettings() {
         val currentState = _uiState.value
-        Timber.i("Settings saved provider=%s, rssSyncEnabled=%b, interval=%d", currentState.selectedProvider, currentState.rssSyncEnabled, currentState.rssSyncIntervalHours)
+        Timber.d(
+            "Settings saved: selectedProvider=%s, realDebridApiToken=%s, localParallelDownloads=%s, libTorrentParallelDownloads=%s, libTorrentRequireVpnConnection=%b, rssSyncEnabled=%b, rssSyncIntervalHours=%d",
+            currentState.selectedProvider,
+            if (currentState.realDebridApiToken.isBlank()) "<empty>" else "***",
+            currentState.localParallelDownloads,
+            currentState.libTorrentParallelDownloads,
+            currentState.libTorrentRequireVpnConnection,
+            currentState.rssSyncEnabled,
+            currentState.rssSyncIntervalHours
+        )
         sharedPreferences.edit {
             putString("provider", currentState.selectedProvider)
             putString("real_debrid_api_token", currentState.realDebridApiToken.trim())

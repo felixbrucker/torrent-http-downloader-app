@@ -43,6 +43,7 @@ import com.felixbrucker.torrenthttpdownloader.feature.logs.LogViewerScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
+import timber.log.Timber
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Timber.d("MainActivity created")
 
         setContent {
             TorrentHttpDownloaderTheme {
@@ -178,5 +180,10 @@ class MainActivity : ComponentActivity() {
 
         mainViewModel.checkAndStartDownloadService(this)
         mainViewModel.ensureRssSyncIsScheduled()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Timber.d("MainActivity destroyed")
     }
 }

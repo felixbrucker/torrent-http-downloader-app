@@ -98,7 +98,7 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Timber.i("DownloadService created")
+        Timber.d("DownloadService created")
         provider = providerFactory.getProvider()
 
         localDownloadManager = LocalDownloadManager(
@@ -555,7 +555,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Timber.i("DownloadService destroyed")
+        Timber.d("DownloadService destroyed")
         torrentStateMachine.stop()
         localDownloadManager.stop()
         provider.stop()
