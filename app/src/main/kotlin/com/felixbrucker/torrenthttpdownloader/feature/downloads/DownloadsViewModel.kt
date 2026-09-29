@@ -5,7 +5,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
@@ -13,20 +14,21 @@ import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
-    private val downloadTracker: DownloadTracker,
+    private val downloadRepository: DownloadRepository,
+    private val rssRepository: RssRepository,
     private val providerFactory: ProviderFactory,
     private val serviceLauncher: DownloadServiceLauncher
 ) : ViewModel() {
 
-    val tasks: StateFlow<List<DownloadTask>> = downloadTracker.tasks
-    val totalUnreadRssCount: Flow<Int> = downloadTracker.totalUnreadRssCount
+    val tasks: StateFlow<List<DownloadTask>> = downloadRepository.tasks
+    val totalUnreadRssCount: Flow<Int> = rssRepository.totalUnreadRssCount
 
     fun getProvider(): TorrentProvider? {
         return providerFactory.getProvider()
     }
 
     fun moveTask(fromIndex: Int, toIndex: Int) {
-        downloadTracker.moveTask(fromIndex, toIndex)
+        downloadRepository.moveTask(fromIndex, toIndex)
     }
 
     fun removeTask(taskId: String, deleteFiles: Boolean, deleteTorrentFile: Boolean) {

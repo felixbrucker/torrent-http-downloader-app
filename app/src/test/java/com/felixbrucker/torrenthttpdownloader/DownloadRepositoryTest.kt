@@ -16,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,121 @@ import org.junit.Test
 class DownloadRepositoryTest {
     private val downloadTracker = mockk<DownloadTracker>()
     private val repository = DownloadRepository(downloadTracker)
+
+    @Test
+    fun testTasksFlowDelegatesToTracker() {
+        val flow = MutableStateFlow<List<DownloadTask>>(emptyList())
+        every { downloadTracker.tasks } returns flow
+
+        val result = repository.tasks
+
+        assertEquals(flow, result)
+        verify { downloadTracker.tasks }
+    }
+
+    @Test
+    fun testGetTasksDelegatesToTracker() {
+        val tasks = listOf(
+            DownloadTask(
+                id = "task-1",
+                name = "Test Task",
+                torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+            )
+        )
+        every { downloadTracker.getTasks() } returns tasks
+
+        val result = repository.getTasks()
+
+        assertEquals(tasks, result)
+        verify { downloadTracker.getTasks() }
+    }
+
+    @Test
+    fun testHasTasksWhichNeedProcessingDelegatesToTracker() {
+        every { downloadTracker.hasTasksWhichNeedProcessing() } returns true
+
+        val result = repository.hasTasksWhichNeedProcessing()
+
+        assertTrue(result)
+        verify { downloadTracker.hasTasksWhichNeedProcessing() }
+    }
+
+    @Test
+    fun testAddTaskDelegatesToTracker() {
+        val task = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+        )
+        every { downloadTracker.addTask(task) } returns Unit
+
+        repository.addTask(task)
+
+        verify { downloadTracker.addTask(task) }
+    }
+
+    @Test
+    fun testMoveTaskDelegatesToTracker() {
+        every { downloadTracker.moveTask(0, 1) } returns Unit
+
+        repository.moveTask(0, 1)
+
+        verify { downloadTracker.moveTask(0, 1) }
+    }
+
+    @Test
+    fun testFindTaskDelegatesToTracker() {
+        val task = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+        )
+        every { downloadTracker.findTask("task-1") } returns task
+
+        val result = repository.findTask("task-1")
+
+        assertEquals(task, result)
+        verify { downloadTracker.findTask("task-1") }
+    }
+
+    @Test
+    fun testRemoveTaskDelegatesToTracker() {
+        every { downloadTracker.removeTask("task-1") } returns Unit
+
+        repository.removeTask("task-1")
+
+        verify { downloadTracker.removeTask("task-1") }
+    }
+
+    @Test
+    fun testUpdateTaskDelegatesToTracker() {
+        val updateLambda: (DownloadTask) -> DownloadTask = { it }
+        every { downloadTracker.updateTask("task-1", updateLambda) } returns Unit
+
+        repository.updateTask("task-1", updateLambda)
+
+        verify { downloadTracker.updateTask("task-1", updateLambda) }
+    }
+
+    @Test
+    fun testUpdateTaskFileDelegatesToTracker() {
+        val updateLambda: (DownloadFile) -> DownloadFile = { it }
+        every { downloadTracker.updateTaskFile("task-1", "link-1", updateLambda) } returns Unit
+
+        repository.updateTaskFile("task-1", "link-1", updateLambda)
+
+        verify { downloadTracker.updateTaskFile("task-1", "link-1", updateLambda) }
+    }
+
+    @Test
+    fun testUpdateTaskFilesDelegatesToTracker() {
+        val updateLambda: (DownloadFile) -> DownloadFile = { it }
+        every { downloadTracker.updateTaskFiles("task-1", updateLambda) } returns Unit
+
+        repository.updateTaskFiles("task-1", updateLambda)
+
+        verify { downloadTracker.updateTaskFiles("task-1", updateLambda) }
+    }
 
     @Test
     fun testUpdateFileDownloadingStateSuccess() {

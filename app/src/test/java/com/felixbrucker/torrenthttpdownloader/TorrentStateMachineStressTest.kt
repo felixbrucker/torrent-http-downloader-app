@@ -11,7 +11,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
@@ -29,7 +28,6 @@ class TorrentStateMachineStressTest {
     private val provider = mockk<TorrentProvider>()
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)
     private val contentResolver = mockk<ContentResolver>()
-    private val downloadTracker = mockk<DownloadTracker>()
     private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
     private val pathFactory = mockk<PathFactory>()
     private val testDispatcher = StandardTestDispatcher()
@@ -44,7 +42,6 @@ class TorrentStateMachineStressTest {
             provider = provider,
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
-            downloadTracker = downloadTracker,
             downloadRepository = downloadRepository,
             pathFactory = pathFactory,
             onTaskCompleted = {},
@@ -68,7 +65,7 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id"
         )
 
-        every { downloadTracker.findTask(taskId) } returns task
+        every { downloadRepository.findTask(taskId) } returns task
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)
@@ -126,8 +123,8 @@ class TorrentStateMachineStressTest {
             providerId = "provider-id-2"
         )
 
-        every { downloadTracker.findTask(taskId1) } returns task1
-        every { downloadTracker.findTask(taskId2) } returns task2
+        every { downloadRepository.findTask(taskId1) } returns task1
+        every { downloadRepository.findTask(taskId2) } returns task2
         every { provider.isLocalProvider } returns false
 
         val callCount = AtomicInteger(0)

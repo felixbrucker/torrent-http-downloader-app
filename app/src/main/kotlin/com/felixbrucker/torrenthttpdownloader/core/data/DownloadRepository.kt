@@ -4,15 +4,49 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.StateFlow
 
 @Singleton
 class DownloadRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
 ) {
+    val tasks: StateFlow<List<DownloadTask>> = downloadTracker.tasks
+
+    fun getTasks(): List<DownloadTask> = downloadTracker.getTasks()
+
+    fun hasTasksWhichNeedProcessing(): Boolean = downloadTracker.hasTasksWhichNeedProcessing()
+
+    fun addTask(task: DownloadTask) {
+        downloadTracker.addTask(task)
+    }
+
+    fun moveTask(fromIndex: Int, toIndex: Int) {
+        downloadTracker.moveTask(fromIndex, toIndex)
+    }
+
+    fun findTask(id: String): DownloadTask? = downloadTracker.findTask(id)
+
+    fun removeTask(id: String) {
+        downloadTracker.removeTask(id)
+    }
+
+    fun updateTask(id: String, update: (DownloadTask) -> DownloadTask) {
+        downloadTracker.updateTask(id, update)
+    }
+
+    fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) {
+        downloadTracker.updateTaskFile(taskId, fileLink, update)
+    }
+
+    fun updateTaskFiles(taskId: String, update: (DownloadFile) -> DownloadFile) {
+        downloadTracker.updateTaskFiles(taskId, update)
+    }
+
     fun updateFileDownloadingState(
         taskId: String,
         fileLink: String,

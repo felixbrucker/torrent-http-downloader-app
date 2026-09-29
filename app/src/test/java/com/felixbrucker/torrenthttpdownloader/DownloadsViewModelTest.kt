@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
@@ -14,21 +15,22 @@ import org.junit.Before
 import org.junit.Test
 
 class DownloadsViewModelTest {
-    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
+    private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
+    private val rssRepository = mockk<RssRepository>(relaxed = true)
     private val providerFactory = mockk<ProviderFactory>(relaxed = true)
     private val serviceLauncher = mockk<DownloadServiceLauncher>(relaxed = true)
 
     @Before
     fun setUp() {
-        every { downloadTracker.tasks } returns MutableStateFlow(emptyList())
-        every { downloadTracker.totalUnreadRssCount } returns MutableStateFlow(0)
+        every { downloadRepository.tasks } returns MutableStateFlow(emptyList())
+        every { rssRepository.totalUnreadRssCount } returns MutableStateFlow(0)
     }
 
     @Test
     fun testGetProviderReturnsProvider() {
         val provider = mockk<TorrentProvider>()
         every { providerFactory.getProvider() } returns provider
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
+        val viewModel = DownloadsViewModel(downloadRepository, rssRepository, providerFactory, serviceLauncher)
 
         val result = viewModel.getProvider()
 
@@ -36,12 +38,12 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun testMoveTaskDelegatesToDownloadTracker() {
-        val viewModel = DownloadsViewModel(downloadTracker, providerFactory, serviceLauncher)
+    fun testMoveTaskDelegatesToDownloadRepository() {
+        val viewModel = DownloadsViewModel(downloadRepository, rssRepository, providerFactory, serviceLauncher)
 
         viewModel.moveTask(0, 1)
 
-        verify { downloadTracker.moveTask(0, 1) }
+        verify { downloadRepository.moveTask(0, 1) }
     }
 
     @Test

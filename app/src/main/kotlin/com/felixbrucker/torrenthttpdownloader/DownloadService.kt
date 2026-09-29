@@ -17,7 +17,6 @@ import javax.inject.Named
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.*
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
@@ -38,7 +37,6 @@ import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 
 @AndroidEntryPoint
 class DownloadService : Service() {
-    @Inject lateinit var downloadTracker: DownloadTracker
     @Inject lateinit var downloadRepository: DownloadRepository
     @Inject lateinit var providerFactory: ProviderFactory
     @Inject @Named("settings") lateinit var sharedPreferences: SharedPreferences
@@ -62,7 +60,7 @@ class DownloadService : Service() {
                     val name = params.name ?: resolved.name ?: uri
                     val type = resolved.type
 
-                    if (downloadTracker.getTasks().any { it.id == id }) {
+                    if (downloadRepository.getTasks().any { it.id == id }) {
                         callback.onFailure("Torrent already added")
                         return@launch
                     }
@@ -87,7 +85,7 @@ class DownloadService : Service() {
         }
 
         override fun getProgress(taskId: String): TorrentProgressStats? {
-            val task = downloadTracker.getTasks().find { it.id == taskId } ?: return null
+            val task = downloadRepository.getTasks().find { it.id == taskId } ?: return null
 
             return TorrentProgressStats().apply {
                 bytesDownloaded = task.downloadedBytes
@@ -104,7 +102,6 @@ class DownloadService : Service() {
         localDownloadManager = LocalDownloadManager(
             scope = serviceScope,
             sharedPreferences = sharedPreferences,
-            downloadTracker = downloadTracker,
             downloadRepository = downloadRepository,
             onLinkExpired = { task, file ->
                 torrentStateMachine.updateFileInfo(task, file)
@@ -117,7 +114,6 @@ class DownloadService : Service() {
             provider = provider,
             localDownloadManager = localDownloadManager,
             contentResolver = contentResolver,
-            downloadTracker = downloadTracker,
             downloadRepository = downloadRepository,
             pathFactory = pathFactory,
             onTaskCompleted = { task ->
@@ -186,7 +182,7 @@ class DownloadService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val tasks = downloadTracker.getTasks()
+        val tasks = downloadRepository.getTasks()
 
         var totalSpeed = 0L
         var totalProgress = 0
@@ -384,7 +380,7 @@ class DownloadService : Service() {
     }
 
     private fun stopSelfIfIdle() {
-        if (!downloadTracker.hasTasksWhichNeedProcessing()) {
+        if (!downloadRepository.hasTasksWhichNeedProcessing()) {
             stopSelf()
         }
     }
@@ -482,7 +478,7 @@ class DownloadService : Service() {
         val onCompletionIntentUri = intent.getStringExtra(EXTRA_ON_COMPLETION_INTENT_URI)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (downloadTracker.getTasks().any { it.id == id }) {
+        if (downloadRepository.getTasks().any { it.id == id }) {
             postNotification(
                 title = "Torrent already added",
                 message = "Torrent $torrentName was not added as it is already in the list of active torrents",

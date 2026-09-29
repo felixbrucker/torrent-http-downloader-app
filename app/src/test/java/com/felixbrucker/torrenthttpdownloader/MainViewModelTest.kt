@@ -1,7 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.content.Context
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import io.mockk.every
 import io.mockk.mockk
@@ -9,14 +9,14 @@ import io.mockk.verify
 import org.junit.Test
 
 class MainViewModelTest {
-    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
+    private val downloadRepository = mockk<DownloadRepository>(relaxed = true)
     private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
 
     @Test
     fun testCheckAndStartDownloadServiceStartsWhenTasksNeedProcessing() {
         val context = mockk<Context>(relaxed = true)
-        every { downloadTracker.hasTasksWhichNeedProcessing() } returns true
-        val viewModel = MainViewModel(downloadTracker, rssSyncLauncher)
+        every { downloadRepository.hasTasksWhichNeedProcessing() } returns true
+        val viewModel = MainViewModel(downloadRepository, rssSyncLauncher)
 
         viewModel.checkAndStartDownloadService(context)
 
@@ -25,7 +25,7 @@ class MainViewModelTest {
 
     @Test
     fun testEnsureRssSyncIsScheduledDelegatesToLauncher() {
-        val viewModel = MainViewModel(downloadTracker, rssSyncLauncher)
+        val viewModel = MainViewModel(downloadRepository, rssSyncLauncher)
 
         viewModel.ensureRssSyncIsScheduled()
 

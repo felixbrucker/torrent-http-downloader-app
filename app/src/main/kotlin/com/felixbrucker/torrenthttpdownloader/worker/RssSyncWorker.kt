@@ -11,7 +11,6 @@ import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import com.felixbrucker.torrenthttpdownloader.DownloadService
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
@@ -22,7 +21,6 @@ import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 class RssSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val downloadTracker: DownloadTracker,
     private val rssRepository: RssRepository,
     private val torrentUriResolver: TorrentUriResolver,
 ) : CoroutineWorker(context, params) {
@@ -38,7 +36,7 @@ class RssSyncWorker @AssistedInject constructor(
             if (feedId == null) {
                 syncRssFeeds()
             } else {
-                val feed = downloadTracker.rssFeeds.value.find { it.id == feedId }
+                val feed = rssRepository.rssFeeds.value.find { it.id == feedId }
                 if (feed != null) {
                     syncFeed(feed)
                 }
@@ -53,16 +51,16 @@ class RssSyncWorker @AssistedInject constructor(
     }
 
     private suspend fun syncRssFeeds() {
-        downloadTracker.setAllFeedsSyncing(true)
+        rssRepository.setAllFeedsSyncing(true)
         try {
-            downloadTracker.rssFeeds.value.forEach { syncFeed(it) }
+            rssRepository.rssFeeds.value.forEach { syncFeed(it) }
         } finally {
-            downloadTracker.setAllFeedsSyncing(false)
+            rssRepository.setAllFeedsSyncing(false)
         }
     }
 
     private suspend fun syncFeed(feed: RssFeed) {
-        downloadTracker.setFeedSyncing(feed.id, true)
+        rssRepository.setFeedSyncing(feed.id, true)
         try {
             val newItems = rssParser.fetchAndParse(feed.url)
             val existingItemIds = feed.items.map { it.id }.toSet()
@@ -87,7 +85,7 @@ class RssSyncWorker @AssistedInject constructor(
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
-            downloadTracker.setFeedSyncing(feed.id, false)
+            rssRepository.setFeedSyncing(feed.id, false)
         }
     }
 
