@@ -5,11 +5,48 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 @Singleton
 class RssRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
 ) {
+    val rssFeeds: StateFlow<List<RssFeed>>
+        get() = downloadTracker.rssFeeds
+
+    val syncingFeedIds: StateFlow<Set<String>>
+        get() = downloadTracker.syncingFeedIds
+
+    val isSyncingAll: StateFlow<Boolean>
+        get() = downloadTracker.isSyncingAll
+
+    val totalUnreadRssCount: Flow<Int>
+        get() = downloadTracker.totalUnreadRssCount
+
+    fun addRssFeed(feed: RssFeed) {
+        downloadTracker.addRssFeed(feed)
+    }
+
+    fun findRssFeed(id: String): RssFeed? = downloadTracker.rssFeeds.value.find { it.id == id }
+
+    fun getFeedFlow(id: String): Flow<RssFeed?> {
+        return downloadTracker.rssFeeds.map { feeds -> feeds.find { it.id == id } }
+    }
+
+    fun removeRssFeed(id: String) {
+        downloadTracker.removeRssFeed(id)
+    }
+
+    fun setFeedSyncing(feedId: String, syncing: Boolean) {
+        downloadTracker.setFeedSyncing(feedId, syncing)
+    }
+
+    fun setAllFeedsSyncing(syncing: Boolean) {
+        downloadTracker.setAllFeedsSyncing(syncing)
+    }
+
     fun markAllItemsAsRead(feedId: String) {
         downloadTracker.updateRssFeed(feedId) { feed ->
             feed.copy(items = feed.items.map { it.copy(isRead = true) })

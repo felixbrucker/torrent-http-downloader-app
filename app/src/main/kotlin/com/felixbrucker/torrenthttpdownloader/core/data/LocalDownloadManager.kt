@@ -27,7 +27,6 @@ data class DownloadWork(val taskId: String, val file: DownloadFile)
 class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val sharedPreferences: SharedPreferences,
-    private val downloadTracker: DownloadTracker,
     private val downloadRepository: DownloadRepository,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
@@ -75,9 +74,9 @@ class LocalDownloadManager(
             // Support regenerating the link if the existing one expires (
             // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
-                val task = downloadTracker.findTask(work.taskId) ?: return
+                val task = downloadRepository.findTask(work.taskId) ?: return
                 onLinkExpired(task, file)
-                file = downloadTracker.findTask(work.taskId)?.files?.find { it.link == file.link } ?: return
+                file = downloadRepository.findTaskFile(work.taskId, file.link) ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
 
@@ -230,13 +229,13 @@ class LocalDownloadManager(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        val task = downloadTracker.findTask(taskId) ?: return
+        val task = downloadRepository.findTask(taskId) ?: return
         val file = task.files.find { it.link == fileLink } ?: return
         enqueueDownload(DownloadWork(taskId, file))
     }
 
     fun pauseTask(taskId: String) {
-        val task = downloadTracker.findTask(taskId) ?: return
+        val task = downloadRepository.findTask(taskId) ?: return
         task.files.forEach { file ->
             if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
                 pauseFile(taskId, file.link)
@@ -245,7 +244,7 @@ class LocalDownloadManager(
     }
 
     fun resumeTask(taskId: String) {
-        val task = downloadTracker.findTask(taskId) ?: return
+        val task = downloadRepository.findTask(taskId) ?: return
         task.files.forEach { file ->
             if (file.state == LocalDownloadState.PAUSED) {
                 resumeFile(taskId, file.link)
@@ -254,13 +253,13 @@ class LocalDownloadManager(
     }
 
     fun pauseAll() {
-        downloadTracker.getTasks().forEach { task ->
+        downloadRepository.getTasks().forEach { task ->
             pauseTask(task.id)
         }
     }
 
     fun resumeAll() {
-        downloadTracker.getTasks().forEach { task ->
+        downloadRepository.getTasks().forEach { task ->
             resumeTask(task.id)
         }
     }

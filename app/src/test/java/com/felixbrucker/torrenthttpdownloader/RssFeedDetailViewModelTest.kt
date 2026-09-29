@@ -1,6 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailViewModel
@@ -15,16 +14,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RssFeedDetailViewModelTest {
-    private val downloadTracker = mockk<DownloadTracker>()
     private val rssRepository = mockk<RssRepository>()
     private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
 
     @Test
     fun testGetFeedFlowReturnsMatchingFeed() = runTest {
         val feed = RssFeed("feed-1", "Name", "http://example.com")
-        every { downloadTracker.rssFeeds } returns MutableStateFlow(listOf(feed))
-        every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
-        val viewModel = RssFeedDetailViewModel(downloadTracker, rssRepository, rssSyncLauncher)
+        every { rssRepository.getFeedFlow("feed-1") } returns MutableStateFlow(feed)
+        every { rssRepository.syncingFeedIds } returns MutableStateFlow(emptySet())
+        val viewModel = RssFeedDetailViewModel(rssRepository, rssSyncLauncher)
 
         val result = viewModel.getFeedFlow("feed-1").first()
 
@@ -33,10 +31,10 @@ class RssFeedDetailViewModelTest {
 
     @Test
     fun testMarkItemAsReadDelegatesToRepository() {
-        every { downloadTracker.rssFeeds } returns MutableStateFlow(emptyList())
-        every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
+        every { rssRepository.rssFeeds } returns MutableStateFlow(emptyList())
+        every { rssRepository.syncingFeedIds } returns MutableStateFlow(emptySet())
         every { rssRepository.markItemAsRead("feed-1", "item-1") } returns Unit
-        val viewModel = RssFeedDetailViewModel(downloadTracker, rssRepository, rssSyncLauncher)
+        val viewModel = RssFeedDetailViewModel(rssRepository, rssSyncLauncher)
 
         viewModel.markItemAsRead("feed-1", "item-1")
 
@@ -46,9 +44,9 @@ class RssFeedDetailViewModelTest {
     @Test
     fun testSyncFeedDelegatesToLauncher() {
         val feed = RssFeed("feed-1", "Name", "http://example.com")
-        every { downloadTracker.rssFeeds } returns MutableStateFlow(emptyList())
-        every { downloadTracker.syncingFeedIds } returns MutableStateFlow(emptySet())
-        val viewModel = RssFeedDetailViewModel(downloadTracker, rssRepository, rssSyncLauncher)
+        every { rssRepository.rssFeeds } returns MutableStateFlow(emptyList())
+        every { rssRepository.syncingFeedIds } returns MutableStateFlow(emptySet())
+        val viewModel = RssFeedDetailViewModel(rssRepository, rssSyncLauncher)
 
         viewModel.syncFeed(feed)
 

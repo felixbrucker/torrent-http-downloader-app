@@ -8,13 +8,105 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RssRepositoryTest {
-    private val downloadTracker = mockk<DownloadTracker>()
+    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
     private val repository = RssRepository(downloadTracker)
+
+    @Test
+    fun testRssFeedsFlowDelegatesToTracker() {
+        val flow = MutableStateFlow<List<RssFeed>>(emptyList())
+        every { downloadTracker.rssFeeds } returns flow
+
+        val result = repository.rssFeeds
+
+        assertEquals(flow, result)
+        verify { downloadTracker.rssFeeds }
+    }
+
+    @Test
+    fun testSyncingFeedIdsFlowDelegatesToTracker() {
+        val flow = MutableStateFlow<Set<String>>(emptySet())
+        every { downloadTracker.syncingFeedIds } returns flow
+
+        val result = repository.syncingFeedIds
+
+        assertEquals(flow, result)
+        verify { downloadTracker.syncingFeedIds }
+    }
+
+    @Test
+    fun testIsSyncingAllFlowDelegatesToTracker() {
+        val flow = MutableStateFlow(false)
+        every { downloadTracker.isSyncingAll } returns flow
+
+        val result = repository.isSyncingAll
+
+        assertEquals(flow, result)
+        verify { downloadTracker.isSyncingAll }
+    }
+
+    @Test
+    fun testTotalUnreadRssCountFlowDelegatesToTracker() {
+        val flow = MutableStateFlow(0)
+        every { downloadTracker.totalUnreadRssCount } returns flow
+
+        val result = repository.totalUnreadRssCount
+
+        assertEquals(flow, result)
+        verify { downloadTracker.totalUnreadRssCount }
+    }
+
+    @Test
+    fun testAddRssFeedDelegatesToTracker() {
+        val feed = RssFeed(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        every { downloadTracker.addRssFeed(feed) } returns Unit
+
+        repository.addRssFeed(feed)
+
+        verify { downloadTracker.addRssFeed(feed) }
+    }
+
+    @Test
+    fun testFindRssFeedReturnsFeedWhenFound() {
+        val feed = RssFeed(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        every { downloadTracker.rssFeeds } returns MutableStateFlow(listOf(feed))
+
+        val result = repository.findRssFeed("feed-1")
+
+        assertEquals(feed, result)
+    }
+
+    @Test
+    fun testRemoveRssFeedDelegatesToTracker() {
+        every { downloadTracker.removeRssFeed("feed-1") } returns Unit
+
+        repository.removeRssFeed("feed-1")
+
+        verify { downloadTracker.removeRssFeed("feed-1") }
+    }
+
+    @Test
+    fun testSetFeedSyncingDelegatesToTracker() {
+        every { downloadTracker.setFeedSyncing("feed-1", true) } returns Unit
+
+        repository.setFeedSyncing("feed-1", true)
+
+        verify { downloadTracker.setFeedSyncing("feed-1", true) }
+    }
+
+    @Test
+    fun testSetAllFeedsSyncingDelegatesToTracker() {
+        every { downloadTracker.setAllFeedsSyncing(true) } returns Unit
+
+        repository.setAllFeedsSyncing(true)
+
+        verify { downloadTracker.setAllFeedsSyncing(true) }
+    }
 
     @Test
     fun testMarkAllItemsAsReadSuccess() {
