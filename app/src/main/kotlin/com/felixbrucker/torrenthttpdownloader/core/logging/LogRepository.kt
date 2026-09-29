@@ -4,7 +4,6 @@ import android.content.Context
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +16,8 @@ import javax.inject.Singleton
 
 @Singleton
 class LogRepository @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val scope: CoroutineScope
 ) {
     private val maxEntries = 3000
     private val pruneThreshold = 3500
@@ -30,7 +30,6 @@ class LogRepository @Inject constructor(
     val logsFlow: StateFlow<List<LogEntry>> = _logsFlow.asStateFlow()
 
     private var logFile: File? = null
-    var scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 
     init {
         val logDir = File(context.filesDir, "logs")
@@ -40,7 +39,11 @@ class LogRepository @Inject constructor(
         val file = File(logDir, "app_logs.jsonl")
         logFile = file
 
-        loadInitialLogsLocked()
+        scope.launch {
+            mutex.withLock {
+                loadInitialLogsLocked()
+            }
+        }
     }
 
     internal fun loadInitialLogsLocked() {

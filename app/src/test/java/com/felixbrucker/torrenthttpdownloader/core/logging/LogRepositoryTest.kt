@@ -36,7 +36,8 @@ class LogRepositoryTest {
         val now = System.currentTimeMillis()
         file.writeText("{\"timestamp\":$now,\"priority\":3,\"tag\":\"Test\",\"message\":\"Msg 1\"}\n")
 
-        val repository = LogRepository(context)
+        val repository = LogRepository(context, scope = this)
+        testScheduler.advanceUntilIdle()
         val logs = repository.logsFlow.value
 
         assertTrue(logs.isNotEmpty())
@@ -45,8 +46,7 @@ class LogRepositoryTest {
 
     @Test
     fun testAddLogAppendsEntryAndUpdatesFlow() = runTest(testDispatcher) {
-        val repository = LogRepository(context)
-        repository.scope = this
+        val repository = LogRepository(context, scope = this)
         val entry = LogEntry(timestamp = System.currentTimeMillis(), message = "Test Log")
 
         repository.addLog(entry)
@@ -59,8 +59,7 @@ class LogRepositoryTest {
 
     @Test
     fun testClearLogsEmptiesFlowAndFile() = runTest(testDispatcher) {
-        val repository = LogRepository(context)
-        repository.scope = this
+        val repository = LogRepository(context, scope = this)
         repository.addLog(LogEntry(message = "Log to clear"))
         testScheduler.advanceUntilIdle()
 
@@ -72,8 +71,8 @@ class LogRepositoryTest {
     }
 
     @Test
-    fun testPruneEntriesFiltersByAgeAndMaxEntries() {
-        val repository = LogRepository(context)
+    fun testPruneEntriesFiltersByAgeAndMaxEntries() = runTest(testDispatcher) {
+        val repository = LogRepository(context, scope = this)
         val now = 100000L
         val oldEntry = LogEntry(timestamp = 1000L, message = "Old")
         val newEntry1 = LogEntry(timestamp = 90000L, message = "New 1")
