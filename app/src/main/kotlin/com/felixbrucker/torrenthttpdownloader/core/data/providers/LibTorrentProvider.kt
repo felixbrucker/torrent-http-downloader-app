@@ -410,7 +410,7 @@ class LibTorrentProvider @Inject constructor(
         if (!forceSave && lastSaveAt !== null && (now - lastSaveAt) < minimumTimeBetweenResumeDataSavesInMs) {
             return
         }
-        if (handle.isValid && handle.needSaveResumeData()) {
+        if (handle.isValid) {
             handle.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
             lastResumeDataSavedAt[id] = now
         }
