@@ -152,7 +152,7 @@ private fun LogsConfigCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("View Logs", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(stringResource(id = R.string.view_logs), fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }
