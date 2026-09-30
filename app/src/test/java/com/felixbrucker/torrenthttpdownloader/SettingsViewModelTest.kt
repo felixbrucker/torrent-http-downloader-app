@@ -11,9 +11,17 @@ import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
     private val sharedPreferences = mockk<SharedPreferences>()
     private val context = mockk<Context>(relaxed = true)
@@ -21,6 +29,17 @@ class SettingsViewModelTest {
     private val provider = mockk<TorrentProvider>(relaxed = true)
     private val providerFactory = mockk<ProviderFactory> {
         every { getProvider() } returns provider
+    }
+    private val testDispatcher = UnconfinedTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -34,7 +53,6 @@ class SettingsViewModelTest {
         every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 6
 
         val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
-
         val state = viewModel.uiState.value
 
         assertEquals(LibTorrentProvider.NAME, state.selectedProvider)
@@ -85,5 +103,45 @@ class SettingsViewModelTest {
         verify { editor.putInt("rss_sync_interval_hours", 12) }
         verify { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 12L) }
         verify(atLeast = 1) { provider.reloadSettings() }
+    }
+
+    @Test
+    fun testRssSyncScheduleOnlyUpdatesWhenRssSyncSettingsChange() {
+        val editor = mockk<SharedPreferences.Editor>(relaxed = true)
+        every { sharedPreferences.edit() } returns editor
+        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
+        every { sharedPreferences.getString("real_debrid_api_token", "") } returns ""
+        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 2
+        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 3
+        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns false
+        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
+        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+
+        viewModel.updateSelectedProvider(RealDebridProvider.NAME)
+        viewModel.updateRssSyncEnabled(false)
+
+        verify(exactly = 1) { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 3L) }
+        verify(exactly = 1) { provider.reloadSettings() }
+    }
+
+    @Test
+    fun testProviderReloadOnlyUpdatesWhenProviderSettingsChange() {
+        val editor = mockk<SharedPreferences.Editor>(relaxed = true)
+        every { sharedPreferences.edit() } returns editor
+        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
+        every { sharedPreferences.getString("real_debrid_api_token", "") } returns ""
+        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 2
+        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 3
+        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns false
+        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
+        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
+        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+
+        viewModel.updateRssSyncIntervalHours(6)
+        viewModel.updateRealDebridApiToken("new-token")
+
+        verify(exactly = 1) { rssSyncLauncher.updateRssSyncSchedule(enabled = true, intervalHours = 6L) }
+        verify(exactly = 1) { provider.reloadSettings() }
     }
 }
