@@ -16,6 +16,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
+import timber.log.Timber
 
 @HiltViewModel
 class AddTorrentViewModel @Inject constructor(
@@ -113,7 +114,7 @@ class AddTorrentViewModel @Inject constructor(
                 )
                 setResolvedConfig(config)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Failed to resolve torrent URI=%s", uri)
                 onFailure()
             } finally {
                 _isResolvingTorrent.value = false
@@ -130,6 +131,7 @@ class AddTorrentViewModel @Inject constructor(
             notifyOnCompletion = _notifyOnCompletionState.value,
             fileSelectionMode = _fileSelectionModeState.value
         )
+        Timber.i("Confirming add torrent id=%s, name=%s", updatedConfig.id, updatedConfig.name)
 
         if (config.feedId == null) {
             sharedPreferences.edit {

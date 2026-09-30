@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -26,6 +27,7 @@ class RssRepository @Inject constructor(
         get() = downloadTracker.totalUnreadRssCount
 
     fun addRssFeed(feed: RssFeed) {
+        Timber.i("Adding RSS feed name=%s, url=%s", feed.name, feed.url)
         downloadTracker.addRssFeed(feed)
     }
 
@@ -36,6 +38,7 @@ class RssRepository @Inject constructor(
     }
 
     fun removeRssFeed(id: String) {
+        Timber.i("Removing RSS feed id=%s", id)
         downloadTracker.removeRssFeed(id)
     }
 
@@ -94,6 +97,7 @@ class RssRepository @Inject constructor(
         totalNewItemsCount: Int,
         lastCheck: Long = System.currentTimeMillis(),
     ) {
+        Timber.i("Updated RSS feed id=%s with %d newly discovered items", feedId, newlyDiscoveredItems.size)
         downloadTracker.updateRssFeed(feedId) { currentFeed ->
             val updatedItems = (newlyDiscoveredItems + currentFeed.items)
                 .distinctBy { it.id }

@@ -121,6 +121,7 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

@@ -7,6 +7,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,7 @@ class DownloadRepository @Inject constructor(
     fun hasTasksWhichNeedProcessing(): Boolean = downloadTracker.hasTasksWhichNeedProcessing()
 
     fun addTask(task: DownloadTask) {
+        Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
         downloadTracker.addTask(task)
     }
 
@@ -40,6 +42,7 @@ class DownloadRepository @Inject constructor(
     }
 
     fun removeTask(id: String) {
+        Timber.i("Removing download task id=%s", id)
         downloadTracker.removeTask(id)
     }
 
@@ -141,12 +144,14 @@ class DownloadRepository @Inject constructor(
     }
 
     fun updateTaskState(taskId: String, state: TorrentState) {
+        Timber.d("Updating task id=%s state to %s", taskId, state)
         downloadTracker.updateTask(taskId) { task ->
             task.copy(state = state)
         }
     }
 
     fun updateTaskError(taskId: String, errorMessage: String?) {
+        Timber.e("Task id=%s error: %s", taskId, errorMessage)
         downloadTracker.updateTask(taskId) { task ->
             task.copy(
                 state = TorrentState.ERROR,
@@ -214,6 +219,7 @@ class DownloadRepository @Inject constructor(
     }
 
     fun resetTaskForRetry(taskId: String) {
+        Timber.i("Resetting task id=%s for retry", taskId)
         downloadTracker.updateTask(taskId) { task ->
             task.copy(
                 providerId = null,

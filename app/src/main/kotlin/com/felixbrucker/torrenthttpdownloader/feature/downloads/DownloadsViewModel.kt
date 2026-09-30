@@ -11,6 +11,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import timber.log.Timber
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
@@ -32,6 +33,7 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun removeTask(taskId: String, deleteFiles: Boolean, deleteTorrentFile: Boolean) {
+        Timber.i("Removing task id=%s (deleteFiles=%b, deleteTorrentFile=%b)", taskId, deleteFiles, deleteTorrentFile)
         serviceLauncher.removeTask(taskId, deleteFiles, deleteTorrentFile)
     }
 
@@ -76,6 +78,7 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun restartTask(taskId: String) {
+        Timber.i("Restarting task id=%s", taskId)
         serviceLauncher.restartTask(taskId)
     }
 

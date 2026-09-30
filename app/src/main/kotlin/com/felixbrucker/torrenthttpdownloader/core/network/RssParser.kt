@@ -10,6 +10,7 @@ import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
+import timber.log.Timber
 
 class RssParser(private val client: OkHttpClient) {
     private val dateFormats = listOf(
@@ -20,6 +21,7 @@ class RssParser(private val client: OkHttpClient) {
     )
 
     suspend fun fetchAndParse(url: String): List<RssItem> {
+        Timber.d("Fetching RSS feed from url=%s", url)
         val request = Request.Builder().url(url).build()
 
         return withContext(Dispatchers.IO) {
@@ -89,8 +91,10 @@ class RssParser(private val client: OkHttpClient) {
                 }
                 eventType = try { parser.next() } catch (e: Exception) { XmlPullParser.END_DOCUMENT }
             }
+            Timber.i("Parsed %d items from RSS feed", items.size)
             return items
         } catch (e: Exception) {
+            Timber.e(e, "XML Parsing failed")
             throw RuntimeException("XML Parsing failed: ${e.message}", e)
         }
     }

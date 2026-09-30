@@ -16,6 +16,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.extensions.makeTorrentId
+import timber.log.Timber
 
 data class ResolvedTorrent(
     val type: TorrentType,
@@ -35,6 +36,7 @@ class TorrentUriResolver @Inject constructor(
         .build()
 
     suspend fun resolve(uri: Uri): ResolvedTorrent {
+        Timber.d("Resolving torrent URI=%s", uri)
         var newUri: Uri = uri
         if (uri.scheme == "http" || uri.scheme == "https") {
             // Fetch torrent file
@@ -64,12 +66,14 @@ class TorrentUriResolver @Inject constructor(
         val name = tryToGetNameFromUri(contentResolver, newUri.toString(), type)
         val id = newUri.makeTorrentId(contentResolver)
 
-        return ResolvedTorrent(
+        val resolved = ResolvedTorrent(
             type = type,
             uri = newUri,
             id = id,
             name = name,
         )
+        Timber.i("Resolved torrent id=%s, type=%s, name=%s", resolved.id, resolved.type, resolved.name)
+        return resolved
     }
     private fun tryToGetNameFromUri(contentResolver: ContentResolver, uriString: String, type: TorrentType): String? {
         if (type == TorrentType.MAGNET) {

@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
+import timber.log.Timber
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -16,11 +17,13 @@ class MainViewModel @Inject constructor(
 
     fun checkAndStartDownloadService(context: Context) {
         if (downloadRepository.hasTasksWhichNeedProcessing()) {
+            Timber.i("Starting DownloadService for tasks needing processing")
             context.startService(Intent(context, DownloadService::class.java))
         }
     }
 
     fun ensureRssSyncIsScheduled() {
+        Timber.d("Ensuring RSS sync is scheduled")
         rssSyncLauncher.ensureRssSyncIsScheduled()
     }
 }
