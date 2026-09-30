@@ -131,6 +131,7 @@ class DownloadService : Service() {
                         Timber.e(e, "Error sending completion intent for task id=%s", task.id)
                     }
                 }
+                updateNotification()
                 stopSelfIfIdle()
             },
             onPostNotification = ::postNotification,
@@ -293,7 +294,6 @@ class DownloadService : Service() {
         )
     }
 
-    @Suppress("DEPRECATION")
     private fun startNotificationUpdates() {
         notificationUpdateJob?.cancel()
         notificationUpdateJob = serviceScope.launch {
@@ -312,6 +312,14 @@ class DownloadService : Service() {
                     notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification(config))
                 }
         }
+    }
+
+    private fun updateNotification() {
+        val config = downloadRepository.getTasks().toNotificationConfig(
+            providerSupportsPauseResume = provider.supports(ProviderFeature.PauseResume)
+        )
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification(config))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -373,52 +381,63 @@ class DownloadService : Service() {
     private fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.pauseFile(taskId, fileLink)
+        updateNotification()
     }
 
     private fun resumeLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.resumeFile(taskId, fileLink)
+        updateNotification()
     }
 
     private fun pauseTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.pauseTask(taskId)
+        updateNotification()
     }
 
     private fun resumeTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.resumeTask(taskId)
+        updateNotification()
     }
 
     private fun pauseAllLocalDownloads() {
         localDownloadManager.pauseAll()
+        updateNotification()
     }
 
     private fun resumeAllLocalDownloads() {
         localDownloadManager.resumeAll()
+        updateNotification()
     }
 
     private suspend fun pauseTaskOnProvider(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.pauseTaskOnProvider(taskId)
+        updateNotification()
     }
 
     private suspend fun resumeTaskOnProvider(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.resumeTaskOnProvider(taskId)
+        updateNotification()
     }
 
     private suspend fun restartTask(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.restartTask(taskId)
+        updateNotification()
     }
 
     private suspend fun pauseAllOnProvider() {
         torrentStateMachine.pauseAllTasksOnProvider()
+        updateNotification()
     }
 
     private suspend fun resumeAllOnProvider() {
         torrentStateMachine.resumeAllTasksOnProvider()
+        updateNotification()
     }
 
     private suspend fun setProviderFilePriority(taskId: String?, fileId: Int, priority: FilePriority) {
