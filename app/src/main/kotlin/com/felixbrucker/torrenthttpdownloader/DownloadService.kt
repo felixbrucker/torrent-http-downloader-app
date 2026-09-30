@@ -16,21 +16,25 @@ import javax.inject.Inject
 import javax.inject.Named
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeature
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
-import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
-import com.felixbrucker.torrenthttpdownloader.core.model.TaskLocation
+import com.felixbrucker.torrenthttpdownloader.core.model.NotificationConfig
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
+import com.felixbrucker.torrenthttpdownloader.core.model.toNotificationConfig
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
@@ -127,7 +131,6 @@ class DownloadService : Service() {
                         Timber.e(e, "Error sending completion intent for task id=%s", task.id)
                     }
                 }
-                updateNotification()
                 stopSelfIfIdle()
             },
             onPostNotification = ::postNotification,
@@ -167,7 +170,7 @@ class DownloadService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun getNotification(): Notification {
+    private fun getNotification(config: NotificationConfig): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -184,46 +187,20 @@ class DownloadService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val tasks = downloadRepository.getTasks()
-
-        var totalSpeed = 0L
-        var totalProgress = 0
-        var totalDownloadedBytes = 0L
-        var totalBytes = 0L
-        var runningLocalDownloads = 0
-        var totalLocalDownloads = 0
-        var completedLocalDownloads = 0
-
-        for (task in tasks) {
-            totalSpeed += task.overallDownloadSpeed
-            totalProgress += task.overallProgress
-            totalDownloadedBytes += task.downloadedBytes
-            totalBytes += task.totalBytes
-            runningLocalDownloads += task.files.filter { it.state == LocalDownloadState.DOWNLOADING }.size
-            completedLocalDownloads += task.files.filter { it.state == LocalDownloadState.COMPLETED }.size
-            totalLocalDownloads += task.files.size
-        }
-
-        val avgProgress = if (tasks.isNotEmpty()) totalProgress / tasks.size else 0
         val builder = NotificationCompat.Builder(this, SERVICE_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Idle")
 
-        if (tasks.isNotEmpty()) {
-            val hasRunningProviderTasks = tasks.any {
-                it.location == TaskLocation.PROVIDER
-                        && it.providerTorrentInfo?.state != ProviderTorrentState.PAUSED
-                        && it.providerTorrentInfo?.state != ProviderTorrentState.COMPLETED
-            }
-            var title = "Downloading: ${Formatter.formatSpeed(totalSpeed)}"
+        if (config.taskCount > 0) {
+            var title = "Downloading: ${Formatter.formatSpeed(config.totalSpeed)}"
             builder.setSmallIcon(android.R.drawable.stat_sys_download)
 
-            if (totalSpeed > 0) {
-                val remainingBytes = totalBytes - totalDownloadedBytes
-                val remainingTime = remainingBytes / totalSpeed
+            if (config.totalSpeed > 0) {
+                val remainingBytes = config.totalBytes - config.totalDownloadedBytes
+                val remainingTime = remainingBytes / config.totalSpeed
                 title += " • ${Formatter.formatTime(remainingTime)} left"
-            } else if (runningLocalDownloads == 0) {
-                if (hasRunningProviderTasks) {
+            } else if (config.runningLocalDownloads == 0) {
+                if (config.hasRunningProviderTasks) {
                     title = "Working"
                 } else {
                     title = "Idle"
@@ -233,11 +210,11 @@ class DownloadService : Service() {
 
             val style = NotificationCompat
                 .InboxStyle()
-                .addLine("Tasks: ${tasks.size} remaining")
-            if (totalLocalDownloads > 0) {
-                style.addLine("Downloads: $runningLocalDownloads active, $completedLocalDownloads/$totalLocalDownloads completed")
+                .addLine("Tasks: ${config.taskCount} remaining")
+            if (config.totalLocalDownloads > 0) {
+                style.addLine("Downloads: ${config.runningLocalDownloads} active, ${config.completedLocalDownloads}/${config.totalLocalDownloads} completed")
             }
-            style.addLine("Size: ${Formatter.formatBytes(totalDownloadedBytes)} / ${Formatter.formatBytes(totalBytes)} downloaded")
+            style.addLine("Size: ${Formatter.formatBytes(config.totalDownloadedBytes)} / ${Formatter.formatBytes(config.totalBytes)} downloaded")
 
             builder
                 .setStyle(style)
@@ -248,12 +225,10 @@ class DownloadService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setProgress(100, avgProgress, tasks.isEmpty())
+            .setProgress(100, config.avgProgress, config.taskCount == 0)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Exit", stopPendingIntent)
 
-        val anyDownloading = tasks.any { task -> task.files.any { it.state == LocalDownloadState.DOWNLOADING || it.state == LocalDownloadState.PENDING } }
-        val anyPaused = tasks.any { task -> task.files.any { it.state == LocalDownloadState.PAUSED } }
-        if (anyDownloading) {
+        if (config.anyLocalDownloading) {
             val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
                 action = ACTION_PAUSE_ALL_LOCAL_DOWNLOADS
             }
@@ -263,7 +238,7 @@ class DownloadService : Service() {
             )
             builder.addAction(android.R.drawable.ic_media_pause, "Pause all", pauseAllPendingIntent)
         }
-        if (anyPaused) {
+        if (config.anyLocalPaused) {
             val resumeAllIntent = Intent(this, DownloadService::class.java).apply {
                 action = ACTION_RESUME_ALL_LOCAL_DOWNLOADS
             }
@@ -273,10 +248,8 @@ class DownloadService : Service() {
             )
             builder.addAction(android.R.drawable.ic_media_play, "Resume all", resumeAllPendingIntent)
         }
-        if (provider.supports(ProviderFeature.PauseResume)) {
-            val anyDownloadingOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING }
-            val anyPausedOnProvider = tasks.any { it.providerTorrentInfo?.state == ProviderTorrentState.PAUSED }
-            if (anyDownloadingOnProvider) {
+        if (config.providerSupportsPauseResume) {
+            if (config.anyDownloadingOnProvider) {
                 val pauseAllOnProviderIntent = Intent(this, DownloadService::class.java).apply {
                     action = ACTION_PAUSE_ALL_ON_PROVIDER
                 }
@@ -290,7 +263,7 @@ class DownloadService : Service() {
                     pauseAllOnProviderPendingIntent
                 )
             }
-            if (anyPausedOnProvider) {
+            if (config.anyPausedOnProvider) {
                 val resumeAllOnProviderIntent = Intent(this, DownloadService::class.java).apply {
                     action = ACTION_RESUME_ALL_ON_PROVIDER
                 }
@@ -310,26 +283,35 @@ class DownloadService : Service() {
     }
 
     private fun startForegroundService() {
+        val initialConfig = downloadRepository.getTasks().toNotificationConfig(
+            providerSupportsPauseResume = provider.supports(ProviderFeature.PauseResume)
+        )
         startForeground(
             SERVICE_NOTIFICATION_ID,
-            getNotification(),
+            getNotification(initialConfig),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
     }
 
+    @Suppress("DEPRECATION")
     private fun startNotificationUpdates() {
         notificationUpdateJob?.cancel()
         notificationUpdateJob = serviceScope.launch {
-            while (isActive) {
-                updateNotification()
-                delay(2.seconds)
-            }
+            val tasksFlow: Flow<List<DownloadTask>> = downloadRepository.tasks
+            tasksFlow
+                .conflate()
+                .onEach { delay(2.seconds) }
+                .map { tasks ->
+                    tasks.toNotificationConfig(
+                        providerSupportsPauseResume = provider.supports(ProviderFeature.PauseResume)
+                    )
+                }
+                .distinctUntilChanged()
+                .collect { config ->
+                    val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification(config))
+                }
         }
-    }
-
-    private fun updateNotification() {
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(SERVICE_NOTIFICATION_ID, getNotification())
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -391,63 +373,52 @@ class DownloadService : Service() {
     private fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.pauseFile(taskId, fileLink)
-        updateNotification()
     }
 
     private fun resumeLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.resumeFile(taskId, fileLink)
-        updateNotification()
     }
 
     private fun pauseTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.pauseTask(taskId)
-        updateNotification()
     }
 
     private fun resumeTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.resumeTask(taskId)
-        updateNotification()
     }
 
     private fun pauseAllLocalDownloads() {
         localDownloadManager.pauseAll()
-        updateNotification()
     }
 
     private fun resumeAllLocalDownloads() {
         localDownloadManager.resumeAll()
-        updateNotification()
     }
 
     private suspend fun pauseTaskOnProvider(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.pauseTaskOnProvider(taskId)
-        updateNotification()
     }
 
     private suspend fun resumeTaskOnProvider(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.resumeTaskOnProvider(taskId)
-        updateNotification()
     }
 
     private suspend fun restartTask(taskId: String?) {
         if (taskId == null) return
         torrentStateMachine.restartTask(taskId)
-        updateNotification()
     }
 
     private suspend fun pauseAllOnProvider() {
         torrentStateMachine.pauseAllTasksOnProvider()
-        updateNotification()
     }
 
     private suspend fun resumeAllOnProvider() {
         torrentStateMachine.resumeAllTasksOnProvider()
-        updateNotification()
     }
 
     private suspend fun setProviderFilePriority(taskId: String?, fileId: Int, priority: FilePriority) {
