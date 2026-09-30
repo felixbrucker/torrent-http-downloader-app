@@ -4,18 +4,25 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
+import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Named
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
-import javax.inject.Inject
-import javax.inject.Named
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
-import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import timber.log.Timber
 
 data class SettingsUiState(
@@ -26,6 +33,14 @@ data class SettingsUiState(
     val libTorrentRequireVpnConnection: Boolean = false,
     val rssSyncEnabled: Boolean = true,
     val rssSyncIntervalHours: Int = 3
+)
+
+private data class ProviderSettings(
+    val selectedProvider: String,
+    val realDebridApiToken: String,
+    val localParallelDownloads: String,
+    val libTorrentParallelDownloads: String,
+    val libTorrentRequireVpnConnection: Boolean
 )
 
 @HiltViewModel
@@ -44,6 +59,91 @@ class SettingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(loadInitialSettings())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    private val selectedProviderFlow = _uiState.map { it.selectedProvider }.distinctUntilChanged()
+    private val realDebridApiTokenFlow = _uiState.map { it.realDebridApiToken.trim() }.distinctUntilChanged()
+    private val localParallelDownloadsFlow = _uiState.map { it.localParallelDownloads }.distinctUntilChanged()
+    private val libTorrentParallelDownloadsFlow = _uiState.map { it.libTorrentParallelDownloads }.distinctUntilChanged()
+    private val libTorrentRequireVpnConnectionFlow = _uiState.map { it.libTorrentRequireVpnConnection }.distinctUntilChanged()
+    private val rssSyncEnabledFlow = _uiState.map { it.rssSyncEnabled }.distinctUntilChanged()
+    private val rssSyncIntervalHoursFlow = _uiState.map { it.rssSyncIntervalHours }.distinctUntilChanged()
+
+    init {
+        selectedProviderFlow.drop(1).onEach { provider ->
+            Timber.d("Settings saved: selectedProvider=%s", provider)
+            sharedPreferences.edit { putString("provider", provider) }
+        }.launchIn(viewModelScope)
+
+        realDebridApiTokenFlow.drop(1).onEach { token ->
+            Timber.d("Settings saved: realDebridApiToken=%s", if (token.isBlank()) "<empty>" else "***")
+            sharedPreferences.edit { putString("real_debrid_api_token", token) }
+        }.launchIn(viewModelScope)
+
+        localParallelDownloadsFlow.drop(1).onEach { limit ->
+            val value = limit.toIntOrNull() ?: 2
+            Timber.d("Settings saved: localParallelDownloads=%d", value)
+            sharedPreferences.edit { putInt("local_parallel_downloads", value) }
+        }.launchIn(viewModelScope)
+
+        libTorrentParallelDownloadsFlow.drop(1).onEach { limit ->
+            val value = limit.toIntOrNull() ?: 3
+            Timber.d("Settings saved: libTorrentParallelDownloads=%d", value)
+            sharedPreferences.edit { putInt("libtorrent_parallel_downloads", value) }
+        }.launchIn(viewModelScope)
+
+        libTorrentRequireVpnConnectionFlow.drop(1).onEach { requireVpn ->
+            Timber.d("Settings saved: libTorrentRequireVpnConnection=%b", requireVpn)
+            sharedPreferences.edit { putBoolean("libtorrent_require_vpn_connection", requireVpn) }
+        }.launchIn(viewModelScope)
+
+        rssSyncEnabledFlow.drop(1).onEach { enabled ->
+            Timber.d("Settings saved: rssSyncEnabled=%b", enabled)
+            sharedPreferences.edit { putBoolean("rss_sync_enabled", enabled) }
+        }.launchIn(viewModelScope)
+
+        rssSyncIntervalHoursFlow.drop(1).onEach { interval ->
+            Timber.d("Settings saved: rssSyncIntervalHours=%d", interval)
+            sharedPreferences.edit { putInt("rss_sync_interval_hours", interval) }
+        }.launchIn(viewModelScope)
+
+        combine(
+            rssSyncEnabledFlow,
+            rssSyncIntervalHoursFlow
+        ) { enabled, interval ->
+            enabled to interval
+        }
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach { (enabled, interval) ->
+                rssSyncLauncher.updateRssSyncSchedule(
+                    enabled = enabled,
+                    intervalHours = interval.toLong()
+                )
+            }
+            .launchIn(viewModelScope)
+
+        combine(
+            selectedProviderFlow,
+            realDebridApiTokenFlow,
+            localParallelDownloadsFlow,
+            libTorrentParallelDownloadsFlow,
+            libTorrentRequireVpnConnectionFlow
+        ) { provider, token, localParallel, libTorrentParallel, requireVpn ->
+            ProviderSettings(
+                selectedProvider = provider,
+                realDebridApiToken = token,
+                localParallelDownloads = localParallel,
+                libTorrentParallelDownloads = libTorrentParallel,
+                libTorrentRequireVpnConnection = requireVpn
+            )
+        }
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach {
+                providerFactory.getProvider().reloadSettings()
+            }
+            .launchIn(viewModelScope)
+    }
+
     private fun loadInitialSettings(): SettingsUiState {
         return SettingsUiState(
             selectedProvider = sharedPreferences.getString("provider", availableProviders[0]) ?: availableProviders[0],
@@ -58,66 +158,31 @@ class SettingsViewModel @Inject constructor(
 
     fun updateSelectedProvider(provider: String) {
         _uiState.update { it.copy(selectedProvider = provider) }
-        saveSettings()
     }
 
     fun updateRealDebridApiToken(token: String) {
         _uiState.update { it.copy(realDebridApiToken = token) }
-        saveSettings()
     }
 
     fun updateLocalParallelDownloads(limit: String) {
         val filtered = limit.filter { it.isDigit() }
         _uiState.update { it.copy(localParallelDownloads = filtered) }
-        saveSettings()
     }
 
     fun updateLibTorrentParallelDownloads(limit: String) {
         val filtered = limit.filter { it.isDigit() }
         _uiState.update { it.copy(libTorrentParallelDownloads = filtered) }
-        saveSettings()
     }
 
     fun updateLibTorrentRequireVpnConnection(requireVpn: Boolean) {
         _uiState.update { it.copy(libTorrentRequireVpnConnection = requireVpn) }
-        saveSettings()
     }
 
     fun updateRssSyncEnabled(enabled: Boolean) {
         _uiState.update { it.copy(rssSyncEnabled = enabled) }
-        saveSettings()
     }
 
     fun updateRssSyncIntervalHours(hours: Int) {
         _uiState.update { it.copy(rssSyncIntervalHours = hours) }
-        saveSettings()
-    }
-
-    private fun saveSettings() {
-        val currentState = _uiState.value
-        Timber.d(
-            "Settings saved: selectedProvider=%s, realDebridApiToken=%s, localParallelDownloads=%s, libTorrentParallelDownloads=%s, libTorrentRequireVpnConnection=%b, rssSyncEnabled=%b, rssSyncIntervalHours=%d",
-            currentState.selectedProvider,
-            if (currentState.realDebridApiToken.isBlank()) "<empty>" else "***",
-            currentState.localParallelDownloads,
-            currentState.libTorrentParallelDownloads,
-            currentState.libTorrentRequireVpnConnection,
-            currentState.rssSyncEnabled,
-            currentState.rssSyncIntervalHours
-        )
-        sharedPreferences.edit {
-            putString("provider", currentState.selectedProvider)
-            putString("real_debrid_api_token", currentState.realDebridApiToken.trim())
-            putInt("local_parallel_downloads", currentState.localParallelDownloads.toIntOrNull() ?: 2)
-            putInt("libtorrent_parallel_downloads", currentState.libTorrentParallelDownloads.toIntOrNull() ?: 3)
-            putBoolean("libtorrent_require_vpn_connection", currentState.libTorrentRequireVpnConnection)
-            putBoolean("rss_sync_enabled", currentState.rssSyncEnabled)
-            putInt("rss_sync_interval_hours", currentState.rssSyncIntervalHours)
-        }
-        rssSyncLauncher.updateRssSyncSchedule(
-            enabled = currentState.rssSyncEnabled,
-            intervalHours = currentState.rssSyncIntervalHours.toLong()
-        )
-        providerFactory.getProvider().reloadSettings()
     }
 }
