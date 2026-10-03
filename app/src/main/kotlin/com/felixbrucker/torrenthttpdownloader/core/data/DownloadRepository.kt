@@ -7,43 +7,65 @@ import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
-import timber.log.Timber
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import timber.log.Timber
 
 @Singleton
 class DownloadRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
+    private val downloadProgressTracker: DownloadProgressTracker,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
     @get:JvmName("getTasksFlow")
-    val tasks: StateFlow<List<DownloadTask>>
-        get() = downloadTracker.tasks
+    val tasks: StateFlow<List<DownloadTask>> = combine(
+        downloadTracker.tasks,
+        downloadProgressTracker.progressInfo,
+    ) { staticTasks, progressMap ->
+        combineTasksWithProgressInfo(staticTasks, progressMap)
+    }.stateIn(
+        scope = scope,
+        started = SharingStarted.Eagerly,
+        initialValue = combineTasksWithProgressInfo(
+            downloadTracker.getTasks(),
+            downloadProgressTracker.progressInfo.value,
+        ),
+    )
 
-    fun getTasks(): List<DownloadTask> = downloadTracker.getTasks()
+    fun getTasks(): List<DownloadTask> = tasks.value
 
     fun hasTasksWhichNeedProcessing(): Boolean = downloadTracker.hasTasksWhichNeedProcessing()
 
     fun addTask(task: DownloadTask) {
         Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
-        downloadTracker.addTask(task)
+        if (task.providerTorrentInfo != null) {
+            downloadProgressTracker.updateProviderTorrentInfo(task.id, task.providerTorrentInfo)
+        }
+        downloadTracker.addTask(task.copy(providerTorrentInfo = null))
     }
 
     fun moveTask(fromIndex: Int, toIndex: Int) {
         downloadTracker.moveTask(fromIndex, toIndex)
     }
 
-    fun findTask(id: String): DownloadTask? = downloadTracker.findTask(id)
+    fun findTask(id: String): DownloadTask? = tasks.value.find { it.id == id }
 
-    fun hasTask(id: String): Boolean = downloadTracker.getTasks().any { it.id == id }
+    fun hasTask(id: String): Boolean = tasks.value.any { it.id == id }
 
     fun findTaskFile(taskId: String, fileLink: String): DownloadFile? {
-        return downloadTracker.findTask(taskId)?.files?.find { it.link == fileLink }
+        return findTask(taskId)?.files?.find { it.link == fileLink }
     }
 
     fun removeTask(id: String) {
         Timber.i("Removing download task id=%s", id)
         downloadTracker.removeTask(id)
+        downloadProgressTracker.clearTask(id)
     }
 
     fun updateFileDownloadingState(
@@ -56,9 +78,9 @@ class DownloadRepository @Inject constructor(
             file.copy(
                 state = LocalDownloadState.DOWNLOADING,
                 totalBytes = totalBytes,
-                downloadedBytes = downloadedBytes,
             )
         }
+        downloadProgressTracker.updateFileDownloadedBytes(taskId, fileLink, downloadedBytes)
     }
 
     fun updateFileProgress(
@@ -70,15 +92,15 @@ class DownloadRepository @Inject constructor(
         lastTimestamp: Long,
         lastBytes: Long,
     ) {
-        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(
-                progress = progress,
-                downloadedBytes = downloadedBytes,
-                speed = speed,
-                lastTimestamp = lastTimestamp,
-                lastBytes = lastBytes,
-            )
-        }
+        downloadProgressTracker.updateFileProgress(
+            taskId = taskId,
+            fileLink = fileLink,
+            progress = progress,
+            downloadedBytes = downloadedBytes,
+            speed = speed,
+            lastTimestamp = lastTimestamp,
+            lastBytes = lastBytes,
+        )
     }
 
     fun updateFileState(
@@ -88,59 +110,25 @@ class DownloadRepository @Inject constructor(
         stateDescription: String? = null,
     ) {
         downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(state = state, stateDescription = stateDescription, speed = 0)
+            file.copy(state = state, stateDescription = stateDescription)
         }
+        downloadProgressTracker.updateFileSpeed(taskId, fileLink, 0)
     }
 
     fun updateProviderTorrentState(taskId: String, state: ProviderTorrentState) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                providerTorrentInfo = task.providerTorrentInfo?.copy(
-                    state = state,
-                )
-            )
-        }
+        downloadProgressTracker.updateProviderTorrentState(taskId, state)
     }
 
     fun setProviderFilePriority(taskId: String, fileId: Int, priority: FilePriority) {
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                if (file.id == fileId) {
-                    file.copy(priority = priority, isSelected = priority != FilePriority.IGNORE)
-                } else {
-                    file
-                }
-            } ?: emptyList()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadProgressTracker.setProviderFilePriority(taskId, fileId, priority)
     }
 
     fun toggleProviderFileSelectionLocally(taskId: String, fileId: Int) {
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                if (file.id == fileId) {
-                    file.copy(isSelected = !file.isSelected)
-                } else {
-                    file
-                }
-            } ?: emptyList()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadProgressTracker.toggleProviderFileSelectionLocally(taskId, fileId)
     }
 
     fun toggleAllProviderFilesSelectionLocally(taskId: String, selectAll: Boolean) {
-        downloadTracker.updateTask(taskId) { currentTask ->
-            val updatedFiles = currentTask.providerTorrentInfo?.files?.map { file ->
-                file.copy(isSelected = selectAll)
-            } ?: emptyList()
-            currentTask.copy(
-                providerTorrentInfo = currentTask.providerTorrentInfo?.copy(files = updatedFiles)
-            )
-        }
+        downloadProgressTracker.toggleAllProviderFilesSelectionLocally(taskId, selectAll)
     }
 
     fun updateTaskState(taskId: String, state: TorrentState) {
@@ -186,16 +174,7 @@ class DownloadRepository @Inject constructor(
     }
 
     fun setProviderTorrentInfoWaitingForFileSelection(taskId: String) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                providerTorrentInfo = task.providerTorrentInfo?.copy(
-                    state = ProviderTorrentState.WAITING_FOR_FILE_SELECTION,
-                    status = "waiting_for_file_selection",
-                    downloadSpeed = 0,
-                    uploadSpeed = 0,
-                )
-            )
-        }
+        downloadProgressTracker.setProviderTorrentInfoWaitingForFileSelection(taskId)
     }
 
     fun updateTaskFilesAndState(taskId: String, files: List<DownloadFile>, state: TorrentState) {
@@ -208,14 +187,14 @@ class DownloadRepository @Inject constructor(
     }
 
     fun markAllTaskFilesCompletedLocally(taskId: String) {
+        val taskFiles = findTask(taskId)?.files ?: emptyList()
         downloadTracker.updateTaskFiles(taskId) { file ->
             file.copy(
                 unrestrictedLink = null,
                 state = LocalDownloadState.COMPLETED,
-                progress = 100,
-                downloadedBytes = file.totalBytes,
             )
         }
+        downloadProgressTracker.markAllTaskFilesCompletedLocally(taskId, taskFiles)
     }
 
     fun resetTaskForRetry(taskId: String) {
@@ -224,19 +203,45 @@ class DownloadRepository @Inject constructor(
             task.copy(
                 providerId = null,
                 state = TorrentState.ADDING_TO_PROVIDER,
-                providerTorrentInfo = null,
                 files = emptyList(),
                 errorMessage = null,
             )
         }
+        downloadProgressTracker.clearTask(taskId)
     }
 
     fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         downloadTracker.updateTask(taskId) { task ->
             task.copy(
                 name = if (task.name == task.torrent.uri) torrentInfo.name else task.name,
-                providerTorrentInfo = torrentInfo,
             )
+        }
+        downloadProgressTracker.updateProviderTorrentInfo(taskId, torrentInfo)
+    }
+
+    private companion object {
+        fun combineTasksWithProgressInfo(
+            staticTasks: List<DownloadTask>,
+            progressMap: Map<String, TaskProgressInfo>,
+        ): List<DownloadTask> {
+            return staticTasks.map { task ->
+                val progressInfo = progressMap[task.id] ?: return@map task
+                val updatedProviderInfo = progressInfo.providerTorrentInfo ?: task.providerTorrentInfo
+                val updatedFiles = task.files.map { file ->
+                    val fileProgress = progressInfo.fileProgressMap[file.link] ?: return@map file
+                    file.copy(
+                        progress = fileProgress.progress,
+                        speed = fileProgress.speed,
+                        downloadedBytes = fileProgress.downloadedBytes,
+                        lastBytes = fileProgress.lastBytes,
+                        lastTimestamp = fileProgress.lastTimestamp,
+                    )
+                }
+                task.copy(
+                    providerTorrentInfo = updatedProviderInfo,
+                    files = updatedFiles,
+                )
+            }
         }
     }
 }

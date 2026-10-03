@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader
 
+import com.felixbrucker.torrenthttpdownloader.core.data.DownloadProgressTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
@@ -16,46 +17,65 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DownloadRepositoryTest {
     private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
-    private val repository = DownloadRepository(downloadTracker)
+    private val downloadProgressTracker = DownloadProgressTracker()
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testScope = TestScope(testDispatcher)
+    private val staticTasksFlow = MutableStateFlow<List<DownloadTask>>(emptyList())
 
-    @Test
-    fun testTasksFlowDelegatesToTracker() {
-        val flow = MutableStateFlow<List<DownloadTask>>(emptyList())
-        every { downloadTracker.tasks } returns flow
-
-        val result = repository.tasks
-
-        assertEquals(flow, result)
-        verify { downloadTracker.tasks }
+    private fun createRepository(): DownloadRepository {
+        every { downloadTracker.tasks } returns staticTasksFlow
+        return DownloadRepository(downloadTracker, downloadProgressTracker, testScope)
     }
 
     @Test
-    fun testGetTasksDelegatesToTracker() {
-        val tasks = listOf(
-            DownloadTask(
-                id = "task-1",
-                name = "Test Task",
-                torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
-            )
+    fun testTasksFlowCombinesTrackerAndProgress() {
+        val staticTask = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
+            files = listOf(DownloadFile(link = "http://example.com/file1"))
         )
-        every { downloadTracker.getTasks() } returns tasks
+        staticTasksFlow.value = listOf(staticTask)
+        val repository = createRepository()
+
+        downloadProgressTracker.updateFileProgress("task-1", "http://example.com/file1", 80, 800L, 100L, 12345L, 700L)
+
+        val combinedTasks = repository.tasks.value
+        assertEquals(1, combinedTasks.size)
+        assertEquals(80, combinedTasks[0].files[0].progress)
+        assertEquals(800L, combinedTasks[0].files[0].downloadedBytes)
+    }
+
+    @Test
+    fun testGetTasksReturnsCombinedTasks() {
+        val staticTask = DownloadTask(
+            id = "task-1",
+            name = "Test Task",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+        )
+        staticTasksFlow.value = listOf(staticTask)
+        val repository = createRepository()
 
         val result = repository.getTasks()
 
-        assertEquals(tasks, result)
-        verify { downloadTracker.getTasks() }
+        assertEquals(listOf(staticTask), result)
     }
 
     @Test
     fun testHasTasksWhichNeedProcessingDelegatesToTracker() {
         every { downloadTracker.hasTasksWhichNeedProcessing() } returns true
+        val repository = createRepository()
 
         val result = repository.hasTasksWhichNeedProcessing()
 
@@ -64,22 +84,40 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun testAddTaskDelegatesToTracker() {
+    fun testAddTaskDelegatesToTrackerAndProgress() {
+        val providerInfo = ProviderTorrentInfo(
+            id = "p-1",
+            name = "Test",
+            state = ProviderTorrentState.DOWNLOADING,
+            status = "downloading",
+            progress = 50f,
+            totalSizeInBytes = 1000L,
+            downloadedBytes = 500L,
+            downloadSpeed = 10L,
+            uploadSpeed = 0L,
+            seeders = 1,
+            leechers = 1,
+            peers = 2,
+            totalPeers = 2,
+        )
         val task = DownloadTask(
             id = "task-1",
             name = "Test Task",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
+            providerTorrentInfo = providerInfo
         )
-        every { downloadTracker.addTask(task) } returns Unit
+        val repository = createRepository()
 
         repository.addTask(task)
 
-        verify { downloadTracker.addTask(task) }
+        verify { downloadTracker.addTask(match { it.id == "task-1" && it.providerTorrentInfo == null }) }
+        assertEquals(providerInfo, downloadProgressTracker.progressInfo.value["task-1"]?.providerTorrentInfo)
     }
 
     @Test
     fun testMoveTaskDelegatesToTracker() {
         every { downloadTracker.moveTask(0, 1) } returns Unit
+        val repository = createRepository()
 
         repository.moveTask(0, 1)
 
@@ -87,28 +125,29 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun testFindTaskDelegatesToTracker() {
-        val task = DownloadTask(
+    fun testFindTaskReturnsTaskWithProgress() {
+        val staticTask = DownloadTask(
             id = "task-1",
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
         )
-        every { downloadTracker.findTask("task-1") } returns task
+        staticTasksFlow.value = listOf(staticTask)
+        val repository = createRepository()
 
         val result = repository.findTask("task-1")
 
-        assertEquals(task, result)
-        verify { downloadTracker.findTask("task-1") }
+        assertEquals(staticTask, result)
     }
 
     @Test
     fun testHasTaskReturnsTrueWhenFound() {
-        val task = DownloadTask(
+        val staticTask = DownloadTask(
             id = "task-1",
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
         )
-        every { downloadTracker.getTasks() } returns listOf(task)
+        staticTasksFlow.value = listOf(staticTask)
+        val repository = createRepository()
 
         val result = repository.hasTask("task-1")
 
@@ -118,13 +157,14 @@ class DownloadRepositoryTest {
     @Test
     fun testFindTaskFileReturnsFileWhenFound() {
         val file = DownloadFile(link = "link-1")
-        val task = DownloadTask(
+        val staticTask = DownloadTask(
             id = "task-1",
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
             files = listOf(file)
         )
-        every { downloadTracker.findTask("task-1") } returns task
+        staticTasksFlow.value = listOf(staticTask)
+        val repository = createRepository()
 
         val result = repository.findTaskFile("task-1", "link-1")
 
@@ -132,12 +172,15 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun testRemoveTaskDelegatesToTracker() {
+    fun testRemoveTaskDelegatesToTrackerAndClearsProgress() {
         every { downloadTracker.removeTask("task-1") } returns Unit
+        downloadProgressTracker.updateFileSpeed("task-1", "link-1", 100L)
+        val repository = createRepository()
 
         repository.removeTask("task-1")
 
         verify { downloadTracker.removeTask("task-1") }
+        assertTrue(downloadProgressTracker.progressInfo.value["task-1"] == null)
     }
 
     @Test
@@ -146,6 +189,7 @@ class DownloadRepositoryTest {
         val link = "http://example.com/file1"
         val fileSlot = slot<(DownloadFile) -> DownloadFile>()
         every { downloadTracker.updateTaskFile(taskId, link, capture(fileSlot)) } returns Unit
+        val repository = createRepository()
 
         repository.updateFileDownloadingState(taskId, link, 1000L, 500L)
 
@@ -154,26 +198,23 @@ class DownloadRepositoryTest {
         val updatedFile = fileSlot.captured(initialFile)
         assertEquals(LocalDownloadState.DOWNLOADING, updatedFile.state)
         assertEquals(1000L, updatedFile.totalBytes)
-        assertEquals(500L, updatedFile.downloadedBytes)
+        assertEquals(500L, downloadProgressTracker.progressInfo.value[taskId]?.fileProgressMap?.get(link)?.downloadedBytes)
     }
 
     @Test
     fun testUpdateFileProgressSuccess() {
         val taskId = "task-1"
         val link = "http://example.com/file1"
-        val fileSlot = slot<(DownloadFile) -> DownloadFile>()
-        every { downloadTracker.updateTaskFile(taskId, link, capture(fileSlot)) } returns Unit
+        val repository = createRepository()
 
         repository.updateFileProgress(taskId, link, 50, 500L, 100L, 123456789L, 500L)
 
-        verify { downloadTracker.updateTaskFile(taskId, link, any()) }
-        val initialFile = DownloadFile(link = link)
-        val updatedFile = fileSlot.captured(initialFile)
-        assertEquals(50, updatedFile.progress)
-        assertEquals(500L, updatedFile.downloadedBytes)
-        assertEquals(100L, updatedFile.speed)
-        assertEquals(123456789L, updatedFile.lastTimestamp)
-        assertEquals(500L, updatedFile.lastBytes)
+        val fileInfo = downloadProgressTracker.progressInfo.value[taskId]?.fileProgressMap?.get(link)
+        assertEquals(50, fileInfo?.progress)
+        assertEquals(500L, fileInfo?.downloadedBytes)
+        assertEquals(100L, fileInfo?.speed)
+        assertEquals(123456789L, fileInfo?.lastTimestamp)
+        assertEquals(500L, fileInfo?.lastBytes)
     }
 
     @Test
@@ -182,96 +223,84 @@ class DownloadRepositoryTest {
         val link = "http://example.com/file1"
         val fileSlot = slot<(DownloadFile) -> DownloadFile>()
         every { downloadTracker.updateTaskFile(taskId, link, capture(fileSlot)) } returns Unit
+        val repository = createRepository()
 
         repository.updateFileState(taskId, link, LocalDownloadState.ERROR, "Network failure")
 
         verify { downloadTracker.updateTaskFile(taskId, link, any()) }
-        val initialFile = DownloadFile(link = link, speed = 100L)
+        val initialFile = DownloadFile(link = link)
         val updatedFile = fileSlot.captured(initialFile)
         assertEquals(LocalDownloadState.ERROR, updatedFile.state)
         assertEquals("Network failure", updatedFile.stateDescription)
-        assertEquals(0L, updatedFile.speed)
+        assertEquals(0L, downloadProgressTracker.progressInfo.value[taskId]?.fileProgressMap?.get(link)?.speed)
     }
 
     @Test
     fun testUpdateProviderTorrentStateSuccess() {
         val taskId = "task-1"
-        val taskSlot = slot<(DownloadTask) -> DownloadTask>()
-        every { downloadTracker.updateTask(taskId, capture(taskSlot)) } returns Unit
+        val providerInfo = ProviderTorrentInfo(
+            id = "p-1",
+            name = "Test Task",
+            state = ProviderTorrentState.DOWNLOADING,
+            status = "downloading",
+            progress = 50f,
+            totalSizeInBytes = 100,
+            downloadedBytes = 50,
+            downloadSpeed = 10,
+            uploadSpeed = 0,
+            seeders = 1,
+            leechers = 1,
+            peers = 2,
+            totalPeers = 2,
+            links = emptyList(),
+            files = emptyList()
+        )
+        downloadProgressTracker.updateProviderTorrentInfo(taskId, providerInfo)
+        val repository = createRepository()
 
         repository.updateProviderTorrentState(taskId, ProviderTorrentState.PAUSED)
 
-        verify { downloadTracker.updateTask(taskId, any()) }
-        val initialTask = DownloadTask(
-            id = taskId,
-            name = "Test Task",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
-            providerTorrentInfo = ProviderTorrentInfo(
-                id = "p-1",
-                name = "Test Task",
-                state = ProviderTorrentState.DOWNLOADING,
-                status = "downloading",
-                progress = 50f,
-                totalSizeInBytes = 100,
-                downloadedBytes = 50,
-                downloadSpeed = 10,
-                uploadSpeed = 0,
-                seeders = 1,
-                leechers = 1,
-                peers = 2,
-                totalPeers = 2,
-                links = emptyList(),
-                files = emptyList()
-            )
-        )
-        val updatedTask = taskSlot.captured(initialTask)
-        assertEquals(ProviderTorrentState.PAUSED, updatedTask.providerTorrentInfo?.state)
+        assertEquals(ProviderTorrentState.PAUSED, downloadProgressTracker.progressInfo.value[taskId]?.providerTorrentInfo?.state)
     }
 
     @Test
     fun testSetProviderFilePrioritySuccess() {
         val taskId = "task-1"
-        val taskSlot = slot<(DownloadTask) -> DownloadTask>()
-        every { downloadTracker.updateTask(taskId, capture(taskSlot)) } returns Unit
-
-        repository.setProviderFilePriority(taskId, 1, FilePriority.HIGH)
-
-        verify { downloadTracker.updateTask(taskId, any()) }
-        val initialTask = DownloadTask(
-            id = taskId,
+        val providerInfo = ProviderTorrentInfo(
+            id = "p-1",
             name = "Test Task",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
-            providerTorrentInfo = ProviderTorrentInfo(
-                id = "p-1",
-                name = "Test Task",
-                state = ProviderTorrentState.DOWNLOADING,
-                status = "downloading",
-                progress = 50f,
-                totalSizeInBytes = 100,
-                downloadedBytes = 50,
-                downloadSpeed = 10,
-                uploadSpeed = 0,
-                seeders = 1,
-                leechers = 1,
-                peers = 2,
-                totalPeers = 2,
-                links = emptyList(),
-                files = listOf(
-                    ProviderTorrentFile(
-                        id = 1,
-                        path = "f1",
-                        size = 100,
-                        isSelected = false,
-                        progress = 0f,
-                        downloadedBytes = 0,
-                        priority = FilePriority.NORMAL
-                    )
+            state = ProviderTorrentState.DOWNLOADING,
+            status = "downloading",
+            progress = 50f,
+            totalSizeInBytes = 100,
+            downloadedBytes = 50,
+            downloadSpeed = 10,
+            uploadSpeed = 0,
+            seeders = 1,
+            leechers = 1,
+            peers = 2,
+            totalPeers = 2,
+            links = emptyList(),
+            files = listOf(
+                ProviderTorrentFile(
+                    id = 1,
+                    path = "f1",
+                    size = 100,
+                    isSelected = false,
+                    progress = 0f,
+                    downloadedBytes = 0,
+                    priority = FilePriority.NORMAL
                 )
             )
         )
-        val updatedTask = taskSlot.captured(initialTask)
-        assertEquals(FilePriority.HIGH, updatedTask.providerTorrentInfo?.files?.first()?.priority)
-        assertTrue(updatedTask.providerTorrentInfo?.files?.first()?.isSelected == true)
+        downloadProgressTracker.updateProviderTorrentInfo(taskId, providerInfo)
+        val repository = createRepository()
+
+        repository.setProviderFilePriority(taskId, 1, FilePriority.HIGH)
+
+        val updatedFile = downloadProgressTracker.progressInfo.value[taskId]?.providerTorrentInfo?.files?.first()
+        assertEquals(FilePriority.HIGH, updatedFile?.priority)
+        assertTrue(updatedFile?.isSelected == true)
     }
 
     @Test
@@ -279,6 +308,7 @@ class DownloadRepositoryTest {
         val taskId = "task-1"
         val taskSlot = slot<(DownloadTask) -> DownloadTask>()
         every { downloadTracker.updateTask(taskId, capture(taskSlot)) } returns Unit
+        val repository = createRepository()
 
         repository.updateTaskState(taskId, TorrentState.COMPLETED)
 
@@ -298,6 +328,7 @@ class DownloadRepositoryTest {
         val taskId = "task-1"
         val taskSlot = slot<(DownloadTask) -> DownloadTask>()
         every { downloadTracker.updateTask(taskId, capture(taskSlot)) } returns Unit
+        val repository = createRepository()
 
         repository.updateTaskError(taskId, "An error occurred")
 
