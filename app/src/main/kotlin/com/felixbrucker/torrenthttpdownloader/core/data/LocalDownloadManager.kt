@@ -1,33 +1,40 @@
 package com.felixbrucker.torrenthttpdownloader.core.data
 
 import android.content.Intent
-import android.content.SharedPreferences
+import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
+import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import java.io.File
 import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.BufferedSink
 import okio.BufferedSource
 import okio.buffer
 import okio.sink
-import com.felixbrucker.torrenthttpdownloader.R
-import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
-import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
-import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import timber.log.Timber
 
 data class DownloadWork(val taskId: String, val file: DownloadFile)
 
 class LocalDownloadManager(
     private val scope: CoroutineScope,
-    private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val downloadRepository: DownloadRepository,
     private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
@@ -42,7 +49,7 @@ class LocalDownloadManager(
         .build()
 
     fun start() {
-        val parallelDownloads = sharedPreferences.getInt("local_parallel_downloads", 2)
+        val parallelDownloads = runBlocking { appSettingsRepository.getSettings() }.localParallelDownloads
         repeat(parallelDownloads) {
             launchWorker()
         }
@@ -72,8 +79,7 @@ class LocalDownloadManager(
         }
 
         try {
-            // Support regenerating the link if the existing one expires (
-            // TODO: how to detect expired links?
+            // Support regenerating the link if the existing one expires
             if (file.unrestrictedLink == null) {
                 val task = downloadRepository.findTask(work.taskId) ?: return
                 onLinkExpired(task, file)

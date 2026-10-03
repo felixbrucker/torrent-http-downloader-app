@@ -1,26 +1,24 @@
 package com.felixbrucker.torrenthttpdownloader.feature.addtorrent
 
-import android.content.SharedPreferences
 import android.net.Uri
-import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
+import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import javax.inject.Named
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
-import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
-import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
-import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadServiceLauncher
 import timber.log.Timber
 
 @HiltViewModel
 class AddTorrentViewModel @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val torrentUriResolver: TorrentUriResolver,
     private val serviceLauncher: DownloadServiceLauncher,
     private val rssRepository: RssRepository
@@ -68,21 +66,14 @@ class AddTorrentViewModel @Inject constructor(
     }
 
     private fun initFormState(config: AddTorrentConfig) {
-        val defaultSubDir = sharedPreferences.getString("default_sub_dir", null)
-        val defaultCreateSubfolder = sharedPreferences.getBoolean("default_create_subfolder", true)
-        val defaultNotifyOnCompletion = sharedPreferences.getBoolean("default_notify_on_completion", false)
-        val defaultFileSelectionModeName = sharedPreferences.getString("default_file_selection_mode", FileSelectionMode.ALL.name) ?: FileSelectionMode.ALL.name
-        val defaultFileSelectionMode = try {
-            FileSelectionMode.valueOf(defaultFileSelectionModeName)
-        } catch (e: Exception) {
-            FileSelectionMode.ALL
-        }
-
         _nameState.value = config.name ?: ""
-        _selectedSubDirState.value = config.destinationSubdirectory ?: defaultSubDir
-        _createSubfolderByNameState.value = config.createSubfolderByName ?: defaultCreateSubfolder
-        _notifyOnCompletionState.value = config.notifyOnCompletion ?: defaultNotifyOnCompletion
-        _fileSelectionModeState.value = config.fileSelectionMode ?: defaultFileSelectionMode
+        viewModelScope.launch {
+            val settings = appSettingsRepository.getSettings()
+            _selectedSubDirState.value = config.destinationSubdirectory ?: settings.lastUsedSubDir
+            _createSubfolderByNameState.value = config.createSubfolderByName ?: settings.lastUsedCreateSubfolder
+            _notifyOnCompletionState.value = config.notifyOnCompletion ?: settings.lastUsedNotifyOnCompletion
+            _fileSelectionModeState.value = config.fileSelectionMode ?: settings.lastUsedFileSelectionMode
+        }
     }
 
     fun setResolvedConfig(config: AddTorrentConfig) {
@@ -134,11 +125,13 @@ class AddTorrentViewModel @Inject constructor(
         Timber.i("Confirming add torrent id=%s, name=%s", updatedConfig.id, updatedConfig.name)
 
         if (config.feedId == null) {
-            sharedPreferences.edit {
-                putString("default_sub_dir", _selectedSubDirState.value)
-                putBoolean("default_create_subfolder", _createSubfolderByNameState.value)
-                putBoolean("default_notify_on_completion", _notifyOnCompletionState.value)
-                putString("default_file_selection_mode", _fileSelectionModeState.value.name)
+            viewModelScope.launch {
+                appSettingsRepository.updateLastUsedAddTorrentOptions(
+                    lastUsedSubDir = _selectedSubDirState.value,
+                    lastUsedCreateSubfolder = _createSubfolderByNameState.value,
+                    lastUsedNotifyOnCompletion = _notifyOnCompletionState.value,
+                    lastUsedFileSelectionMode = _fileSelectionModeState.value
+                )
             }
         }
 

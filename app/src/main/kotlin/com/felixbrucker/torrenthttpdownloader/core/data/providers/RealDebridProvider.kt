@@ -1,18 +1,18 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-import android.content.SharedPreferences
-import javax.inject.Inject
-import javax.inject.Named
-import javax.inject.Singleton
-import kotlin.math.min
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
 import com.felixbrucker.torrenthttpdownloader.core.network.ResourceNotFoundException
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.math.min
+import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 
 @Singleton
 class RealDebridProvider @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val realDebridApiService: RealDebridApiService,
 ) : TorrentProvider {
     override val name: String = NAME
@@ -24,7 +24,7 @@ class RealDebridProvider @Inject constructor(
         const val NAME: String = "Real-Debrid"
     }
 
-    private var apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
+    private var apiToken = runBlocking { appSettingsRepository.getSettings() }.realDebridApiToken
     private val auth: String get() = "Bearer $apiToken"
 
     override suspend fun restoreTorrent(id: String) {
@@ -143,11 +143,11 @@ class RealDebridProvider @Inject constructor(
     }
 
     override fun reloadSettings() {
-        apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
+        apiToken = runBlocking { appSettingsRepository.getSettings() }.realDebridApiToken
     }
 
     private fun checkApiToken() {
-        if(apiToken.isEmpty()) {
+        if (apiToken.isEmpty()) {
             throw Exception("API token is empty")
         }
     }

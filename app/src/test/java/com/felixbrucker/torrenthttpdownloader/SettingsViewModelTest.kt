@@ -1,18 +1,22 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettings
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -23,7 +27,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
-    private val sharedPreferences = mockk<SharedPreferences>()
+    private val appSettingsRepository = mockk<AppSettingsRepository>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
     private val provider = mockk<TorrentProvider>(relaxed = true)
@@ -31,10 +35,12 @@ class SettingsViewModelTest {
         every { getProvider() } returns provider
     }
     private val testDispatcher = UnconfinedTestDispatcher()
+    private val settingsFlow = MutableStateFlow(AppSettings())
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        coEvery { appSettingsRepository.settingsFlow } returns settingsFlow
     }
 
     @After
@@ -44,15 +50,17 @@ class SettingsViewModelTest {
 
     @Test
     fun testInitialUiStateLoadsSavedValues() {
-        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
-        every { sharedPreferences.getString("real_debrid_api_token", "") } returns "test-token"
-        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 4
-        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 5
-        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns true
-        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
-        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 6
+        settingsFlow.value = AppSettings(
+            selectedProvider = LibTorrentProvider.NAME,
+            realDebridApiToken = "test-token",
+            localParallelDownloads = 4,
+            libTorrentParallelDownloads = 5,
+            libTorrentRequireVpnConnection = true,
+            rssSyncEnabled = true,
+            rssSyncIntervalHours = 6
+        )
 
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
         val state = viewModel.uiState.value
 
         assertEquals(LibTorrentProvider.NAME, state.selectedProvider)
@@ -66,17 +74,8 @@ class SettingsViewModelTest {
 
     @Test
     fun testUpdatersModifyStateAndSave() {
-        val editor = mockk<SharedPreferences.Editor>(relaxed = true)
-        every { sharedPreferences.edit() } returns editor
-        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
-        every { sharedPreferences.getString("real_debrid_api_token", "") } returns ""
-        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 2
-        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 3
-        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns false
-        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
-        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
         every { context.packageName } returns "com.felixbrucker.torrenthttpdownloader"
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
 
         viewModel.updateSelectedProvider(RealDebridProvider.NAME)
         viewModel.updateRealDebridApiToken("token-123")
@@ -94,29 +93,20 @@ class SettingsViewModelTest {
         assertEquals(true, state.libTorrentRequireVpnConnection)
         assertEquals(false, state.rssSyncEnabled)
         assertEquals(12, state.rssSyncIntervalHours)
-        verify { editor.putString("provider", RealDebridProvider.NAME) }
-        verify { editor.putString("real_debrid_api_token", "token-123") }
-        verify { editor.putInt("local_parallel_downloads", 3) }
-        verify { editor.putInt("libtorrent_parallel_downloads", 4) }
-        verify { editor.putBoolean("libtorrent_require_vpn_connection", true) }
-        verify { editor.putBoolean("rss_sync_enabled", false) }
-        verify { editor.putInt("rss_sync_interval_hours", 12) }
+        coVerify { appSettingsRepository.updateSelectedProvider(RealDebridProvider.NAME) }
+        coVerify { appSettingsRepository.updateRealDebridApiToken("token-123") }
+        coVerify { appSettingsRepository.updateLocalParallelDownloads(3) }
+        coVerify { appSettingsRepository.updateLibTorrentParallelDownloads(4) }
+        coVerify { appSettingsRepository.updateLibTorrentRequireVpnConnection(true) }
+        coVerify { appSettingsRepository.updateRssSyncEnabled(false) }
+        coVerify { appSettingsRepository.updateRssSyncIntervalHours(12) }
         verify { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 12L) }
         verify(atLeast = 1) { provider.reloadSettings() }
     }
 
     @Test
     fun testRssSyncScheduleOnlyUpdatesWhenRssSyncSettingsChange() {
-        val editor = mockk<SharedPreferences.Editor>(relaxed = true)
-        every { sharedPreferences.edit() } returns editor
-        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
-        every { sharedPreferences.getString("real_debrid_api_token", "") } returns ""
-        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 2
-        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 3
-        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns false
-        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
-        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
 
         viewModel.updateSelectedProvider(RealDebridProvider.NAME)
         viewModel.updateRssSyncEnabled(false)
@@ -127,16 +117,7 @@ class SettingsViewModelTest {
 
     @Test
     fun testProviderReloadOnlyUpdatesWhenProviderSettingsChange() {
-        val editor = mockk<SharedPreferences.Editor>(relaxed = true)
-        every { sharedPreferences.edit() } returns editor
-        every { sharedPreferences.getString("provider", any()) } returns LibTorrentProvider.NAME
-        every { sharedPreferences.getString("real_debrid_api_token", "") } returns ""
-        every { sharedPreferences.getInt("local_parallel_downloads", 2) } returns 2
-        every { sharedPreferences.getInt("libtorrent_parallel_downloads", 3) } returns 3
-        every { sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false) } returns false
-        every { sharedPreferences.getBoolean("rss_sync_enabled", true) } returns true
-        every { sharedPreferences.getInt("rss_sync_interval_hours", 3) } returns 3
-        val viewModel = SettingsViewModel(sharedPreferences, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
 
         viewModel.updateRssSyncIntervalHours(6)
         viewModel.updateRealDebridApiToken("new-token")

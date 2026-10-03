@@ -1,18 +1,18 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-import android.content.SharedPreferences
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
+import kotlinx.coroutines.runBlocking
 
 @Singleton
 class ProviderFactory @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val libTorrentProvider: LibTorrentProvider,
     private val realDebridProvider: RealDebridProvider,
 ) {
     fun getProvider(): TorrentProvider {
-        val providerName = sharedPreferences.getString("provider", RealDebridProvider.NAME)
+        val providerName = runBlocking { appSettingsRepository.getSettings() }.selectedProvider
 
         return when (providerName) {
             LibTorrentProvider.NAME -> libTorrentProvider
