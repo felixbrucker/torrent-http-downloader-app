@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import timber.log.Timber
 
 @Singleton
 class RssSyncLauncher @Inject constructor(
@@ -42,10 +43,12 @@ class RssSyncLauncher @Inject constructor(
 
     fun updateRssSyncSchedule(enabled: Boolean, intervalHours: Long) {
         if (!enabled) {
+            Timber.d("RSS sync disabled, canceling unique periodic work 'RssSyncRequest'")
             WorkManager.getInstance(context).cancelUniqueWork("RssSyncRequest")
             return
         }
         val safeInterval = maxOf(1L, intervalHours)
+        Timber.d("RSS sync enabled, scheduling 'RssSyncRequest' with intervalHours=%d", safeInterval)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()

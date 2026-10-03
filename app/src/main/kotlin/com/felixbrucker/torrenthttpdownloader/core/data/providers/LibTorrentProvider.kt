@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.Priority
@@ -126,6 +127,10 @@ class LibTorrentProvider @Inject constructor(
             sessionSettings.portRangeFirst = range.first
             sessionSettings.portRangeSecond = range.second
         }
+
+        val settings = runBlocking { appSettingsRepository.getSettings() }
+        requireVpnConnection = settings.libTorrentRequireVpnConnection
+        sessionSettings.activeDownloads = settings.libTorrentParallelDownloads
 
         appSettingsRepository.settingsFlow
             .map { it.libTorrentRequireVpnConnection }

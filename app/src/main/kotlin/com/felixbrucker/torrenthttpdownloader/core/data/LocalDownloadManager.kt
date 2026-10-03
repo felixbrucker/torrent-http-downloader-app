@@ -41,7 +41,6 @@ class LocalDownloadManager(
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = ConcurrentHashMap.newKeySet<DownloadWork>()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
-    private var parallelDownloads: Int = 2
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -49,7 +48,7 @@ class LocalDownloadManager(
         .build()
 
     suspend fun start() {
-        parallelDownloads = appSettingsRepository.getSettings().localParallelDownloads
+        val parallelDownloads = appSettingsRepository.getSettings().localParallelDownloads
         repeat(parallelDownloads) {
             launchWorker()
         }
