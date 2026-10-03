@@ -36,7 +36,11 @@ object DataStoreModule {
                         "default_sub_dir",
                         "default_create_subfolder",
                         "default_notify_on_completion",
-                        "default_file_selection_mode"
+                        "default_file_selection_mode",
+                        "last_used_sub_dir",
+                        "last_used_create_subfolder",
+                        "last_used_notify_on_completion",
+                        "last_used_file_selection_mode"
                     )
                 )
             ),

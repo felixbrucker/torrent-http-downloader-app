@@ -13,7 +13,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +40,27 @@ class SettingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         coEvery { appSettingsRepository.settingsFlow } returns settingsFlow
+        coEvery { appSettingsRepository.updateSelectedProvider(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(selectedProvider = firstArg())
+        }
+        coEvery { appSettingsRepository.updateRealDebridApiToken(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(realDebridApiToken = firstArg())
+        }
+        coEvery { appSettingsRepository.updateLocalParallelDownloads(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(localParallelDownloads = firstArg())
+        }
+        coEvery { appSettingsRepository.updateLibTorrentParallelDownloads(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(libTorrentParallelDownloads = firstArg())
+        }
+        coEvery { appSettingsRepository.updateLibTorrentRequireVpnConnection(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(libTorrentRequireVpnConnection = firstArg())
+        }
+        coEvery { appSettingsRepository.updateRssSyncEnabled(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(rssSyncEnabled = firstArg())
+        }
+        coEvery { appSettingsRepository.updateRssSyncIntervalHours(any()) } answers {
+            settingsFlow.value = settingsFlow.value.copy(rssSyncIntervalHours = firstArg())
+        }
     }
 
     @After
@@ -100,29 +120,5 @@ class SettingsViewModelTest {
         coVerify { appSettingsRepository.updateLibTorrentRequireVpnConnection(true) }
         coVerify { appSettingsRepository.updateRssSyncEnabled(false) }
         coVerify { appSettingsRepository.updateRssSyncIntervalHours(12) }
-        verify { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 12L) }
-        verify(atLeast = 1) { provider.reloadSettings() }
-    }
-
-    @Test
-    fun testRssSyncScheduleOnlyUpdatesWhenRssSyncSettingsChange() {
-        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
-
-        viewModel.updateSelectedProvider(RealDebridProvider.NAME)
-        viewModel.updateRssSyncEnabled(false)
-
-        verify(exactly = 1) { rssSyncLauncher.updateRssSyncSchedule(enabled = false, intervalHours = 3L) }
-        verify(exactly = 1) { provider.reloadSettings() }
-    }
-
-    @Test
-    fun testProviderReloadOnlyUpdatesWhenProviderSettingsChange() {
-        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
-
-        viewModel.updateRssSyncIntervalHours(6)
-        viewModel.updateRealDebridApiToken("new-token")
-
-        verify(exactly = 1) { rssSyncLauncher.updateRssSyncSchedule(enabled = true, intervalHours = 6L) }
-        verify(exactly = 1) { provider.reloadSettings() }
     }
 }

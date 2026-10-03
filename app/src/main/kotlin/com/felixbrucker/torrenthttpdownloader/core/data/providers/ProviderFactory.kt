@@ -1,23 +1,35 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 @Singleton
 class ProviderFactory @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val libTorrentProvider: LibTorrentProvider,
     private val realDebridProvider: RealDebridProvider,
+    @param:ApplicationScope private val scope: CoroutineScope
 ) {
-    fun getProvider(): TorrentProvider {
-        val providerName = runBlocking { appSettingsRepository.getSettings() }.selectedProvider
+    private var activeProviderName: String = LibTorrentProvider.NAME
 
-        return when (providerName) {
+    init {
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                activeProviderName = settings.selectedProvider
+            }
+            .launchIn(scope)
+    }
+
+    fun getProvider(): TorrentProvider {
+        return when (activeProviderName) {
             LibTorrentProvider.NAME -> libTorrentProvider
             RealDebridProvider.NAME -> realDebridProvider
-            else -> { throw Exception("Unknown provider: $providerName") }
+            else -> realDebridProvider
         }
     }
 }

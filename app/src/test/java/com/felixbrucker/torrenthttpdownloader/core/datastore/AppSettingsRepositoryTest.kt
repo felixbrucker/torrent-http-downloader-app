@@ -35,19 +35,21 @@ class AppSettingsRepositoryTest {
     }
 
     @Test
-    fun testLegacyFallbackKeys() = runTest {
+    fun testPreferencesReadFromDataStore() = runTest {
         val prefs = preferencesOf(
-            AppSettingsRepository.KEY_DEFAULT_SUB_DIR_LEGACY to "LegacyFolder",
-            AppSettingsRepository.KEY_DEFAULT_CREATE_SUBFOLDER_LEGACY to false,
-            AppSettingsRepository.KEY_DEFAULT_NOTIFY_ON_COMPLETION_LEGACY to true,
-            AppSettingsRepository.KEY_DEFAULT_FILE_SELECTION_MODE_LEGACY to "BIGGEST"
+            AppSettingsRepository.KEY_PROVIDER to "Real-Debrid",
+            AppSettingsRepository.KEY_LAST_USED_SUB_DIR to "Movies",
+            AppSettingsRepository.KEY_LAST_USED_CREATE_SUBFOLDER to false,
+            AppSettingsRepository.KEY_LAST_USED_NOTIFY_ON_COMPLETION to true,
+            AppSettingsRepository.KEY_LAST_USED_FILE_SELECTION_MODE to "BIGGEST"
         )
         coEvery { dataStore.data } returns flowOf(prefs)
         val repository = AppSettingsRepository(dataStore)
 
         val settings = repository.getSettings()
 
-        assertEquals("LegacyFolder", settings.lastUsedSubDir)
+        assertEquals("Real-Debrid", settings.selectedProvider)
+        assertEquals("Movies", settings.lastUsedSubDir)
         assertEquals(false, settings.lastUsedCreateSubfolder)
         assertEquals(true, settings.lastUsedNotifyOnCompletion)
         assertEquals(FileSelectionMode.BIGGEST, settings.lastUsedFileSelectionMode)

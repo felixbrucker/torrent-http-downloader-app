@@ -18,9 +18,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -42,14 +43,22 @@ class LocalDownloadManager(
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
     private val inProgressWork = ConcurrentHashMap.newKeySet<DownloadWork>()
     private val activeDownloads = ConcurrentHashMap<String, Job>()
+    private var parallelDownloads: Int = 2
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    init {
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                parallelDownloads = settings.localParallelDownloads
+            }
+            .launchIn(scope)
+    }
+
     fun start() {
-        val parallelDownloads = runBlocking { appSettingsRepository.getSettings() }.localParallelDownloads
         repeat(parallelDownloads) {
             launchWorker()
         }
@@ -79,7 +88,8 @@ class LocalDownloadManager(
         }
 
         try {
-            // Support regenerating the link if the existing one expires
+            // Support regenerating the link if the existing one expires (
+            // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
                 val task = downloadRepository.findTask(work.taskId) ?: return
                 onLinkExpired(task, file)

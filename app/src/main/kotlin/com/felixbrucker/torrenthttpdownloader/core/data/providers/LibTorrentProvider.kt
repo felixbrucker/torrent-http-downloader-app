@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import com.felixbrucker.torrenthttpdownloader.extensions.makeAddTorrentParams
 import com.felixbrucker.torrenthttpdownloader.extensions.sha1Hash
@@ -17,8 +18,10 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.Priority
@@ -45,6 +48,7 @@ class LibTorrentProvider @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val connectivityManager: ConnectivityManager,
     private val pathFactory: PathFactory,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
@@ -120,9 +124,23 @@ class LibTorrentProvider @Inject constructor(
             sessionSettings.portRangeFirst = range.first
             sessionSettings.portRangeSecond = range.second
         }
-        val settings = runBlocking { appSettingsRepository.getSettings() }
-        requireVpnConnection = settings.libTorrentRequireVpnConnection
-        sessionSettings.activeDownloads = settings.libTorrentParallelDownloads
+
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                val newRequireVpnConnection = settings.libTorrentRequireVpnConnection
+                val newActiveDownloads = settings.libTorrentParallelDownloads
+
+                val vpnChanged = requireVpnConnection != newRequireVpnConnection
+                val activeDownloadsChanged = sessionSettings.activeDownloads != newActiveDownloads
+
+                requireVpnConnection = newRequireVpnConnection
+                sessionSettings.activeDownloads = newActiveDownloads
+
+                if (vpnChanged || activeDownloadsChanged) {
+                    sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
+                }
+            }
+            .launchIn(scope)
     }
 
     private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {
@@ -339,21 +357,6 @@ class LibTorrentProvider @Inject constructor(
         torrentHandle.resume()
     }
 
-    override fun reloadSettings() {
-        val settings = runBlocking { appSettingsRepository.getSettings() }
-        val newRequireVpnConnection = settings.libTorrentRequireVpnConnection
-        val newActiveDownloads = settings.libTorrentParallelDownloads
-
-        val vpnChanged = requireVpnConnection != newRequireVpnConnection
-        val activeDownloadsChanged = sessionSettings.activeDownloads != newActiveDownloads
-
-        if (vpnChanged || activeDownloadsChanged) {
-            requireVpnConnection = newRequireVpnConnection
-            sessionSettings.activeDownloads = newActiveDownloads
-            sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
-        }
-    }
-
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
         // relative paths in the torrent
         val files: MutableList<Pair<String, Long>> = mutableListOf()
@@ -565,6 +568,9 @@ class SessionSettings {
         const val DEFAULT_VALIDATE_HTTPS_TRACKERS: Boolean = true
 
         val randomRangePort: Pair<Int, Int>
+            /*
+            * Get the first port in range [37000, 57000] and the second `first` + 10
+            */
             get() {
                 val port = DEFAULT_PORT_RANGE_FIRST + Random().nextInt(
                     DEFAULT_PORT_RANGE_SECOND - 10 - DEFAULT_PORT_RANGE_FIRST

@@ -9,23 +9,35 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import com.felixbrucker.torrenthttpdownloader.worker.RssSyncWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 @Singleton
 class RssSyncLauncher @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    @param:ApplicationScope private val scope: CoroutineScope
 ) {
+    init {
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                updateRssSyncSchedule(
+                    enabled = settings.rssSyncEnabled,
+                    intervalHours = settings.rssSyncIntervalHours.toLong()
+                )
+            }
+            .launchIn(scope)
+    }
+
     fun ensureRssSyncIsScheduled() {
-        runBlocking {
-            val settings = appSettingsRepository.getSettings()
-            updateRssSyncSchedule(enabled = settings.rssSyncEnabled, intervalHours = settings.rssSyncIntervalHours.toLong())
-        }
+        // Handled automatically via settingsFlow subscription in init
     }
 
     fun updateRssSyncSchedule(enabled: Boolean, intervalHours: Long) {

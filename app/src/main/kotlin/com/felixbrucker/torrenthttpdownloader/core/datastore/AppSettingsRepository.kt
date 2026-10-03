@@ -41,17 +41,12 @@ class AppSettingsRepository @Inject constructor(
             libTorrentRequireVpnConnection = preferences[KEY_LIBTORRENT_REQUIRE_VPN] ?: false,
             rssSyncEnabled = preferences[KEY_RSS_SYNC_ENABLED] ?: true,
             rssSyncIntervalHours = preferences[KEY_RSS_SYNC_INTERVAL_HOURS] ?: 3,
-            lastUsedSubDir = preferences[KEY_LAST_USED_SUB_DIR] ?: preferences[KEY_DEFAULT_SUB_DIR_LEGACY],
-            lastUsedCreateSubfolder = preferences[KEY_LAST_USED_CREATE_SUBFOLDER]
-                ?: preferences[KEY_DEFAULT_CREATE_SUBFOLDER_LEGACY]
-                ?: true,
-            lastUsedNotifyOnCompletion = preferences[KEY_LAST_USED_NOTIFY_ON_COMPLETION]
-                ?: preferences[KEY_DEFAULT_NOTIFY_ON_COMPLETION_LEGACY]
-                ?: false,
-            lastUsedFileSelectionMode = (preferences[KEY_LAST_USED_FILE_SELECTION_MODE] ?: preferences[KEY_DEFAULT_FILE_SELECTION_MODE_LEGACY])
-                ?.let { modeName ->
-                    runCatching { FileSelectionMode.valueOf(modeName) }.getOrDefault(FileSelectionMode.ALL)
-                } ?: FileSelectionMode.ALL
+            lastUsedSubDir = preferences[KEY_LAST_USED_SUB_DIR],
+            lastUsedCreateSubfolder = preferences[KEY_LAST_USED_CREATE_SUBFOLDER] ?: true,
+            lastUsedNotifyOnCompletion = preferences[KEY_LAST_USED_NOTIFY_ON_COMPLETION] ?: false,
+            lastUsedFileSelectionMode = preferences[KEY_LAST_USED_FILE_SELECTION_MODE]?.let { modeName ->
+                runCatching { FileSelectionMode.valueOf(modeName) }.getOrDefault(FileSelectionMode.ALL)
+            } ?: FileSelectionMode.ALL
         )
     }
 
@@ -114,12 +109,6 @@ class AppSettingsRepository @Inject constructor(
             preferences[KEY_LAST_USED_CREATE_SUBFOLDER] = lastUsedCreateSubfolder
             preferences[KEY_LAST_USED_NOTIFY_ON_COMPLETION] = lastUsedNotifyOnCompletion
             preferences[KEY_LAST_USED_FILE_SELECTION_MODE] = lastUsedFileSelectionMode.name
-
-            // Clean legacy keys if present
-            preferences.remove(KEY_DEFAULT_SUB_DIR_LEGACY)
-            preferences.remove(KEY_DEFAULT_CREATE_SUBFOLDER_LEGACY)
-            preferences.remove(KEY_DEFAULT_NOTIFY_ON_COMPLETION_LEGACY)
-            preferences.remove(KEY_DEFAULT_FILE_SELECTION_MODE_LEGACY)
         }
     }
 
@@ -136,11 +125,5 @@ class AppSettingsRepository @Inject constructor(
         val KEY_LAST_USED_CREATE_SUBFOLDER = booleanPreferencesKey("last_used_create_subfolder")
         val KEY_LAST_USED_NOTIFY_ON_COMPLETION = booleanPreferencesKey("last_used_notify_on_completion")
         val KEY_LAST_USED_FILE_SELECTION_MODE = stringPreferencesKey("last_used_file_selection_mode")
-
-        // Legacy keys for migration from SharedPreferences
-        val KEY_DEFAULT_SUB_DIR_LEGACY = stringPreferencesKey("default_sub_dir")
-        val KEY_DEFAULT_CREATE_SUBFOLDER_LEGACY = booleanPreferencesKey("default_create_subfolder")
-        val KEY_DEFAULT_NOTIFY_ON_COMPLETION_LEGACY = booleanPreferencesKey("default_notify_on_completion")
-        val KEY_DEFAULT_FILE_SELECTION_MODE_LEGACY = stringPreferencesKey("default_file_selection_mode")
     }
 }
