@@ -42,10 +42,14 @@ import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.logs.LogViewerScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var rssSyncLauncher: RssSyncLauncher
+
     private val mainViewModel: MainViewModel by viewModels()
     private val addTorrentViewModel: AddTorrentViewModel by viewModels()
 
