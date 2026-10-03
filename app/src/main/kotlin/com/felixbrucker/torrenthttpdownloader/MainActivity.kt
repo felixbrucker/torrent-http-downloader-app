@@ -48,6 +48,7 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    // Injected to ensure eager instantiation on app startup so RssSyncLauncher initializes its settings flow and schedules periodic work
     @Inject lateinit var rssSyncLauncher: RssSyncLauncher
 
     private val mainViewModel: MainViewModel by viewModels()
