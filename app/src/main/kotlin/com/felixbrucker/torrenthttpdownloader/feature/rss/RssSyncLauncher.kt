@@ -16,7 +16,9 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
 @Singleton
@@ -27,17 +29,15 @@ class RssSyncLauncher @Inject constructor(
 ) {
     init {
         appSettingsRepository.settingsFlow
-            .onEach { settings ->
+            .map { it.rssSyncEnabled to it.rssSyncIntervalHours }
+            .distinctUntilChanged()
+            .onEach { (enabled, intervalHours) ->
                 updateRssSyncSchedule(
-                    enabled = settings.rssSyncEnabled,
-                    intervalHours = settings.rssSyncIntervalHours.toLong()
+                    enabled = enabled,
+                    intervalHours = intervalHours.toLong()
                 )
             }
             .launchIn(scope)
-    }
-
-    fun ensureRssSyncIsScheduled() {
-        // Handled automatically via settingsFlow subscription in init
     }
 
     fun updateRssSyncSchedule(enabled: Boolean, intervalHours: Long) {

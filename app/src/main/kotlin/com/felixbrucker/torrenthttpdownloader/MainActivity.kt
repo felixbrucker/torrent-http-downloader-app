@@ -177,6 +177,5 @@ class MainActivity : ComponentActivity() {
         super.onStart()
 
         mainViewModel.checkAndStartDownloadService(this)
-        mainViewModel.ensureRssSyncIsScheduled()
     }
 }

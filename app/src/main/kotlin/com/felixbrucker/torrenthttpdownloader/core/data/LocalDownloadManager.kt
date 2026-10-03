@@ -18,8 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,15 +48,8 @@ class LocalDownloadManager(
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    init {
-        appSettingsRepository.settingsFlow
-            .onEach { settings ->
-                parallelDownloads = settings.localParallelDownloads
-            }
-            .launchIn(scope)
-    }
-
-    fun start() {
+    suspend fun start() {
+        parallelDownloads = appSettingsRepository.getSettings().localParallelDownloads
         repeat(parallelDownloads) {
             launchWorker()
         }

@@ -147,8 +147,10 @@ class DownloadService : Service() {
         startNotificationUpdates()
 
         provider.start()
-        localDownloadManager.start()
-        torrentStateMachine.start()
+        serviceScope.launch {
+            localDownloadManager.start()
+            torrentStateMachine.start()
+        }
     }
 
     private fun createServiceNotificationChannel() {

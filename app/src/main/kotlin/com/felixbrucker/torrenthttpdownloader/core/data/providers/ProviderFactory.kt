@@ -7,6 +7,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
 
 @Singleton
 class ProviderFactory @Inject constructor(
@@ -15,7 +16,7 @@ class ProviderFactory @Inject constructor(
     private val realDebridProvider: RealDebridProvider,
     @param:ApplicationScope private val scope: CoroutineScope
 ) {
-    private var activeProviderName: String = LibTorrentProvider.NAME
+    private var activeProviderName: String = runBlocking { appSettingsRepository.getSettings() }.selectedProvider
 
     init {
         appSettingsRepository.settingsFlow
@@ -29,7 +30,7 @@ class ProviderFactory @Inject constructor(
         return when (activeProviderName) {
             LibTorrentProvider.NAME -> libTorrentProvider
             RealDebridProvider.NAME -> realDebridProvider
-            else -> realDebridProvider
+            else -> { throw Exception("Unknown provider: $activeProviderName") }
         }
     }
 }

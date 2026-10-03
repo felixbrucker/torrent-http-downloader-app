@@ -20,7 +20,9 @@ import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
@@ -126,19 +128,19 @@ class LibTorrentProvider @Inject constructor(
         }
 
         appSettingsRepository.settingsFlow
-            .onEach { settings ->
-                val newRequireVpnConnection = settings.libTorrentRequireVpnConnection
-                val newActiveDownloads = settings.libTorrentParallelDownloads
+            .map { it.libTorrentRequireVpnConnection }
+            .distinctUntilChanged()
+            .onEach { requireVpn ->
+                requireVpnConnection = requireVpn
+            }
+            .launchIn(scope)
 
-                val vpnChanged = requireVpnConnection != newRequireVpnConnection
-                val activeDownloadsChanged = sessionSettings.activeDownloads != newActiveDownloads
-
-                requireVpnConnection = newRequireVpnConnection
-                sessionSettings.activeDownloads = newActiveDownloads
-
-                if (vpnChanged || activeDownloadsChanged) {
-                    sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
-                }
+        appSettingsRepository.settingsFlow
+            .map { it.libTorrentParallelDownloads }
+            .distinctUntilChanged()
+            .onEach { parallelDownloads ->
+                sessionSettings.activeDownloads = parallelDownloads
+                sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
             }
             .launchIn(scope)
     }
