@@ -47,11 +47,75 @@ enum class FileSelectionMode {
     MANUAL
 }
 
-
 data class TorrentDescriptor(
     val type: TorrentType,
     val uri: String
 )
+
+data class DownloadFileEntity(
+    val link: String,
+    val unrestrictedLink: String? = null,
+    val state: LocalDownloadState = LocalDownloadState.PENDING,
+    val stateDescription: String? = null,
+    val filePath: String? = null,
+    val totalBytes: Long = 0,
+) {
+    val fileName get() = filePath?.substringAfterLast("/")
+
+    fun toDownloadFile(
+        progress: Int = 0,
+        speed: Long = 0,
+        downloadedBytes: Long = 0,
+        lastBytes: Long = 0,
+        lastTimestamp: Long = System.currentTimeMillis(),
+    ) = DownloadFile(
+        link = link,
+        unrestrictedLink = unrestrictedLink,
+        state = state,
+        stateDescription = stateDescription,
+        progress = progress,
+        filePath = filePath,
+        speed = speed,
+        totalBytes = totalBytes,
+        downloadedBytes = downloadedBytes,
+        lastBytes = lastBytes,
+        lastTimestamp = lastTimestamp,
+    )
+}
+
+data class DownloadTaskEntity(
+    val id: String,
+    val providerId: String? = null,
+    val name: String,
+    val torrent: TorrentDescriptor,
+    val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
+    val files: List<DownloadFileEntity> = listOf(),
+    val errorMessage: String? = null,
+    val destinationSubdirectory: String? = null,
+    val createSubfolderByName: Boolean = true,
+    val notifyOnCompletion: Boolean = false,
+    val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
+    val onCompletionIntentUri: String? = null,
+) {
+    fun toDownloadTask(
+        providerTorrentInfo: ProviderTorrentInfo? = null,
+        files: List<DownloadFile> = this.files.map { it.toDownloadFile() },
+    ) = DownloadTask(
+        id = id,
+        providerId = providerId,
+        name = name,
+        torrent = torrent,
+        state = state,
+        providerTorrentInfo = providerTorrentInfo,
+        files = files,
+        errorMessage = errorMessage,
+        destinationSubdirectory = destinationSubdirectory,
+        createSubfolderByName = createSubfolderByName,
+        notifyOnCompletion = notifyOnCompletion,
+        fileSelectionMode = fileSelectionMode,
+        onCompletionIntentUri = onCompletionIntentUri,
+    )
+}
 
 data class DownloadFile(
     val link: String, // The original provider link
@@ -67,6 +131,15 @@ data class DownloadFile(
     @Transient val lastTimestamp: Long = System.currentTimeMillis()
 ) {
     val fileName get() = filePath?.substringAfterLast("/")
+
+    fun toEntity() = DownloadFileEntity(
+        link = link,
+        unrestrictedLink = unrestrictedLink,
+        state = state,
+        stateDescription = stateDescription,
+        filePath = filePath,
+        totalBytes = totalBytes,
+    )
 }
 
 data class DownloadTask(
@@ -84,6 +157,21 @@ data class DownloadTask(
     val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
     val onCompletionIntentUri: String? = null,
 ) {
+    fun toEntity() = DownloadTaskEntity(
+        id = id,
+        providerId = providerId,
+        name = name,
+        torrent = torrent,
+        state = state,
+        files = files.map { it.toEntity() },
+        errorMessage = errorMessage,
+        destinationSubdirectory = destinationSubdirectory,
+        createSubfolderByName = createSubfolderByName,
+        notifyOnCompletion = notifyOnCompletion,
+        fileSelectionMode = fileSelectionMode,
+        onCompletionIntentUri = onCompletionIntentUri,
+    )
+
     val isDownloadingOnProvider: Boolean get() {
         return providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING
     }

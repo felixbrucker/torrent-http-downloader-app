@@ -13,8 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
@@ -26,7 +26,7 @@ class DownloadTracker @Inject constructor(
     @param:Named("settings") private val settingsSharedPreferences: SharedPreferences,
     private val gson: Gson,
 ) {
-    private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
+    private val _tasks = MutableStateFlow<List<DownloadTaskEntity>>(emptyList())
 
     @get:JvmName("getTasksFlow")
     val tasks = _tasks.asStateFlow()
@@ -45,15 +45,15 @@ class DownloadTracker @Inject constructor(
     init {
         val json = downloadsSharedPreferences.getString("tasks", null)
         if (json != null) {
-            val type = object : TypeToken<List<DownloadTask>>() {}.type
-            _tasks.value = gson.fromJson(json, type)
+            val type = object : TypeToken<List<DownloadTaskEntity>>() {}.type
+            _tasks.value = gson.fromJson(json, type) ?: emptyList()
         }
 
         val rssJsonLegacy = downloadsSharedPreferences.getString("rss_feeds", null)
         if (rssJsonLegacy != null) {
             // Migrate legacy
             val type = object : TypeToken<List<RssFeed>>() {}.type
-            _rssFeeds.value = gson.fromJson(rssJsonLegacy, type)
+            _rssFeeds.value = gson.fromJson(rssJsonLegacy, type) ?: emptyList()
             downloadsSharedPreferences.edit { remove("rss_feeds") }
             saveRssFeeds()
         }
@@ -61,7 +61,7 @@ class DownloadTracker @Inject constructor(
         val rssJson = settingsSharedPreferences.getString("rss_feeds", null)
         if (rssJson != null) {
             val type = object : TypeToken<List<RssFeed>>() {}.type
-            _rssFeeds.value = gson.fromJson(rssJson, type)
+            _rssFeeds.value = gson.fromJson(rssJson, type) ?: emptyList()
         }
     }
 
@@ -75,7 +75,7 @@ class DownloadTracker @Inject constructor(
         settingsSharedPreferences.edit { putString("rss_feeds", json) }
     }
 
-    fun getTasks(): List<DownloadTask> {
+    fun getTasks(): List<DownloadTaskEntity> {
         return _tasks.value
     }
 
@@ -93,7 +93,7 @@ class DownloadTracker @Inject constructor(
         }
     }
 
-    fun addTask(task: DownloadTask) {
+    fun addTask(task: DownloadTaskEntity) {
         _tasks.update { it + task }
         saveTasks()
     }
@@ -107,7 +107,7 @@ class DownloadTracker @Inject constructor(
         saveTasks()
     }
 
-    fun findTask(id: String): DownloadTask? {
+    fun findTask(id: String): DownloadTaskEntity? {
         return _tasks.value.find { it.id == id }
     }
 
@@ -116,14 +116,14 @@ class DownloadTracker @Inject constructor(
         saveTasks()
     }
 
-    fun updateTask(id: String, update: (DownloadTask) -> DownloadTask) {
+    fun updateTask(id: String, update: (DownloadTaskEntity) -> DownloadTaskEntity) {
         _tasks.update { tasks ->
             tasks.map { if (it.id == id) update(it) else it }
         }
         saveTasks()
     }
 
-    fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFile) -> DownloadFile) {
+    fun updateTaskFile(taskId: String, fileLink: String, update: (DownloadFileEntity) -> DownloadFileEntity) {
         updateTaskFiles(taskId) {
             if (it.link == fileLink) {
                 update(it)
@@ -131,7 +131,7 @@ class DownloadTracker @Inject constructor(
         }
     }
 
-    fun updateTaskFiles(taskId: String, update: (DownloadFile) -> DownloadFile) {
+    fun updateTaskFiles(taskId: String, update: (DownloadFileEntity) -> DownloadFileEntity) {
         updateTask(taskId) { task ->
             task.copy(files = task.files.map {
                 update(it)

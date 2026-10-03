@@ -5,6 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorren
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
@@ -21,7 +22,7 @@ import timber.log.Timber
 class DownloadRepository @Inject constructor(
     private val downloadTracker: DownloadTracker,
     private val downloadProgressTracker: DownloadProgressTracker,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     @get:JvmName("getTasksFlow")
     val tasks: StateFlow<List<DownloadTask>> = combine(
@@ -47,7 +48,7 @@ class DownloadRepository @Inject constructor(
         if (task.providerTorrentInfo != null) {
             downloadProgressTracker.updateProviderTorrentInfo(task.id, task.providerTorrentInfo)
         }
-        downloadTracker.addTask(task.copy(providerTorrentInfo = null))
+        downloadTracker.addTask(task.toEntity())
     }
 
     fun moveTask(fromIndex: Int, toIndex: Int) {
@@ -180,7 +181,7 @@ class DownloadRepository @Inject constructor(
     fun updateTaskFilesAndState(taskId: String, files: List<DownloadFile>, state: TorrentState) {
         downloadTracker.updateTask(taskId) { task ->
             task.copy(
-                files = files,
+                files = files.map { it.toEntity() },
                 state = state,
             )
         }
@@ -221,25 +222,29 @@ class DownloadRepository @Inject constructor(
 
     private companion object {
         fun combineTasksWithProgressInfo(
-            staticTasks: List<DownloadTask>,
+            staticTasks: List<DownloadTaskEntity>,
             progressMap: Map<String, TaskProgressInfo>,
         ): List<DownloadTask> {
-            return staticTasks.map { task ->
-                val progressInfo = progressMap[task.id] ?: return@map task
-                val updatedProviderInfo = progressInfo.providerTorrentInfo ?: task.providerTorrentInfo
-                val updatedFiles = task.files.map { file ->
-                    val fileProgress = progressInfo.fileProgressMap[file.link] ?: return@map file
-                    file.copy(
-                        progress = fileProgress.progress,
-                        speed = fileProgress.speed,
-                        downloadedBytes = fileProgress.downloadedBytes,
-                        lastBytes = fileProgress.lastBytes,
-                        lastTimestamp = fileProgress.lastTimestamp,
-                    )
+            return staticTasks.map { taskEntity ->
+                val progressInfo = progressMap[taskEntity.id]
+                val providerInfo = progressInfo?.providerTorrentInfo
+                val combinedFiles = taskEntity.files.map { fileEntity ->
+                    val fileProgress = progressInfo?.fileProgressMap?.get(fileEntity.link)
+                    if (fileProgress != null) {
+                        fileEntity.toDownloadFile(
+                            progress = fileProgress.progress,
+                            speed = fileProgress.speed,
+                            downloadedBytes = fileProgress.downloadedBytes,
+                            lastBytes = fileProgress.lastBytes,
+                            lastTimestamp = fileProgress.lastTimestamp,
+                        )
+                    } else {
+                        fileEntity.toDownloadFile()
+                    }
                 }
-                task.copy(
-                    providerTorrentInfo = updatedProviderInfo,
-                    files = updatedFiles,
+                taskEntity.toDownloadTask(
+                    providerTorrentInfo = providerInfo,
+                    files = combinedFiles,
                 )
             }
         }
