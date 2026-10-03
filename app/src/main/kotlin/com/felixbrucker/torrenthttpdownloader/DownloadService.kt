@@ -6,21 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
-import javax.inject.Named
-import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
@@ -28,6 +17,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeature
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.NotificationConfig
@@ -38,13 +28,27 @@ import com.felixbrucker.torrenthttpdownloader.core.model.toNotificationConfig
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
 import com.felixbrucker.torrenthttpdownloader.core.util.Formatter
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 @AndroidEntryPoint
 class DownloadService : Service() {
     @Inject lateinit var downloadRepository: DownloadRepository
     @Inject lateinit var providerFactory: ProviderFactory
-    @Inject @Named("settings") lateinit var sharedPreferences: SharedPreferences
+    @Inject lateinit var appSettingsRepository: AppSettingsRepository
     @Inject lateinit var pathFactory: PathFactory
     @Inject lateinit var torrentUriResolver: TorrentUriResolver
 
@@ -107,7 +111,7 @@ class DownloadService : Service() {
 
         localDownloadManager = LocalDownloadManager(
             scope = serviceScope,
-            sharedPreferences = sharedPreferences,
+            appSettingsRepository = appSettingsRepository,
             downloadRepository = downloadRepository,
             onLinkExpired = { task, file ->
                 torrentStateMachine.updateFileInfo(task, file)
@@ -143,8 +147,10 @@ class DownloadService : Service() {
         startNotificationUpdates()
 
         provider.start()
-        localDownloadManager.start()
-        torrentStateMachine.start()
+        serviceScope.launch {
+            localDownloadManager.start()
+            torrentStateMachine.start()
+        }
     }
 
     private fun createServiceNotificationChannel() {

@@ -1,19 +1,23 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-import android.content.SharedPreferences
-import javax.inject.Inject
-import javax.inject.Named
-import javax.inject.Singleton
-import kotlin.math.min
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
 import com.felixbrucker.torrenthttpdownloader.core.network.ResourceNotFoundException
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.math.min
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 
 @Singleton
 class RealDebridProvider @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val realDebridApiService: RealDebridApiService,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
@@ -24,8 +28,16 @@ class RealDebridProvider @Inject constructor(
         const val NAME: String = "Real-Debrid"
     }
 
-    private var apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
+    private var apiToken = ""
     private val auth: String get() = "Bearer $apiToken"
+
+    init {
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                apiToken = settings.realDebridApiToken
+            }
+            .launchIn(scope)
+    }
 
     override suspend fun restoreTorrent(id: String) {
         // Nothing to do
@@ -142,12 +154,8 @@ class RealDebridProvider @Inject constructor(
         // Nothing to do
     }
 
-    override fun reloadSettings() {
-        apiToken = sharedPreferences.getString("real_debrid_api_token", "") ?: ""
-    }
-
     private fun checkApiToken() {
-        if(apiToken.isEmpty()) {
+        if (apiToken.isEmpty()) {
             throw Exception("API token is empty")
         }
     }
