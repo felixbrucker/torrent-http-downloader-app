@@ -1,18 +1,30 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.TRANSPORT_VPN
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
+import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
+import com.felixbrucker.torrenthttpdownloader.extensions.makeAddTorrentParams
+import com.felixbrucker.torrenthttpdownloader.extensions.sha1Hash
+import com.felixbrucker.torrenthttpdownloader.extensions.torrentId
+import com.felixbrucker.torrenthttpdownloader.extensions.torrentInfo
 import java.io.File
 import java.util.Random
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.FileStorage
 import org.libtorrent4j.Priority
@@ -33,18 +45,13 @@ import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.swig.torrent_flags_t
 import org.libtorrent4j.swig.torrent_handle
-import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
-import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
-import com.felixbrucker.torrenthttpdownloader.extensions.makeAddTorrentParams
-import com.felixbrucker.torrenthttpdownloader.extensions.sha1Hash
-import com.felixbrucker.torrenthttpdownloader.extensions.torrentId
-import com.felixbrucker.torrenthttpdownloader.extensions.torrentInfo
 
 @Singleton
 class LibTorrentProvider @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val connectivityManager: ConnectivityManager,
     private val pathFactory: PathFactory,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) : TorrentProvider {
     override val name: String = NAME
     override val features: Set<ProviderFeature> = setOf(
@@ -59,7 +66,7 @@ class LibTorrentProvider @Inject constructor(
     private val sessionManager = SessionManager()
     private val sessionSettings = SessionSettings()
 
-    private var requireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
+    private var requireVpnConnection = false
     private val networkCallback: ConnectivityManager.NetworkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network : Network, networkCapabilities : NetworkCapabilities) {
             if (sessionManager.isPaused && isAllowedToRun(networkCapabilities)) {
@@ -120,7 +127,27 @@ class LibTorrentProvider @Inject constructor(
             sessionSettings.portRangeFirst = range.first
             sessionSettings.portRangeSecond = range.second
         }
-        sessionSettings.activeDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
+
+        val settings = runBlocking { appSettingsRepository.getSettings() }
+        requireVpnConnection = settings.libTorrentRequireVpnConnection
+        sessionSettings.activeDownloads = settings.libTorrentParallelDownloads
+
+        appSettingsRepository.settingsFlow
+            .map { it.libTorrentRequireVpnConnection }
+            .distinctUntilChanged()
+            .onEach { requireVpn ->
+                requireVpnConnection = requireVpn
+            }
+            .launchIn(scope)
+
+        appSettingsRepository.settingsFlow
+            .map { it.libTorrentParallelDownloads }
+            .distinctUntilChanged()
+            .onEach { parallelDownloads ->
+                sessionSettings.activeDownloads = parallelDownloads
+                sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
+            }
+            .launchIn(scope)
     }
 
     private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {
@@ -337,20 +364,6 @@ class LibTorrentProvider @Inject constructor(
         torrentHandle.resume()
     }
 
-    override fun reloadSettings() {
-        val newRequireVpnConnection = sharedPreferences.getBoolean("libtorrent_require_vpn_connection", false)
-        val newActiveDownloads = sharedPreferences.getInt("libtorrent_parallel_downloads", 2)
-
-        val vpnChanged = requireVpnConnection != newRequireVpnConnection
-        val activeDownloadsChanged = sessionSettings.activeDownloads != newActiveDownloads
-
-        if (vpnChanged || activeDownloadsChanged) {
-            requireVpnConnection = newRequireVpnConnection
-            sessionSettings.activeDownloads = newActiveDownloads
-            sessionManager.applySettings(settingsToSettingsPack(sessionSettings))
-        }
-    }
-
     private fun getFileList(storage: FileStorage): List<Pair<String, Long>> {
         // relative paths in the torrent
         val files: MutableList<Pair<String, Long>> = mutableListOf()
@@ -472,13 +485,13 @@ class LibTorrentProvider @Inject constructor(
     private fun getIface(inetAddress: String, portRangeFirst: Int): String {
         var iface: String?
         if (inetAddress == SessionSettings.DEFAULT_INETADDRESS) {
-            iface = $$"0.0.0.0:%1$d,[::]:%1$d"
+            iface = "0.0.0.0:%1\$d,[::]:%1\$d"
         } else {
             /* IPv6 test */
             if (inetAddress.contains(":")) iface = "[$inetAddress]"
             else iface = inetAddress
 
-            iface = $$"$$iface:%1$d"
+            iface = "$iface:%1\$d"
         }
 
         return String.format(iface, portRangeFirst)

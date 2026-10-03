@@ -1,23 +1,36 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-import android.content.SharedPreferences
+import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
 
 @Singleton
 class ProviderFactory @Inject constructor(
-    @param:Named("settings") private val sharedPreferences: SharedPreferences,
+    private val appSettingsRepository: AppSettingsRepository,
     private val libTorrentProvider: LibTorrentProvider,
     private val realDebridProvider: RealDebridProvider,
+    @param:ApplicationScope private val scope: CoroutineScope
 ) {
-    fun getProvider(): TorrentProvider {
-        val providerName = sharedPreferences.getString("provider", RealDebridProvider.NAME)
+    private var activeProviderName: String = runBlocking { appSettingsRepository.getSettings() }.selectedProvider
 
-        return when (providerName) {
+    init {
+        appSettingsRepository.settingsFlow
+            .onEach { settings ->
+                activeProviderName = settings.selectedProvider
+            }
+            .launchIn(scope)
+    }
+
+    fun getProvider(): TorrentProvider {
+        return when (activeProviderName) {
             LibTorrentProvider.NAME -> libTorrentProvider
             RealDebridProvider.NAME -> realDebridProvider
-            else -> { throw Exception("Unknown provider: $providerName") }
+            else -> { throw Exception("Unknown provider: $activeProviderName") }
         }
     }
 }

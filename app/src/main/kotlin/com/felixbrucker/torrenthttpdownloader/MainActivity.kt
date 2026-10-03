@@ -42,10 +42,15 @@ import com.felixbrucker.torrenthttpdownloader.feature.downloads.DownloadsScreen
 import com.felixbrucker.torrenthttpdownloader.feature.logs.LogViewerScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedDetailScreen
 import com.felixbrucker.torrenthttpdownloader.feature.rss.RssFeedsScreen
+import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsScreen
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    // Injected to ensure eager instantiation on app startup so RssSyncLauncher initializes its settings flow and schedules periodic work
+    @Inject lateinit var rssSyncLauncher: RssSyncLauncher
+
     private val mainViewModel: MainViewModel by viewModels()
     private val addTorrentViewModel: AddTorrentViewModel by viewModels()
 
@@ -177,6 +182,5 @@ class MainActivity : ComponentActivity() {
         super.onStart()
 
         mainViewModel.checkAndStartDownloadService(this)
-        mainViewModel.ensureRssSyncIsScheduled()
     }
 }

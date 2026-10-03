@@ -1,7 +1,5 @@
 package com.felixbrucker.torrenthttpdownloader.core.data.providers
 
-
-
 data class ProviderTorrentInfo(
     val id: String,
     val name: String,
@@ -98,5 +96,4 @@ interface TorrentProvider {
     suspend fun resume(id: String)
     fun start()
     fun stop()
-    fun reloadSettings()
 }
