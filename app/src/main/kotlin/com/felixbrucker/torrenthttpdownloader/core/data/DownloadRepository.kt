@@ -70,7 +70,7 @@ class DownloadRepository @Inject constructor(
         return downloadTracker.findFileEntity(taskId, fileLink)
     }
 
-    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity>? {
+    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
         return downloadTracker.findTaskFileEntities(taskId)
     }
 

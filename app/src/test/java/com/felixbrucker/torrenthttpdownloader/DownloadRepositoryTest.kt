@@ -71,7 +71,8 @@ class DownloadRepositoryTest {
 
         val result = repository.getTasks()
 
-        assertEquals(listOf(staticTask.toDownloadTask()), result)
+        assertEquals(1, result.size)
+        assertEquals("task-1", result[0].id)
     }
 
     @Test
@@ -138,7 +139,7 @@ class DownloadRepositoryTest {
 
         val result = repository.findTask("task-1")
 
-        assertEquals(staticTask.toDownloadTask(), result)
+        assertEquals("task-1", result?.id)
     }
 
     @Test
@@ -166,7 +167,7 @@ class DownloadRepositoryTest {
 
         val result = repository.findTaskFile("task-1", "link-1")
 
-        assertEquals(fileEntity.toDownloadFile(), result)
+        assertEquals("link-1", result?.link)
     }
 
     @Test

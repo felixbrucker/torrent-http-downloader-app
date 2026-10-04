@@ -152,7 +152,7 @@ class TorrentStateMachine(
     }
 
     suspend fun restartTask(taskId: String) {
-        val task = downloadRepository.findTaskEntity(taskId) ?: return
+        val task = downloadRepository.findTask(taskId) ?: return
         try {
             resetTorrent(task)
             taskIdsToProcess.add(task.id)
@@ -495,10 +495,7 @@ class TorrentStateMachine(
     }
 
     private suspend fun handleFailedProviderTask(task: DownloadTask) {
-        val taskEntity = downloadRepository.findTaskEntity(task.id)
-        if (taskEntity != null) {
-            resetTorrent(taskEntity)
-        }
+        resetTorrent(task)
         onPostNotification(
             "Torrent has been restarted",
             "Torrent ${task.name} encountered an error on provider and has been restarted",
@@ -507,11 +504,9 @@ class TorrentStateMachine(
         )
     }
 
-    private suspend fun resetTorrent(task: DownloadTaskEntity) {
-        val fullTask = downloadRepository.findTask(task.id)
-        if (fullTask != null) {
-            localDownloadManager.removeTaskFromQueues(fullTask)
-        }
+    private suspend fun resetTorrent(task: DownloadTask) {
+        localDownloadManager.removeTaskFromQueues(task)
+        // Tasks not added to provider yet don't need to get deleted from there
         if (task.providerId != null) {
             provider.deleteTorrent(task.providerId)
         }

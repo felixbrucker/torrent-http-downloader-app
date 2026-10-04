@@ -54,8 +54,8 @@ data class TorrentDescriptor(
 )
 
 data class DownloadFileEntity(
-    val link: String,
-    val unrestrictedLink: String? = null,
+    val link: String, // The original provider link
+    val unrestrictedLink: String? = null, // The download link, might need to be regenerated
     val state: LocalDownloadState = LocalDownloadState.PENDING,
     val stateDescription: String? = null,
     val filePath: String? = null,
@@ -80,7 +80,7 @@ data class DownloadFileEntity(
 
 data class DownloadTaskEntity(
     val id: String,
-    val providerId: String? = null,
+    val providerId: String? = null, // Provider Torrent ID, may be same as id
     val name: String,
     val torrent: TorrentDescriptor,
     val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,

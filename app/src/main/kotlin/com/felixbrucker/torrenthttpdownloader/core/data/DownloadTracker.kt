@@ -123,8 +123,8 @@ class DownloadTracker @Inject constructor(
         return findTaskEntity(taskId)?.files?.find { it.link == fileLink }
     }
 
-    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity>? {
-        return findTaskEntity(taskId)?.files
+    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
+        return findTaskEntity(taskId)?.files ?: emptyList()
     }
 
     fun removeTask(id: String) {
