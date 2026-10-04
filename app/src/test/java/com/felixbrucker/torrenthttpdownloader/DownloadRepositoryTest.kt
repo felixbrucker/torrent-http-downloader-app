@@ -143,17 +143,13 @@ class DownloadRepositoryTest {
 
     @Test
     fun testHasTaskReturnsTrueWhenFound() {
-        val staticTask = DownloadTaskEntity(
-            id = "task-1",
-            name = "Test Task",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
-        )
-        staticTasksFlow.value = listOf(staticTask)
+        every { downloadTracker.hasTask("task-1") } returns true
         val repository = createRepository()
 
         val result = repository.hasTask("task-1")
 
         assertTrue(result)
+        verify { downloadTracker.hasTask("task-1") }
     }
 
     @Test

@@ -93,6 +93,10 @@ class DownloadTracker @Inject constructor(
         }
     }
 
+    fun hasTask(id: String): Boolean {
+        return _tasks.value.any { it.id == id }
+    }
+
     fun addTask(task: DownloadTaskEntity) {
         _tasks.update { it + task }
         saveTasks()
@@ -109,6 +113,18 @@ class DownloadTracker @Inject constructor(
 
     fun findTask(id: String): DownloadTaskEntity? {
         return _tasks.value.find { it.id == id }
+    }
+
+    fun findTaskEntity(id: String): DownloadTaskEntity? {
+        return _tasks.value.find { it.id == id }
+    }
+
+    fun findFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
+        return findTaskEntity(taskId)?.files?.find { it.link == fileLink }
+    }
+
+    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity>? {
+        return findTaskEntity(taskId)?.files
     }
 
     fun removeTask(id: String) {

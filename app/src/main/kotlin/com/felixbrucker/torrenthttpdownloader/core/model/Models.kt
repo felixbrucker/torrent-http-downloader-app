@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.core.model
 
 import java.util.UUID
 import kotlin.math.max
+import com.felixbrucker.torrenthttpdownloader.core.data.FileProgressInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
@@ -62,24 +63,18 @@ data class DownloadFileEntity(
 ) {
     val fileName get() = filePath?.substringAfterLast("/")
 
-    fun toDownloadFile(
-        progress: Int = 0,
-        speed: Long = 0,
-        downloadedBytes: Long = 0,
-        lastBytes: Long = 0,
-        lastTimestamp: Long = System.currentTimeMillis(),
-    ) = DownloadFile(
+    fun toDownloadFile(fileProgressInfo: FileProgressInfo? = null) = DownloadFile(
         link = link,
         unrestrictedLink = unrestrictedLink,
         state = state,
         stateDescription = stateDescription,
-        progress = progress,
+        progress = fileProgressInfo?.progress ?: 0,
         filePath = filePath,
-        speed = speed,
+        speed = fileProgressInfo?.speed ?: 0,
         totalBytes = totalBytes,
-        downloadedBytes = downloadedBytes,
-        lastBytes = lastBytes,
-        lastTimestamp = lastTimestamp,
+        downloadedBytes = fileProgressInfo?.downloadedBytes ?: 0,
+        lastBytes = fileProgressInfo?.lastBytes ?: 0,
+        lastTimestamp = fileProgressInfo?.lastTimestamp ?: System.currentTimeMillis(),
     )
 }
 

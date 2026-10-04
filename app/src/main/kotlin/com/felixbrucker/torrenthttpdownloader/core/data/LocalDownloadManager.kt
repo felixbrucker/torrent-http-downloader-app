@@ -5,6 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import java.io.File
@@ -35,7 +36,7 @@ class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val appSettingsRepository: AppSettingsRepository,
     private val downloadRepository: DownloadRepository,
-    private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
+    private val onLinkExpired: suspend (DownloadTaskEntity, DownloadFile) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
@@ -78,11 +79,10 @@ class LocalDownloadManager(
         }
 
         try {
-            // Support regenerating the link if the existing one expires (
-            // TODO: how to detect expired links?
+            // Support regenerating the link if the existing one expires
             if (file.unrestrictedLink == null) {
-                val task = downloadRepository.findTask(work.taskId) ?: return
-                onLinkExpired(task, file)
+                val taskEntity = downloadRepository.findTaskEntity(work.taskId) ?: return
+                onLinkExpired(taskEntity, file)
                 file = downloadRepository.findTaskFile(work.taskId, file.link) ?: return
             }
             val downloadUrl = file.unrestrictedLink ?: return
@@ -241,14 +241,13 @@ class LocalDownloadManager(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        val file = task.files.find { it.link == fileLink } ?: return
+        val file = downloadRepository.findTaskFile(taskId, fileLink) ?: return
         enqueueDownload(DownloadWork(taskId, file))
     }
 
     fun pauseTask(taskId: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        task.files.forEach { file ->
+        val files = downloadRepository.findTaskFileEntities(taskId) ?: return
+        files.forEach { file ->
             if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
                 pauseFile(taskId, file.link)
             }
@@ -256,8 +255,8 @@ class LocalDownloadManager(
     }
 
     fun resumeTask(taskId: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        task.files.forEach { file ->
+        val files = downloadRepository.findTaskFileEntities(taskId) ?: return
+        files.forEach { file ->
             if (file.state == LocalDownloadState.PAUSED) {
                 resumeFile(taskId, file.link)
             }

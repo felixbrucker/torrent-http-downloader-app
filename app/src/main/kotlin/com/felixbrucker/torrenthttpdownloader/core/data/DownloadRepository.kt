@@ -4,6 +4,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
@@ -28,8 +29,8 @@ class DownloadRepository @Inject constructor(
     val tasks: StateFlow<List<DownloadTask>> = combine(
         downloadTracker.tasks,
         downloadProgressTracker.progressInfo,
-    ) { staticTasks, progressMap ->
-        combineTasksWithProgressInfo(staticTasks, progressMap)
+    ) { taskEntities, progressMap ->
+        combineTasksWithProgressInfo(taskEntities, progressMap)
     }.stateIn(
         scope = scope,
         started = SharingStarted.Eagerly,
@@ -57,10 +58,24 @@ class DownloadRepository @Inject constructor(
 
     fun findTask(id: String): DownloadTask? = tasks.value.find { it.id == id }
 
-    fun hasTask(id: String): Boolean = tasks.value.any { it.id == id }
+    fun findTaskEntity(id: String): DownloadTaskEntity? = downloadTracker.findTaskEntity(id)
+
+    fun hasTask(id: String): Boolean = downloadTracker.hasTask(id)
 
     fun findTaskFile(taskId: String, fileLink: String): DownloadFile? {
         return findTask(taskId)?.files?.find { it.link == fileLink }
+    }
+
+    fun findFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
+        return downloadTracker.findFileEntity(taskId, fileLink)
+    }
+
+    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity>? {
+        return downloadTracker.findTaskFileEntities(taskId)
+    }
+
+    fun findTaskFiles(taskId: String): List<DownloadFile>? {
+        return findTask(taskId)?.files
     }
 
     fun removeTask(id: String) {
@@ -188,7 +203,7 @@ class DownloadRepository @Inject constructor(
     }
 
     fun markAllTaskFilesCompletedLocally(taskId: String) {
-        val taskFiles = findTask(taskId)?.files ?: emptyList()
+        val taskFiles = findTaskFiles(taskId) ?: emptyList()
         downloadTracker.updateTaskFiles(taskId) { file ->
             file.copy(
                 unrestrictedLink = null,
@@ -222,25 +237,15 @@ class DownloadRepository @Inject constructor(
 
     private companion object {
         fun combineTasksWithProgressInfo(
-            staticTasks: List<DownloadTaskEntity>,
+            taskEntities: List<DownloadTaskEntity>,
             progressMap: Map<String, TaskProgressInfo>,
         ): List<DownloadTask> {
-            return staticTasks.map { taskEntity ->
+            return taskEntities.map { taskEntity ->
                 val progressInfo = progressMap[taskEntity.id]
                 val providerInfo = progressInfo?.providerTorrentInfo
                 val combinedFiles = taskEntity.files.map { fileEntity ->
                     val fileProgress = progressInfo?.fileProgressMap?.get(fileEntity.link)
-                    if (fileProgress != null) {
-                        fileEntity.toDownloadFile(
-                            progress = fileProgress.progress,
-                            speed = fileProgress.speed,
-                            downloadedBytes = fileProgress.downloadedBytes,
-                            lastBytes = fileProgress.lastBytes,
-                            lastTimestamp = fileProgress.lastTimestamp,
-                        )
-                    } else {
-                        fileEntity.toDownloadFile()
-                    }
+                    fileEntity.toDownloadFile(fileProgress)
                 }
                 taskEntity.toDownloadTask(
                     providerTorrentInfo = providerInfo,
