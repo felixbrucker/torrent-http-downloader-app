@@ -3,7 +3,7 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -154,7 +154,7 @@ class DownloadProgressTracker @Inject constructor() {
         }
     }
 
-    fun markAllTaskFilesCompletedLocally(taskId: String, files: List<DownloadFile>) {
+    fun markAllTaskFilesCompletedLocally(taskId: String, files: List<DownloadFileEntity>) {
         _progressInfo.update { currentMap ->
             val taskInfo = currentMap[taskId] ?: TaskProgressInfo()
             val updatedFileMap = taskInfo.fileProgressMap.toMutableMap()

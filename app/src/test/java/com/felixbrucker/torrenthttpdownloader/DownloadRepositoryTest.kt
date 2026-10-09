@@ -88,33 +88,16 @@ class DownloadRepositoryTest {
 
     @Test
     fun testAddTaskDelegatesToTrackerAndProgress() {
-        val providerInfo = ProviderTorrentInfo(
-            id = "p-1",
-            name = "Test",
-            state = ProviderTorrentState.DOWNLOADING,
-            status = "downloading",
-            progress = 50f,
-            totalSizeInBytes = 1000L,
-            downloadedBytes = 500L,
-            downloadSpeed = 10L,
-            uploadSpeed = 0L,
-            seeders = 1,
-            leechers = 1,
-            peers = 2,
-            totalPeers = 2,
-        )
-        val task = DownloadTask(
+        val task = DownloadTaskEntity(
             id = "task-1",
             name = "Test Task",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
-            providerTorrentInfo = providerInfo
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
         )
         val repository = createRepository()
 
         repository.addTask(task)
 
         verify { downloadTracker.addTask(match { it.id == "task-1" }) }
-        assertEquals(providerInfo, downloadProgressTracker.progressInfo.value["task-1"]?.providerTorrentInfo)
     }
 
     @Test

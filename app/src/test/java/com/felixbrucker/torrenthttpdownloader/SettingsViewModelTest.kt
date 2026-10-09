@@ -1,17 +1,12 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import android.content.Context
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettings
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
-import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import com.felixbrucker.torrenthttpdownloader.feature.settings.SettingsViewModel
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,12 +22,6 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
     private val appSettingsRepository = mockk<AppSettingsRepository>(relaxed = true)
-    private val context = mockk<Context>(relaxed = true)
-    private val rssSyncLauncher = mockk<RssSyncLauncher>(relaxed = true)
-    private val provider = mockk<TorrentProvider>(relaxed = true)
-    private val providerFactory = mockk<ProviderFactory> {
-        every { getProvider() } returns provider
-    }
     private val testDispatcher = UnconfinedTestDispatcher()
     private val settingsFlow = MutableStateFlow(AppSettings())
 
@@ -80,7 +69,7 @@ class SettingsViewModelTest {
             rssSyncIntervalHours = 6
         )
 
-        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository)
         val state = viewModel.uiState.value
 
         assertEquals(LibTorrentProvider.NAME, state.selectedProvider)
@@ -94,8 +83,7 @@ class SettingsViewModelTest {
 
     @Test
     fun testUpdatersModifyStateAndSave() {
-        every { context.packageName } returns "com.felixbrucker.torrenthttpdownloader"
-        val viewModel = SettingsViewModel(appSettingsRepository, context, rssSyncLauncher, providerFactory)
+        val viewModel = SettingsViewModel(appSettingsRepository)
 
         viewModel.updateSelectedProvider(RealDebridProvider.NAME)
         viewModel.updateRealDebridApiToken("token-123")

@@ -15,7 +15,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 @Singleton
 class RealDebridProvider @Inject constructor(
-    private val appSettingsRepository: AppSettingsRepository,
+    appSettingsRepository: AppSettingsRepository,
     private val realDebridApiService: RealDebridApiService,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) : TorrentProvider {

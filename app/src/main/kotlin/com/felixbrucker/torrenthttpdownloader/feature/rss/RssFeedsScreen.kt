@@ -41,7 +41,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RssFeedsScreen(
     onBack: () -> Unit,

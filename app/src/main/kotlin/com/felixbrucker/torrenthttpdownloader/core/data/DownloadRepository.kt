@@ -42,14 +42,17 @@ class DownloadRepository @Inject constructor(
 
     fun getTasks(): List<DownloadTask> = tasks.value
 
+    fun getTaskIds(): List<String> = tasks.value.map { it.id }
+
     fun hasTasksWhichNeedProcessing(): Boolean = downloadTracker.hasTasksWhichNeedProcessing()
 
-    fun addTask(task: DownloadTask) {
+    fun addTask(task: DownloadTaskEntity) {
         Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
-        if (task.providerTorrentInfo != null) {
-            downloadProgressTracker.updateProviderTorrentInfo(task.id, task.providerTorrentInfo)
-        }
-        downloadTracker.addTask(task.toEntity())
+        downloadTracker.addTask(task)
+    }
+
+    fun addTaskFiles(taskId: String, files: List<DownloadFileEntity>) {
+        downloadTracker.addTaskFiles(taskId, files)
     }
 
     fun moveTask(fromIndex: Int, toIndex: Int) {
@@ -66,16 +69,12 @@ class DownloadRepository @Inject constructor(
         return findTask(taskId)?.files?.find { it.link == fileLink }
     }
 
-    fun findFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
-        return downloadTracker.findFileEntity(taskId, fileLink)
+    fun findTaskFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
+        return downloadTracker.findTaskFileEntity(taskId, fileLink)
     }
 
     fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
         return downloadTracker.findTaskFileEntities(taskId)
-    }
-
-    fun findTaskFiles(taskId: String): List<DownloadFile>? {
-        return findTask(taskId)?.files
     }
 
     fun removeTask(id: String) {
@@ -169,12 +168,14 @@ class DownloadRepository @Inject constructor(
         fileLink: String,
         totalBytes: Long,
         filePath: String,
+        fileName: String,
         unrestrictedLink: String,
     ) {
         downloadTracker.updateTaskFile(taskId, fileLink) { file ->
             file.copy(
                 totalBytes = totalBytes,
                 filePath = filePath,
+                fileName = fileName,
                 unrestrictedLink = unrestrictedLink,
             )
         }
@@ -193,23 +194,9 @@ class DownloadRepository @Inject constructor(
         downloadProgressTracker.setProviderTorrentInfoWaitingForFileSelection(taskId)
     }
 
-    fun updateTaskFilesAndState(taskId: String, files: List<DownloadFile>, state: TorrentState) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                files = files.map { it.toEntity() },
-                state = state,
-            )
-        }
-    }
-
     fun markAllTaskFilesCompletedLocally(taskId: String) {
-        val taskFiles = findTaskFiles(taskId) ?: emptyList()
-        downloadTracker.updateTaskFiles(taskId) { file ->
-            file.copy(
-                unrestrictedLink = null,
-                state = LocalDownloadState.COMPLETED,
-            )
-        }
+        downloadTracker.markAllTaskFilesCompletedLocally(taskId)
+        val taskFiles = findTaskFileEntities(taskId)
         downloadProgressTracker.markAllTaskFilesCompletedLocally(taskId, taskFiles)
     }
 

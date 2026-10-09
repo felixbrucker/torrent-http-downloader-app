@@ -6,7 +6,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.extensions.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.extensions.hash
 
@@ -45,7 +45,7 @@ class PathFactory @Inject constructor(
         )
     }
 
-    fun getScopedDestinationDirectory(task: DownloadTask): File {
+    fun getScopedDestinationDirectory(task: DownloadTaskEntity): File {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val baseDir = if (!task.destinationSubdirectory.isNullOrEmpty()) {
             File(downloadsDir, task.destinationSubdirectory)

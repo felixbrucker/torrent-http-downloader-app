@@ -86,7 +86,7 @@ import com.felixbrucker.torrenthttpdownloader.extensions.capitalized
 fun DownloadItem(
     task: DownloadTask,
     onRemove: () -> Unit,
-    provider: TorrentProvider?,
+    provider: TorrentProvider,
     onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit,
     onConfirmFileSelection: (taskId: String) -> Unit,
     onPauseTaskOnProvider: (taskId: String) -> Unit,
@@ -314,7 +314,7 @@ fun TaskStatsFlow(task: DownloadTask) {
 @Composable
 fun NarrowTaskActionRow(
     task: DownloadTask,
-    provider: TorrentProvider?,
+    provider: TorrentProvider,
     onRemove: () -> Unit,
     isExpandable: Boolean,
     isExpanded: Boolean,
@@ -355,7 +355,7 @@ fun NarrowTaskActionRow(
 @Composable
 fun TaskActions(
     task: DownloadTask,
-    provider: TorrentProvider?,
+    provider: TorrentProvider,
     onRemove: () -> Unit,
     onConfirmFileSelection: (taskId: String) -> Unit,
     onPauseTaskOnProvider: (taskId: String) -> Unit,
@@ -373,7 +373,7 @@ fun TaskActions(
         }
     }
 
-    if (task.location == TaskLocation.PROVIDER && provider?.supports(ProviderFeature.PauseResume) == true) {
+    if (task.location == TaskLocation.PROVIDER && provider.supports(ProviderFeature.PauseResume)) {
         if (task.providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING) {
             IconButton(onClick = { onPauseTaskOnProvider(task.id) }) {
                 Icon(Icons.Default.Pause, contentDescription = "Pause")
@@ -411,7 +411,7 @@ fun TaskActions(
 @Composable
 fun TaskExpandedFilesList(
     task: DownloadTask,
-    provider: TorrentProvider?,
+    provider: TorrentProvider,
     isManualSelectionMode: Boolean,
     onResumeLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
     onPauseLocalFileDownload: (taskId: String, fileLink: String) -> Unit,
@@ -435,7 +435,7 @@ fun TaskExpandedFilesList(
                 ProviderTorrentFileItem(
                     taskId = task.id,
                     file = file,
-                    supportsPriorities = provider?.supports(ProviderFeature.FilePriorities) == true,
+                    supportsPriorities = provider.supports(ProviderFeature.FilePriorities),
                     isTorrentCompletedOnProvider = task.providerTorrentInfo.state == ProviderTorrentState.COMPLETED,
                     isManualSelectionMode = isManualSelectionMode,
                     onToggleProviderFileSelection = onToggleProviderFileSelection,

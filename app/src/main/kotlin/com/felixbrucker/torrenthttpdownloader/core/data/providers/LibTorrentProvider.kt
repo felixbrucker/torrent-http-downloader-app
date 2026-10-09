@@ -151,10 +151,7 @@ class LibTorrentProvider @Inject constructor(
     }
 
     private fun isAllowedToRun(capabilities: NetworkCapabilities): Boolean {
-        if (!requireVpnConnection) {
-            return true
-        }
-        return capabilities.hasTransport(TRANSPORT_VPN)
+        return !requireVpnConnection || capabilities.hasTransport(TRANSPORT_VPN)
     }
 
     override fun start() {
@@ -485,13 +482,11 @@ class LibTorrentProvider @Inject constructor(
     private fun getIface(inetAddress: String, portRangeFirst: Int): String {
         var iface: String?
         if (inetAddress == SessionSettings.DEFAULT_INETADDRESS) {
-            iface = "0.0.0.0:%1\$d,[::]:%1\$d"
+            iface = $$"0.0.0.0:%1$d,[::]:%1$d"
         } else {
             /* IPv6 test */
-            if (inetAddress.contains(":")) iface = "[$inetAddress]"
-            else iface = inetAddress
-
-            iface = "$iface:%1\$d"
+            iface = if (inetAddress.contains(":")) "[$inetAddress]" else inetAddress
+            iface = $$"$$iface:%1$d"
         }
 
         return String.format(iface, portRangeFirst)
@@ -508,12 +503,12 @@ class LibTorrentProvider @Inject constructor(
         modeOutcoming: SessionSettings.EncryptMode,
         modeIncoming: SessionSettings.EncryptMode
     ): Int {
-        if (modeOutcoming === SessionSettings.EncryptMode.FORCED
+        return if (modeOutcoming === SessionSettings.EncryptMode.FORCED
             || modeIncoming === SessionSettings.EncryptMode.FORCED
         ) {
-            return settings_pack.enc_level.pe_rc4.swigValue()
+            settings_pack.enc_level.pe_rc4.swigValue()
         } else {
-            return settings_pack.enc_level.pe_both.swigValue()
+            settings_pack.enc_level.pe_both.swigValue()
         }
     }
 }

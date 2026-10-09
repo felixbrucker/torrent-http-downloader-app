@@ -1,11 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.core.data
 
-import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -21,7 +19,6 @@ import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 
 @Singleton
 class DownloadTracker @Inject constructor(
-    @param:ApplicationContext private val context: Context,
     @param:Named("downloads") private val downloadsSharedPreferences: SharedPreferences,
     @param:Named("settings") private val settingsSharedPreferences: SharedPreferences,
     private val gson: Gson,
@@ -82,13 +79,8 @@ class DownloadTracker @Inject constructor(
     fun hasTasksWhichNeedProcessing(): Boolean {
         // Early exit on first active task instead of iterating all tasks
         return _tasks.value.any { task ->
-            if (task.state != TorrentState.DOWNLOADING_LOCALLY) {
-                true
-            } else {
-                task.files.any {
-                    it.state == LocalDownloadState.PENDING
-                    || it.state == LocalDownloadState.DOWNLOADING
-                }
+            task.state != TorrentState.DOWNLOADING_LOCALLY || task.files.any {
+                it.state == LocalDownloadState.PENDING || it.state == LocalDownloadState.DOWNLOADING
             }
         }
     }
@@ -102,6 +94,12 @@ class DownloadTracker @Inject constructor(
         saveTasks()
     }
 
+    fun addTaskFiles(taskId: String, files: List<DownloadFileEntity>) {
+        updateTask(taskId) { task ->
+            task.copy(files = task.files + files)
+        }
+    }
+
     fun moveTask(fromIndex: Int, toIndex: Int) {
         _tasks.update { tasks ->
             tasks.toMutableList().apply {
@@ -111,20 +109,25 @@ class DownloadTracker @Inject constructor(
         saveTasks()
     }
 
-    fun findTask(id: String): DownloadTaskEntity? {
-        return _tasks.value.find { it.id == id }
-    }
-
     fun findTaskEntity(id: String): DownloadTaskEntity? {
         return _tasks.value.find { it.id == id }
     }
 
-    fun findFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
+    fun findTaskFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
         return findTaskEntity(taskId)?.files?.find { it.link == fileLink }
     }
 
     fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
         return findTaskEntity(taskId)?.files ?: emptyList()
+    }
+
+    fun markAllTaskFilesCompletedLocally(taskId: String) {
+        updateTaskFiles(taskId) { file ->
+            file.copy(
+                unrestrictedLink = null,
+                state = LocalDownloadState.COMPLETED,
+            )
+        }
     }
 
     fun removeTask(id: String) {

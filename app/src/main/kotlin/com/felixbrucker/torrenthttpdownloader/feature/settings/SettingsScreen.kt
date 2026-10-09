@@ -58,7 +58,6 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProv
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -171,7 +170,6 @@ private fun SettingsTopBar(onBack: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProviderConfigCard(
     providers: List<String>,

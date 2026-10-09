@@ -3,7 +3,6 @@ package com.felixbrucker.torrenthttpdownloader.feature.rss
 import android.text.format.DateUtils
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -39,7 +38,6 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.extensions.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfigFields
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RssFeedItem(
     feed: RssFeed,
@@ -380,7 +378,6 @@ private fun RssItemTrailingContent(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditRssFeedDialog(
     feed: RssFeed? = null,

@@ -5,7 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentFile
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -248,7 +248,7 @@ class DownloadProgressTrackerTest {
     @Test
     fun testMarkAllTaskFilesCompletedLocallySuccess() {
         val taskId = "task-1"
-        val files = listOf(DownloadFile(link = "http://example.com/file1", totalBytes = 5000L))
+        val files = listOf(DownloadFileEntity(link = "http://example.com/file1", totalBytes = 5000L))
 
         progressTracker.markAllTaskFilesCompletedLocally(taskId, files)
 

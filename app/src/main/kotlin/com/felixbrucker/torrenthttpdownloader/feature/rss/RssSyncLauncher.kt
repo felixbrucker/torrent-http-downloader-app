@@ -25,7 +25,7 @@ import timber.log.Timber
 @Singleton
 class RssSyncLauncher @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val appSettingsRepository: AppSettingsRepository,
+    appSettingsRepository: AppSettingsRepository,
     @param:ApplicationScope private val scope: CoroutineScope
 ) {
     init {

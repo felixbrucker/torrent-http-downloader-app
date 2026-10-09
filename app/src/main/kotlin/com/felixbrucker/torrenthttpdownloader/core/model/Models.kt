@@ -59,10 +59,9 @@ data class DownloadFileEntity(
     val state: LocalDownloadState = LocalDownloadState.PENDING,
     val stateDescription: String? = null,
     val filePath: String? = null,
+    val fileName: String? = null,
     val totalBytes: Long = 0,
 ) {
-    val fileName get() = filePath?.substringAfterLast("/")
-
     fun toDownloadFile(fileProgressInfo: FileProgressInfo? = null) = DownloadFile(
         link = link,
         unrestrictedLink = unrestrictedLink,
@@ -84,7 +83,7 @@ data class DownloadTaskEntity(
     val name: String,
     val torrent: TorrentDescriptor,
     val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
-    val files: List<DownloadFileEntity> = listOf(),
+    val files: List<DownloadFileEntity> = listOf(), // should be sorted by filename ASC
     val errorMessage: String? = null,
     val destinationSubdirectory: String? = null,
     val createSubfolderByName: Boolean = true,
@@ -110,6 +109,31 @@ data class DownloadTaskEntity(
         fileSelectionMode = fileSelectionMode,
         onCompletionIntentUri = onCompletionIntentUri,
     )
+
+    fun deleteFiles() {
+        for (filePath in files.mapNotNull { file -> file.filePath }) {
+            filePath.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeTorrentFile() {
+        if (torrent.type == TorrentType.TORRENT_FILE) {
+            torrent.uri.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeResumeData(pathFactory: PathFactory) {
+        if (providerId != null) {
+            pathFactory.getResumeDataPath(providerId).deleteIfExists()
+        }
+    }
+
+    fun removeScopedTemporaryDirectory(pathFactory: PathFactory) {
+        val tempDir = pathFactory.getScopedTemporaryDirectory(name)
+        if (tempDir.exists()) {
+            tempDir.deleteRecursively()
+        }
+    }
 }
 
 data class DownloadFile(
@@ -124,18 +148,7 @@ data class DownloadFile(
     val downloadedBytes: Long = 0,
     @Transient val lastBytes: Long = 0,
     @Transient val lastTimestamp: Long = System.currentTimeMillis()
-) {
-    val fileName get() = filePath?.substringAfterLast("/")
-
-    fun toEntity() = DownloadFileEntity(
-        link = link,
-        unrestrictedLink = unrestrictedLink,
-        state = state,
-        stateDescription = stateDescription,
-        filePath = filePath,
-        totalBytes = totalBytes,
-    )
-}
+)
 
 data class DownloadTask(
     val id: String,
@@ -152,21 +165,6 @@ data class DownloadTask(
     val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
     val onCompletionIntentUri: String? = null,
 ) {
-    fun toEntity() = DownloadTaskEntity(
-        id = id,
-        providerId = providerId,
-        name = name,
-        torrent = torrent,
-        state = state,
-        files = files.map { it.toEntity() },
-        errorMessage = errorMessage,
-        destinationSubdirectory = destinationSubdirectory,
-        createSubfolderByName = createSubfolderByName,
-        notifyOnCompletion = notifyOnCompletion,
-        fileSelectionMode = fileSelectionMode,
-        onCompletionIntentUri = onCompletionIntentUri,
-    )
-
     val isDownloadingOnProvider: Boolean get() {
         return providerTorrentInfo?.state == ProviderTorrentState.DOWNLOADING
     }
@@ -230,31 +228,6 @@ data class DownloadTask(
             TaskLocation.PROVIDER
         } else {
             TaskLocation.LOCAL
-        }
-    }
-
-    fun deleteFiles() {
-        for (filePath in files.mapNotNull { file -> file.filePath }) {
-            filePath.asFile().deleteIfExists()
-        }
-    }
-
-    fun removeTorrentFile() {
-        if (torrent.type == TorrentType.TORRENT_FILE) {
-            torrent.uri.asFile().deleteIfExists()
-        }
-    }
-
-    fun removeResumeData(pathFactory: PathFactory) {
-        if (providerId != null) {
-            pathFactory.getResumeDataPath(providerId).deleteIfExists()
-        }
-    }
-
-    fun removeScopedTemporaryDirectory(pathFactory: PathFactory) {
-        val tempDir = pathFactory.getScopedTemporaryDirectory(name)
-        if (tempDir.exists()) {
-            tempDir.deleteRecursively()
         }
     }
 }

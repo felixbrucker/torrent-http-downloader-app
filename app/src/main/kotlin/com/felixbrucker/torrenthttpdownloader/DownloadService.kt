@@ -19,6 +19,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeatur
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.NotificationConfig
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
@@ -74,7 +75,7 @@ class DownloadService : Service() {
                         return@launch
                     }
 
-                    val task = DownloadTask(
+                    val task = DownloadTaskEntity(
                         id = id,
                         name = name,
                         torrent = TorrentDescriptor(type, uri),
@@ -467,7 +468,7 @@ class DownloadService : Service() {
             return
         }
 
-        val task = DownloadTask(
+        val task = DownloadTaskEntity(
             id = id,
             name = torrentName ?: uri,
             torrent = TorrentDescriptor(type, uri),
@@ -481,7 +482,7 @@ class DownloadService : Service() {
         addTask(task)
     }
 
-    private fun addTask(task: DownloadTask) {
+    private fun addTask(task: DownloadTaskEntity) {
         torrentStateMachine.addTask(task)
     }
 
