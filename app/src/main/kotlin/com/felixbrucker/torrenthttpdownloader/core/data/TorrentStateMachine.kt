@@ -18,8 +18,8 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeatur
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TaskLocation
@@ -73,7 +73,7 @@ class TorrentStateMachine(
         taskIdsToProcess.clear()
     }
 
-    fun addTask(task: DownloadTaskEntity) {
+    suspend fun addTask(task: DownloadTaskEntity) {
         downloadRepository.addTask(task)
         taskIdsToProcess.add(task.id)
     }
@@ -166,12 +166,14 @@ class TorrentStateMachine(
         deleteFiles: Boolean = true,
         deleteTorrentFile: Boolean = true
     ) {
-        val task = downloadRepository.findTaskEntity(taskId) ?: return
+        val taskWithFiles = downloadRepository.findTaskWithFiles(taskId) ?: return
+        val task = taskWithFiles.task
+        val files = taskWithFiles.files
 
-        localDownloadManager.removeTaskFromQueues(task)
+        localDownloadManager.removeTaskFromQueues(task.id, files)
 
         if (deleteFiles) {
-            task.deleteFiles()
+            taskWithFiles.deleteFiles()
             task.removeScopedTemporaryDirectory(pathFactory)
             task.removeResumeData(pathFactory)
         }
@@ -338,8 +340,8 @@ class TorrentStateMachine(
                     }
 
                     if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
-                        val files = torrentInfo.links.map { DownloadFileEntity(link = it) }
-                        downloadRepository.addTaskFiles(task.id, files)
+                        val files = torrentInfo.links.map { DownloadFileEntity(taskId = task.id, link = it) }
+                        downloadRepository.addTaskFiles(files)
                         downloadRepository.updateTaskState(
                             taskId = task.id,
                             state = TorrentState.POPULATING_FILE_INFOS,
@@ -353,7 +355,8 @@ class TorrentStateMachine(
                 }
 
                 TorrentState.POPULATING_FILE_INFOS -> {
-                    for (file in task.files.filter { it.filePath == null || it.unrestrictedLink == null }) {
+                    val taskFiles = downloadRepository.findTaskFileEntities(task.id)
+                    for (file in taskFiles.filter { it.filePath == null || it.unrestrictedLink == null }) {
                         updateFileInfo(task, file)
                     }
                     if (provider.isLocalProvider) {
@@ -369,14 +372,14 @@ class TorrentStateMachine(
                 }
 
                 TorrentState.DOWNLOADING_LOCALLY -> {
-                    task.files.filter { it.state != LocalDownloadState.COMPLETED && it.state != LocalDownloadState.PAUSED }.forEach {
+                    var taskFiles = downloadRepository.findTaskFileEntities(task.id)
+                    taskFiles.filter { it.state != LocalDownloadState.COMPLETED && it.state != LocalDownloadState.PAUSED }.forEach {
                         localDownloadManager.enqueueDownload(DownloadWork(task.id, it))
                     }
 
-                    var files = task.files
-                    while (files.any { it.state != LocalDownloadState.COMPLETED }) {
+                    while (taskFiles.any { it.state != LocalDownloadState.COMPLETED }) {
                         delay(2.seconds)
-                        files = downloadRepository.findTaskFileEntities(task.id)
+                        taskFiles = downloadRepository.findTaskFileEntities(task.id)
                     }
 
                     // All done, continue to next state
@@ -400,7 +403,8 @@ class TorrentStateMachine(
                 }
 
                 TorrentState.CHECKING_FOR_ARCHIVES -> {
-                    if (task.files.any { it.filePath?.endsWith(".rar", true) == true }) {
+                    val taskFiles = downloadRepository.findTaskFileEntities(task.id)
+                    if (taskFiles.any { it.filePath?.endsWith(".rar", true) == true }) {
                         downloadRepository.updateTaskState(task.id, TorrentState.EXTRACTING_ARCHIVES)
                     } else {
                         downloadRepository.updateTaskState(task.id, TorrentState.MOVING_TO_DESTINATION)
@@ -410,7 +414,8 @@ class TorrentStateMachine(
                 }
 
                 TorrentState.EXTRACTING_ARCHIVES -> {
-                    task.files
+                    val taskFiles = downloadRepository.findTaskFileEntities(task.id)
+                    taskFiles
                         .filter { it.filePath !== null && it.filePath.endsWith(".rar", true) }
                         .map { File(it.filePath!!) }
                         .filter { it.exists() && it.isFile }
@@ -501,7 +506,8 @@ class TorrentStateMachine(
     }
 
     private suspend fun resetTorrent(task: DownloadTaskEntity) {
-        localDownloadManager.removeTaskFromQueues(task)
+        val files = downloadRepository.findTaskFileEntities(task.id)
+        localDownloadManager.removeTaskFromQueues(task.id, files)
         // Tasks not added to provider yet don't need to get deleted from there
         if (task.providerId != null) {
             provider.deleteTorrent(task.providerId)
@@ -509,7 +515,7 @@ class TorrentStateMachine(
         downloadRepository.resetTaskForRetry(task.id)
     }
 
-    private fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
+    private suspend fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         downloadRepository.updateTaskWithTorrentInfo(taskId, torrentInfo)
     }
 }

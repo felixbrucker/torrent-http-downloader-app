@@ -3,10 +3,11 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.dao.DownloadDao
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskWithFiles
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
@@ -21,80 +22,78 @@ import timber.log.Timber
 
 @Singleton
 class DownloadRepository @Inject constructor(
-    private val downloadTracker: DownloadTracker,
+    private val downloadDao: DownloadDao,
     private val downloadProgressTracker: DownloadProgressTracker,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     @get:JvmName("getTasksFlow")
     val tasks: StateFlow<List<DownloadTask>> = combine(
-        downloadTracker.tasks,
+        downloadDao.getTasksWithFilesFlow(),
         downloadProgressTracker.progressInfo,
-    ) { taskEntities, progressMap ->
-        combineTasksWithProgressInfo(taskEntities, progressMap)
+    ) { tasksWithFiles, progressMap ->
+        combineTasksWithProgressInfo(tasksWithFiles, progressMap)
     }.stateIn(
         scope = scope,
         started = SharingStarted.Eagerly,
-        initialValue = combineTasksWithProgressInfo(
-            downloadTracker.getTasks(),
-            downloadProgressTracker.progressInfo.value,
-        ),
+        initialValue = emptyList(),
     )
 
     fun getTasks(): List<DownloadTask> = tasks.value
 
-    fun getTaskIds(): List<String> = tasks.value.map { it.id }
+    suspend fun getTaskIds(): List<String> = downloadDao.getTaskIds()
 
-    fun hasTasksWhichNeedProcessing(): Boolean = downloadTracker.hasTasksWhichNeedProcessing()
+    suspend fun hasTasksWhichNeedProcessing(): Boolean = downloadDao.hasTasksWhichNeedProcessing()
 
-    fun addTask(task: DownloadTaskEntity) {
+    suspend fun addTask(task: DownloadTaskEntity) {
         Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
-        downloadTracker.addTask(task)
+        val maxOrder = downloadDao.getMaxDisplayOrder() ?: -1
+        val taskWithOrder = task.copy(displayOrder = maxOrder + 1)
+        downloadDao.insertTask(taskWithOrder)
     }
 
-    fun addTaskFiles(taskId: String, files: List<DownloadFileEntity>) {
-        downloadTracker.addTaskFiles(taskId, files)
+    suspend fun addTaskFiles(files: List<DownloadFileEntity>) {
+        downloadDao.insertFiles(files)
     }
 
-    fun moveTask(fromIndex: Int, toIndex: Int) {
-        downloadTracker.moveTask(fromIndex, toIndex)
+    suspend fun moveTask(fromIndex: Int, toIndex: Int) {
+        val currentTasks = downloadDao.getTasksWithFiles()
+        if (fromIndex !in currentTasks.indices || toIndex !in currentTasks.indices) return
+        val mutable = currentTasks.map { it.task }.toMutableList()
+        val moved = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, moved)
+        val orders = mutable.mapIndexed { index, task -> task.id to index }
+        downloadDao.updateTaskDisplayOrders(orders)
     }
 
     fun findTask(id: String): DownloadTask? = tasks.value.find { it.id == id }
 
-    fun findTaskEntity(id: String): DownloadTaskEntity? = downloadTracker.findTaskEntity(id)
+    suspend fun findTaskEntity(id: String): DownloadTaskEntity? = downloadDao.getTask(id)
 
-    fun hasTask(id: String): Boolean = downloadTracker.hasTask(id)
+    suspend fun findTaskWithFiles(id: String): DownloadTaskWithFiles? = downloadDao.getTaskWithFiles(id)
 
-    fun findTaskFile(taskId: String, fileLink: String): DownloadFile? {
-        return findTask(taskId)?.files?.find { it.link == fileLink }
+    suspend fun hasTask(id: String): Boolean = downloadDao.hasTask(id)
+
+    suspend fun findTaskFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
+        return downloadDao.getFile(taskId, fileLink)
     }
 
-    fun findTaskFileEntity(taskId: String, fileLink: String): DownloadFileEntity? {
-        return downloadTracker.findTaskFileEntity(taskId, fileLink)
+    suspend fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
+        return downloadDao.getFilesForTask(taskId)
     }
 
-    fun findTaskFileEntities(taskId: String): List<DownloadFileEntity> {
-        return downloadTracker.findTaskFileEntities(taskId)
-    }
-
-    fun removeTask(id: String) {
+    suspend fun removeTask(id: String) {
         Timber.i("Removing download task id=%s", id)
-        downloadTracker.removeTask(id)
+        downloadDao.deleteTask(id)
         downloadProgressTracker.clearTask(id)
     }
 
-    fun updateFileDownloadingState(
+    suspend fun updateFileDownloadingState(
         taskId: String,
         fileLink: String,
         totalBytes: Long,
         downloadedBytes: Long,
     ) {
-        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(
-                state = LocalDownloadState.DOWNLOADING,
-                totalBytes = totalBytes,
-            )
-        }
+        downloadDao.updateFileDownloadingState(taskId, fileLink, LocalDownloadState.DOWNLOADING, totalBytes)
         downloadProgressTracker.updateFileDownloadedBytes(taskId, fileLink, downloadedBytes)
     }
 
@@ -118,15 +117,13 @@ class DownloadRepository @Inject constructor(
         )
     }
 
-    fun updateFileState(
+    suspend fun updateFileState(
         taskId: String,
         fileLink: String,
         state: LocalDownloadState,
         stateDescription: String? = null,
     ) {
-        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(state = state, stateDescription = stateDescription)
-        }
+        downloadDao.updateFileState(taskId, fileLink, state, stateDescription)
         downloadProgressTracker.updateFileSpeed(taskId, fileLink, 0)
     }
 
@@ -146,24 +143,17 @@ class DownloadRepository @Inject constructor(
         downloadProgressTracker.toggleAllProviderFilesSelectionLocally(taskId, selectAll)
     }
 
-    fun updateTaskState(taskId: String, state: TorrentState) {
+    suspend fun updateTaskState(taskId: String, state: TorrentState) {
         Timber.d("Updating task id=%s state to %s", taskId, state)
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(state = state)
-        }
+        downloadDao.updateTaskState(taskId, state)
     }
 
-    fun updateTaskError(taskId: String, errorMessage: String?) {
+    suspend fun updateTaskError(taskId: String, errorMessage: String?) {
         Timber.e("Task id=%s error: %s", taskId, errorMessage)
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                state = TorrentState.ERROR,
-                errorMessage = errorMessage,
-            )
-        }
+        downloadDao.updateTaskError(taskId, errorMessage, TorrentState.ERROR)
     }
 
-    fun updateTaskFileInfo(
+    suspend fun updateTaskFileInfo(
         taskId: String,
         fileLink: String,
         totalBytes: Long,
@@ -171,72 +161,46 @@ class DownloadRepository @Inject constructor(
         fileName: String,
         unrestrictedLink: String,
     ) {
-        downloadTracker.updateTaskFile(taskId, fileLink) { file ->
-            file.copy(
-                totalBytes = totalBytes,
-                filePath = filePath,
-                fileName = fileName,
-                unrestrictedLink = unrestrictedLink,
-            )
-        }
+        downloadDao.updateTaskFileInfo(taskId, fileLink, totalBytes, filePath, fileName, unrestrictedLink)
     }
 
-    fun updateTaskProviderIdAndState(taskId: String, providerId: String, state: TorrentState) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                providerId = providerId,
-                state = state,
-            )
-        }
+    suspend fun updateTaskProviderIdAndState(taskId: String, providerId: String, state: TorrentState) {
+        downloadDao.updateTaskProviderIdAndState(taskId, providerId, state)
     }
 
     fun setProviderTorrentInfoWaitingForFileSelection(taskId: String) {
         downloadProgressTracker.setProviderTorrentInfoWaitingForFileSelection(taskId)
     }
 
-    fun markAllTaskFilesCompletedLocally(taskId: String) {
-        downloadTracker.markAllTaskFilesCompletedLocally(taskId)
-        val taskFiles = findTaskFileEntities(taskId)
+    suspend fun markAllTaskFilesCompletedLocally(taskId: String) {
+        val taskFiles = downloadDao.getFilesForTask(taskId)
+        downloadDao.markAllTaskFilesCompletedLocally(taskId, LocalDownloadState.COMPLETED)
         downloadProgressTracker.markAllTaskFilesCompletedLocally(taskId, taskFiles)
     }
 
-    fun resetTaskForRetry(taskId: String) {
+    suspend fun resetTaskForRetry(taskId: String) {
         Timber.i("Resetting task id=%s for retry", taskId)
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                providerId = null,
-                state = TorrentState.ADDING_TO_PROVIDER,
-                files = emptyList(),
-                errorMessage = null,
-            )
-        }
+        downloadDao.resetTaskForRetry(taskId, TorrentState.ADDING_TO_PROVIDER)
         downloadProgressTracker.clearTask(taskId)
     }
 
-    fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
-        downloadTracker.updateTask(taskId) { task ->
-            task.copy(
-                name = if (task.name == task.torrent.uri) torrentInfo.name else task.name,
-            )
-        }
+    suspend fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
+        downloadDao.updateTaskNameIfDefault(taskId, torrentInfo.name)
         downloadProgressTracker.updateProviderTorrentInfo(taskId, torrentInfo)
     }
 
     private companion object {
         fun combineTasksWithProgressInfo(
-            taskEntities: List<DownloadTaskEntity>,
+            tasksWithFiles: List<DownloadTaskWithFiles>,
             progressMap: Map<String, TaskProgressInfo>,
         ): List<DownloadTask> {
-            return taskEntities.map { taskEntity ->
-                val progressInfo = progressMap[taskEntity.id]
+            return tasksWithFiles.map { taskWithFiles ->
+                val progressInfo = progressMap[taskWithFiles.task.id]
                 val providerInfo = progressInfo?.providerTorrentInfo
-                val combinedFiles = taskEntity.files.map { fileEntity ->
-                    val fileProgress = progressInfo?.fileProgressMap?.get(fileEntity.link)
-                    fileEntity.toDownloadFile(fileProgress)
-                }
-                taskEntity.toDownloadTask(
+                val fileProgressMap = progressInfo?.fileProgressMap
+                taskWithFiles.toDownloadTask(
                     providerTorrentInfo = providerInfo,
-                    files = combinedFiles,
+                    fileProgressMap = fileProgressMap,
                 )
             }
         }

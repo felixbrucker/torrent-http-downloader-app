@@ -91,7 +91,6 @@ fun RssFeedsScreen(
                 onConfirm = { newFeed ->
                     viewModel.addRssFeed(newFeed)
                     showAddFeedDialog = false
-                    viewModel.syncFeed(newFeed)
                 }
             )
         }
@@ -102,7 +101,6 @@ fun RssFeedsScreen(
                 onDismiss = { editFeedConfig = null },
                 onConfirm = { newFeed ->
                     viewModel.updateFeedConfig(newFeed)
-                    viewModel.syncFeed(newFeed)
                     editFeedConfig = null
                 }
             )

@@ -2,9 +2,9 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 
 import android.content.Intent
 import com.felixbrucker.torrenthttpdownloader.R
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import java.io.File
@@ -79,8 +79,6 @@ class LocalDownloadManager(
         }
 
         try {
-            // Support regenerating the link if the existing one expires (
-            // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
                 val taskEntity = downloadRepository.findTaskEntity(work.taskId) ?: return
                 onLinkExpired(taskEntity, file)
@@ -203,7 +201,7 @@ class LocalDownloadManager(
         }
     }
 
-    private fun handleFailedLocalDownload(work: DownloadWork, errorMessage: String) {
+    private suspend fun handleFailedLocalDownload(work: DownloadWork, errorMessage: String) {
         val downloadFile = work.file
         Timber.e("Local download failed task=%s file=%s error=%s", work.taskId, downloadFile.fileName, errorMessage)
         updateFileState(work.taskId, downloadFile.link, LocalDownloadState.ERROR, "Download failed: $errorMessage")
@@ -219,11 +217,11 @@ class LocalDownloadManager(
         }
     }
 
-    private fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
+    private suspend fun updateFileState(taskId: String, fileLink: String, state: LocalDownloadState, error: String? = null) {
         downloadRepository.updateFileState(taskId, fileLink, state, error)
     }
 
-    fun enqueueDownload(work: DownloadWork) {
+    suspend fun enqueueDownload(work: DownloadWork) {
         if (!isWorkEnqueued(work.taskId, work.file.link)) {
             Timber.d("Enqueuing download task=%s file=%s", work.taskId, work.file.fileName)
             updateFileState(work.taskId, work.file.link, LocalDownloadState.PENDING)
@@ -236,7 +234,7 @@ class LocalDownloadManager(
                 inProgressWork.any { it.taskId == taskId && it.file.link == fileLink }
     }
 
-    fun pauseFile(taskId: String, fileLink: String) {
+    suspend fun pauseFile(taskId: String, fileLink: String) {
         Timber.d("Pausing file task=%s fileLink=%s", taskId, fileLink)
         activeDownloads[fileLink]?.cancel()
         activeDownloads.remove(fileLink)
@@ -244,12 +242,12 @@ class LocalDownloadManager(
         updateFileState(taskId, fileLink, LocalDownloadState.PAUSED)
     }
 
-    fun resumeFile(taskId: String, fileLink: String) {
+    suspend fun resumeFile(taskId: String, fileLink: String) {
         val file = downloadRepository.findTaskFileEntity(taskId, fileLink) ?: return
         enqueueDownload(DownloadWork(taskId, file))
     }
 
-    fun pauseTask(taskId: String) {
+    suspend fun pauseTask(taskId: String) {
         val files = downloadRepository.findTaskFileEntities(taskId)
         files.forEach { file ->
             if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
@@ -258,7 +256,7 @@ class LocalDownloadManager(
         }
     }
 
-    fun resumeTask(taskId: String) {
+    suspend fun resumeTask(taskId: String) {
         val files = downloadRepository.findTaskFileEntities(taskId)
         files.forEach { file ->
             if (file.state == LocalDownloadState.PAUSED) {
@@ -267,24 +265,21 @@ class LocalDownloadManager(
         }
     }
 
-    fun pauseAll() {
+    suspend fun pauseAll() {
         downloadRepository.getTaskIds().forEach { taskId ->
             pauseTask(taskId)
         }
     }
 
-    fun resumeAll() {
+    suspend fun resumeAll() {
         downloadRepository.getTaskIds().forEach { taskId ->
             resumeTask(taskId)
         }
     }
 
-    fun removeTaskFromQueues(task: DownloadTaskEntity) {
-        // Remove pending local downloads
-        downloadQueue.removeIf { it.taskId == task.id }
-
-        // Cancel active downloads
-        for (file in task.files) {
+    fun removeTaskFromQueues(taskId: String, files: List<DownloadFileEntity>) {
+        downloadQueue.removeIf { it.taskId == taskId }
+        for (file in files) {
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)
         }
