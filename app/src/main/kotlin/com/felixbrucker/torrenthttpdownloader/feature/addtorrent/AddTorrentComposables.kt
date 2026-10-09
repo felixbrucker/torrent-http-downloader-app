@@ -4,7 +4,6 @@ import android.os.Environment
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -57,7 +55,6 @@ data class DirectoryItemInfo(
     val totalSize: Long
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddTorrentConfigFields(
     selectedSubDir: String?,
@@ -218,7 +215,6 @@ private fun EmptySubdirectoriesNotice() {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SubdirectoryChipsSection(
     subDirectories: List<DirectoryItemInfo>,
@@ -368,7 +364,6 @@ private fun AddTorrentCheckboxOptions(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateFolderDialog(
     suggestedSelectedParentDir: String?,
@@ -486,7 +481,6 @@ fun CreateFolderDialog(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ParentDirSelectionSection(
     subDirectories: List<String>,

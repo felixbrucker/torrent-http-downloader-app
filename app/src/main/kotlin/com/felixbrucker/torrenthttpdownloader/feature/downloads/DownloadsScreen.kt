@@ -350,7 +350,7 @@ private fun LazyItemScope.DownloadTaskListItem(
     isDragging: Boolean,
     draggingOffset: Float,
     onRemove: () -> Unit,
-    provider: TorrentProvider?,
+    provider: TorrentProvider,
     onToggleAllProviderFileSelection: (taskId: String, selectAll: Boolean) -> Unit,
     onConfirmFileSelection: (taskId: String) -> Unit,
     onPauseTaskOnProvider: (taskId: String) -> Unit,

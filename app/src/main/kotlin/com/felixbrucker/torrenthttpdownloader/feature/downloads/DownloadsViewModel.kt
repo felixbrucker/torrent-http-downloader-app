@@ -16,7 +16,7 @@ import timber.log.Timber
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
-    private val rssRepository: RssRepository,
+    rssRepository: RssRepository,
     private val providerFactory: ProviderFactory,
     private val serviceLauncher: DownloadServiceLauncher
 ) : ViewModel() {
@@ -24,7 +24,7 @@ class DownloadsViewModel @Inject constructor(
     val tasks: StateFlow<List<DownloadTask>> = downloadRepository.tasks
     val totalUnreadRssCount: Flow<Int> = rssRepository.totalUnreadRssCount
 
-    fun getProvider(): TorrentProvider? {
+    fun getProvider(): TorrentProvider {
         return providerFactory.getProvider()
     }
 

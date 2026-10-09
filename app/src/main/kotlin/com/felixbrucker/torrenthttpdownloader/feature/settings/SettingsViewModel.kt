@@ -1,15 +1,11 @@
 package com.felixbrucker.torrenthttpdownloader.feature.settings
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.LibTorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFactory
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.RealDebridProvider
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
-import com.felixbrucker.torrenthttpdownloader.feature.rss.RssSyncLauncher
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,9 +28,6 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
-    @param:ApplicationContext private val context: Context,
-    private val rssSyncLauncher: RssSyncLauncher,
-    private val providerFactory: ProviderFactory
 ) : ViewModel() {
 
     val availableProviders: List<String> = listOf(

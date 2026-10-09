@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.core.model
 
 import java.util.UUID
 import kotlin.math.max
+import com.felixbrucker.torrenthttpdownloader.core.data.FileProgressInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
@@ -47,11 +48,93 @@ enum class FileSelectionMode {
     MANUAL
 }
 
-
 data class TorrentDescriptor(
     val type: TorrentType,
     val uri: String
 )
+
+data class DownloadFileEntity(
+    val link: String, // The original provider link
+    val unrestrictedLink: String? = null, // The download link, might need to be regenerated
+    val state: LocalDownloadState = LocalDownloadState.PENDING,
+    val stateDescription: String? = null,
+    val filePath: String? = null,
+    val fileName: String? = null,
+    val totalBytes: Long = 0,
+) {
+    fun toDownloadFile(fileProgressInfo: FileProgressInfo? = null) = DownloadFile(
+        link = link,
+        unrestrictedLink = unrestrictedLink,
+        state = state,
+        stateDescription = stateDescription,
+        progress = fileProgressInfo?.progress ?: 0,
+        filePath = filePath,
+        speed = fileProgressInfo?.speed ?: 0,
+        totalBytes = totalBytes,
+        downloadedBytes = fileProgressInfo?.downloadedBytes ?: 0,
+        lastBytes = fileProgressInfo?.lastBytes ?: 0,
+        lastTimestamp = fileProgressInfo?.lastTimestamp ?: System.currentTimeMillis(),
+    )
+}
+
+data class DownloadTaskEntity(
+    val id: String,
+    val providerId: String? = null, // Provider Torrent ID, may be same as id
+    val name: String,
+    val torrent: TorrentDescriptor,
+    val state: TorrentState = TorrentState.ADDING_TO_PROVIDER,
+    val files: List<DownloadFileEntity> = listOf(), // should be sorted by filename ASC
+    val errorMessage: String? = null,
+    val destinationSubdirectory: String? = null,
+    val createSubfolderByName: Boolean = true,
+    val notifyOnCompletion: Boolean = false,
+    val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
+    val onCompletionIntentUri: String? = null,
+) {
+    fun toDownloadTask(
+        providerTorrentInfo: ProviderTorrentInfo? = null,
+        files: List<DownloadFile> = this.files.map { it.toDownloadFile() },
+    ) = DownloadTask(
+        id = id,
+        providerId = providerId,
+        name = name,
+        torrent = torrent,
+        state = state,
+        providerTorrentInfo = providerTorrentInfo,
+        files = files,
+        errorMessage = errorMessage,
+        destinationSubdirectory = destinationSubdirectory,
+        createSubfolderByName = createSubfolderByName,
+        notifyOnCompletion = notifyOnCompletion,
+        fileSelectionMode = fileSelectionMode,
+        onCompletionIntentUri = onCompletionIntentUri,
+    )
+
+    fun deleteFiles() {
+        for (filePath in files.mapNotNull { file -> file.filePath }) {
+            filePath.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeTorrentFile() {
+        if (torrent.type == TorrentType.TORRENT_FILE) {
+            torrent.uri.asFile().deleteIfExists()
+        }
+    }
+
+    fun removeResumeData(pathFactory: PathFactory) {
+        if (providerId != null) {
+            pathFactory.getResumeDataPath(providerId).deleteIfExists()
+        }
+    }
+
+    fun removeScopedTemporaryDirectory(pathFactory: PathFactory) {
+        val tempDir = pathFactory.getScopedTemporaryDirectory(name)
+        if (tempDir.exists()) {
+            tempDir.deleteRecursively()
+        }
+    }
+}
 
 data class DownloadFile(
     val link: String, // The original provider link
@@ -65,9 +148,7 @@ data class DownloadFile(
     val downloadedBytes: Long = 0,
     @Transient val lastBytes: Long = 0,
     @Transient val lastTimestamp: Long = System.currentTimeMillis()
-) {
-    val fileName get() = filePath?.substringAfterLast("/")
-}
+)
 
 data class DownloadTask(
     val id: String,
@@ -147,31 +228,6 @@ data class DownloadTask(
             TaskLocation.PROVIDER
         } else {
             TaskLocation.LOCAL
-        }
-    }
-
-    fun deleteFiles() {
-        for (filePath in files.mapNotNull { file -> file.filePath }) {
-            filePath.asFile().deleteIfExists()
-        }
-    }
-
-    fun removeTorrentFile() {
-        if (torrent.type == TorrentType.TORRENT_FILE) {
-            torrent.uri.asFile().deleteIfExists()
-        }
-    }
-
-    fun removeResumeData(pathFactory: PathFactory) {
-        if (providerId != null) {
-            pathFactory.getResumeDataPath(providerId).deleteIfExists()
-        }
-    }
-
-    fun removeScopedTemporaryDirectory(pathFactory: PathFactory) {
-        val tempDir = pathFactory.getScopedTemporaryDirectory(name)
-        if (tempDir.exists()) {
-            tempDir.deleteRecursively()
         }
     }
 }

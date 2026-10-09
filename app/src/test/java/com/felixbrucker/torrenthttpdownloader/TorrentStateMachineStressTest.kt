@@ -1,27 +1,35 @@
 package com.felixbrucker.torrenthttpdownloader
 
 import android.content.ContentResolver
-import io.mockk.*
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Duration.Companion.milliseconds
-import kotlinx.coroutines.*
-import kotlinx.coroutines.test.*
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
 import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.data.LocalDownloadManager
 import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.designsystem.icons.downloading
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.unmockkAll
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TorrentStateMachineStressTest {
@@ -55,80 +63,18 @@ class TorrentStateMachineStressTest {
     }
 
     @Test
-    fun `processTaskSafely should prevent concurrent execution for the same taskId`() = runTest {
+    fun testProcessTaskSafelyPreventsConcurrentExecutionSameTaskId() = runTest {
         val taskId = "test-task-id"
-        val task = DownloadTask(
+        val task = DownloadTaskEntity(
             id = taskId,
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "magnet:?xt=urn:btih:123"),
             state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
             providerId = "provider-id"
         )
-
-        every { downloadRepository.findTask(taskId) } returns task
+        every { downloadRepository.findTaskEntity(taskId) } returns task
         every { provider.isLocalProvider } returns false
-
         val callCount = AtomicInteger(0)
-
-        coEvery { provider.getTorrentInfo(any()) } coAnswers {
-            callCount.incrementAndGet()
-            delay(100.milliseconds) // Simulate work
-            ProviderTorrentInfo(
-                id = "provider-id",
-                name = "Test Task",
-                state = ProviderTorrentState.DOWNLOADING,
-                status = "downloading",
-                progress = 50f,
-                totalSizeInBytes = 1000,
-                downloadedBytes = 500,
-                downloadSpeed = 100,
-                uploadSpeed = 0,
-                seeders = 5,
-                leechers = 1,
-                peers = 6,
-                totalPeers = 10,
-                links = emptyList(),
-                files = emptyList()
-            )
-        }
-
-        // Launch multiple coroutines trying to process the same task simultaneously
-        val jobs = List(10) {
-            async(Dispatchers.Default) {
-                stateMachine.processTaskSafely(taskId)
-            }
-        }
-
-        jobs.awaitAll()
-
-        assertEquals("Expected only 1 execution due to locking", 1, callCount.get())
-    }
-
-    @Test
-    fun `processTaskSafely should allow concurrent execution for different taskIds`() = runTest {
-        val taskId1 = "task-1"
-        val taskId2 = "task-2"
-        val task1 = DownloadTask(
-            id = taskId1,
-            name = "Task 1",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "magnet:?xt=urn:btih:1"),
-            state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
-            providerId = "provider-id-1"
-        )
-        val task2 = DownloadTask(
-            id = taskId2,
-            name = "Task 2",
-            torrent = TorrentDescriptor(TorrentType.MAGNET, "magnet:?xt=urn:btih:2"),
-            state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
-            providerId = "provider-id-2"
-        )
-
-        every { downloadRepository.findTask(taskId1) } returns task1
-        every { downloadRepository.findTask(taskId2) } returns task2
-        every { provider.isLocalProvider } returns false
-
-        val callCount = AtomicInteger(0)
-
         coEvery { provider.getTorrentInfo(any()) } coAnswers {
             callCount.incrementAndGet()
             delay(100.milliseconds)
@@ -150,7 +96,60 @@ class TorrentStateMachineStressTest {
                 files = emptyList()
             )
         }
+        val jobs = List(10) {
+            async(Dispatchers.Default) {
+                stateMachine.processTaskSafely(taskId)
+            }
+        }
 
+        jobs.awaitAll()
+
+        assertEquals("Expected only 1 execution due to locking", 1, callCount.get())
+    }
+
+    @Test
+    fun testProcessTaskSafelyAllowsConcurrentExecutionDifferentTaskIds() = runTest {
+        val taskId1 = "task-1"
+        val taskId2 = "task-2"
+        val task1 = DownloadTaskEntity(
+            id = taskId1,
+            name = "Task 1",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "magnet:?xt=urn:btih:1"),
+            state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
+            providerId = "provider-id-1"
+        )
+        val task2 = DownloadTaskEntity(
+            id = taskId2,
+            name = "Task 2",
+            torrent = TorrentDescriptor(TorrentType.MAGNET, "magnet:?xt=urn:btih:2"),
+            state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
+            providerId = "provider-id-2"
+        )
+        every { downloadRepository.findTaskEntity(taskId1) } returns task1
+        every { downloadRepository.findTaskEntity(taskId2) } returns task2
+        every { provider.isLocalProvider } returns false
+        val callCount = AtomicInteger(0)
+        coEvery { provider.getTorrentInfo(any()) } coAnswers {
+            callCount.incrementAndGet()
+            delay(100.milliseconds)
+            ProviderTorrentInfo(
+                id = "provider-id",
+                name = "Test Task",
+                state = ProviderTorrentState.DOWNLOADING,
+                status = "downloading",
+                progress = 50f,
+                totalSizeInBytes = 1000,
+                downloadedBytes = 500,
+                downloadSpeed = 100,
+                uploadSpeed = 0,
+                seeders = 5,
+                leechers = 1,
+                peers = 6,
+                totalPeers = 10,
+                links = emptyList(),
+                files = emptyList()
+            )
+        }
         val job1 = async(Dispatchers.Default) { stateMachine.processTaskSafely(taskId1) }
         val job2 = async(Dispatchers.Default) { stateMachine.processTaskSafely(taskId2) }
 

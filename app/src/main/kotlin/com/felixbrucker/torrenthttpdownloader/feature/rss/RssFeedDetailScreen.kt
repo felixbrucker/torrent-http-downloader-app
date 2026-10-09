@@ -34,7 +34,6 @@ import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RssFeedDetailScreen(
     feedId: String,

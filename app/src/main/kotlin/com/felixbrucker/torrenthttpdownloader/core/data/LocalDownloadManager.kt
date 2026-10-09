@@ -3,8 +3,8 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 import android.content.Intent
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFile
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.extensions.createDirectoryRecursivelyIfNotExists
 import java.io.File
@@ -29,13 +29,13 @@ import okio.buffer
 import okio.sink
 import timber.log.Timber
 
-data class DownloadWork(val taskId: String, val file: DownloadFile)
+data class DownloadWork(val taskId: String, val file: DownloadFileEntity)
 
 class LocalDownloadManager(
     private val scope: CoroutineScope,
     private val appSettingsRepository: AppSettingsRepository,
     private val downloadRepository: DownloadRepository,
-    private val onLinkExpired: suspend (DownloadTask, DownloadFile) -> Unit,
+    private val onLinkExpired: suspend (DownloadTaskEntity, DownloadFileEntity) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
     private val downloadQueue = ConcurrentLinkedQueue<DownloadWork>()
@@ -71,6 +71,7 @@ class LocalDownloadManager(
     }
 
     private suspend fun processDownload(work: DownloadWork) {
+        var work = work
         var file = work.file
         // Should not happen, we enqueued an already completed file
         if (file.state == LocalDownloadState.COMPLETED) {
@@ -81,14 +82,15 @@ class LocalDownloadManager(
             // Support regenerating the link if the existing one expires (
             // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
-                val task = downloadRepository.findTask(work.taskId) ?: return
-                onLinkExpired(task, file)
-                file = downloadRepository.findTaskFile(work.taskId, file.link) ?: return
+                val taskEntity = downloadRepository.findTaskEntity(work.taskId) ?: return
+                onLinkExpired(taskEntity, file)
+                file = downloadRepository.findTaskFileEntity(work.taskId, file.link) ?: return
+                work = work.copy(file = file)
             }
             val downloadUrl = file.unrestrictedLink ?: return
 
             val job = scope.launch(Dispatchers.IO) {
-                performDownload(work, downloadUrl, file)
+                performDownload(work, downloadUrl)
             }
             activeDownloads[file.link] = job
             job.join()
@@ -106,8 +108,9 @@ class LocalDownloadManager(
         }
     }
 
-    private suspend fun performDownload(work: DownloadWork, unrestrictedLink: String, downloadFile: DownloadFile) {
+    private suspend fun performDownload(work: DownloadWork, unrestrictedLink: String) {
         val taskId = work.taskId
+        val downloadFile = work.file
         val filePath = downloadFile.filePath ?: return
         Timber.i("Starting local download file=%s to path=%s", downloadFile.fileName, filePath)
         val destFile = File(filePath)
@@ -138,7 +141,7 @@ class LocalDownloadManager(
             withContext(Dispatchers.IO) {
                 call.execute().use { response ->
                     if (!response.isSuccessful && response.code != 206) {
-                        handleFailedLocalDownload(work, downloadFile, "HTTP ${response.code}")
+                        handleFailedLocalDownload(work, "HTTP ${response.code}")
                         return@withContext
                     }
 
@@ -195,12 +198,13 @@ class LocalDownloadManager(
             }
         } catch (e: Exception) {
             if (e !is CancellationException) {
-                handleFailedLocalDownload(work, downloadFile, e.message ?: "unknown error")
+                handleFailedLocalDownload(work, e.message ?: "unknown error")
             }
         }
     }
 
-    private fun handleFailedLocalDownload(work: DownloadWork, downloadFile: DownloadFile, errorMessage: String) {
+    private fun handleFailedLocalDownload(work: DownloadWork, errorMessage: String) {
+        val downloadFile = work.file
         Timber.e("Local download failed task=%s file=%s error=%s", work.taskId, downloadFile.fileName, errorMessage)
         updateFileState(work.taskId, downloadFile.link, LocalDownloadState.ERROR, "Download failed: $errorMessage")
         onPostNotification(
@@ -211,7 +215,7 @@ class LocalDownloadManager(
         )
         scope.launch(Dispatchers.IO) {
             delay(5.seconds)
-            enqueueDownload(work.copy(file = downloadFile))
+            enqueueDownload(work)
         }
     }
 
@@ -241,14 +245,13 @@ class LocalDownloadManager(
     }
 
     fun resumeFile(taskId: String, fileLink: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        val file = task.files.find { it.link == fileLink } ?: return
+        val file = downloadRepository.findTaskFileEntity(taskId, fileLink) ?: return
         enqueueDownload(DownloadWork(taskId, file))
     }
 
     fun pauseTask(taskId: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        task.files.forEach { file ->
+        val files = downloadRepository.findTaskFileEntities(taskId)
+        files.forEach { file ->
             if (file.state == LocalDownloadState.DOWNLOADING || file.state == LocalDownloadState.PENDING) {
                 pauseFile(taskId, file.link)
             }
@@ -256,8 +259,8 @@ class LocalDownloadManager(
     }
 
     fun resumeTask(taskId: String) {
-        val task = downloadRepository.findTask(taskId) ?: return
-        task.files.forEach { file ->
+        val files = downloadRepository.findTaskFileEntities(taskId)
+        files.forEach { file ->
             if (file.state == LocalDownloadState.PAUSED) {
                 resumeFile(taskId, file.link)
             }
@@ -265,18 +268,18 @@ class LocalDownloadManager(
     }
 
     fun pauseAll() {
-        downloadRepository.getTasks().forEach { task ->
-            pauseTask(task.id)
+        downloadRepository.getTaskIds().forEach { taskId ->
+            pauseTask(taskId)
         }
     }
 
     fun resumeAll() {
-        downloadRepository.getTasks().forEach { task ->
-            resumeTask(task.id)
+        downloadRepository.getTaskIds().forEach { taskId ->
+            resumeTask(taskId)
         }
     }
 
-    fun removeTaskFromQueues(task: DownloadTask) {
+    fun removeTaskFromQueues(task: DownloadTaskEntity) {
         // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == task.id }
 
@@ -285,7 +288,6 @@ class LocalDownloadManager(
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)
         }
-
     }
 
     fun stop() {
