@@ -21,6 +21,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
     ],
     indices = [
         Index(value = ["taskId"]),
+        Index(value = ["fileName"]),
     ]
 )
 data class DownloadFileEntity(

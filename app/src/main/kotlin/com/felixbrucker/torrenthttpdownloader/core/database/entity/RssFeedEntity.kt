@@ -12,6 +12,7 @@ import java.util.UUID
     tableName = "rss_feeds",
     indices = [
         Index(value = ["url"]),
+        Index(value = ["name"]),
     ]
 )
 data class RssFeedEntity(
@@ -25,6 +26,20 @@ data class RssFeedEntity(
     val autoDownload: Boolean = false,
     val lastCheck: Long = 0,
 ) {
+    fun updatedWith(feed: RssFeedEntity): RssFeedEntity {
+        val isResetState = url != feed.url
+
+        return copy(
+            name = feed.name,
+            url = feed.url,
+            destinationSubdirectory = feed.destinationSubdirectory,
+            createSubfolderByName = feed.createSubfolderByName,
+            notifyOnCompletion = feed.notifyOnCompletion,
+            fileSelectionMode = feed.fileSelectionMode,
+            autoDownload = feed.autoDownload,
+            lastCheck = if (isResetState) 0 else lastCheck,
+        )
+    }
     fun toRssFeed(items: List<RssItem> = emptyList()): RssFeed = RssFeed(
         id = id,
         name = name,

@@ -34,7 +34,7 @@ class DownloadRepository @Inject constructor(
         combineTasksWithProgressInfo(tasksWithFiles, progressMap)
     }.stateIn(
         scope = scope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.Eagerly, // getTasks() might be broken if we don't start eagerly
         initialValue = emptyList(),
     )
 

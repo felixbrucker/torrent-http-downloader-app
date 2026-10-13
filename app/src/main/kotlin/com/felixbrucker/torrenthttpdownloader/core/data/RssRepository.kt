@@ -29,7 +29,7 @@ class RssRepository @Inject constructor(
         feedsWithItems.map { it.toRssFeed() }
     }.stateIn(
         scope = scope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList(),
     )
 
@@ -44,8 +44,7 @@ class RssRepository @Inject constructor(
     suspend fun addRssFeed(feed: RssFeed) {
         Timber.i("Adding RSS feed name=%s, url=%s", feed.name, feed.url)
         val entity = RssFeedEntity.fromDomain(feed)
-        val itemEntities = feed.items.map { RssItemEntity.fromDomain(entity.id, it) }
-        rssDao.insertFeedWithItems(entity, itemEntities)
+        rssDao.insertFeed(entity)
     }
 
     suspend fun findRssFeed(id: String): RssFeed? = rssDao.getFeedWithItems(id)?.toRssFeed()
@@ -84,24 +83,13 @@ class RssRepository @Inject constructor(
     }
 
     suspend fun updateFeedConfig(newFeed: RssFeed) {
-        val currentFeed = rssDao.getFeedWithItems(newFeed.id)
-        val isResetState = currentFeed != null && currentFeed.feed.url != newFeed.url
+        val currentFeed = rssDao.getFeed(newFeed.id) ?: return
+        val isResetState = currentFeed.url != newFeed.url
         if (isResetState) {
             rssDao.deleteItemsForFeed(newFeed.id)
         }
-        rssDao.updateFeedConfig(
-            id = newFeed.id,
-            name = newFeed.name,
-            url = newFeed.url,
-            destinationSubdirectory = newFeed.destinationSubdirectory,
-            createSubfolderByName = newFeed.createSubfolderByName,
-            notifyOnCompletion = newFeed.notifyOnCompletion,
-            fileSelectionMode = newFeed.fileSelectionMode,
-            autoDownload = newFeed.autoDownload,
-        )
-        if (isResetState) {
-            rssDao.updateLastCheck(newFeed.id, 0)
-        }
+        val updatedFeed = currentFeed.updatedWith(RssFeedEntity.fromDomain(newFeed))
+        rssDao.updateFeed(updatedFeed)
     }
 
     suspend fun updateDiscoveredItems(

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedWithItems
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
@@ -15,16 +16,19 @@ import kotlinx.coroutines.flow.Flow
 interface RssDao {
 
     @Transaction
-    @Query("SELECT * FROM rss_feeds")
+    @Query("SELECT * FROM rss_feeds ORDER BY name ASC")
     fun getFeedsWithItemsFlow(): Flow<List<RssFeedWithItems>>
 
     @Transaction
-    @Query("SELECT * FROM rss_feeds")
+    @Query("SELECT * FROM rss_feeds ORDER BY name ASC")
     suspend fun getFeedsWithItems(): List<RssFeedWithItems>
 
     @Transaction
     @Query("SELECT * FROM rss_feeds WHERE id = :id")
     suspend fun getFeedWithItems(id: String): RssFeedWithItems?
+
+    @Query("SELECT * FROM rss_feeds WHERE id = :id")
+    suspend fun getFeed(id: String): RssFeedEntity?
 
     @Transaction
     @Query("SELECT * FROM rss_feeds WHERE id = :id")
@@ -35,14 +39,6 @@ interface RssDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItems(items: List<RssItemEntity>)
-
-    @Transaction
-    suspend fun insertFeedWithItems(feed: RssFeedEntity, items: List<RssItemEntity>) {
-        insertFeed(feed)
-        if (items.isNotEmpty()) {
-            insertItems(items)
-        }
-    }
 
     @Query("DELETE FROM rss_feeds WHERE id = :id")
     suspend fun deleteFeed(id: String)
@@ -62,21 +58,8 @@ interface RssDao {
     @Query("SELECT COUNT(*) FROM rss_items WHERE isRead = 0")
     fun getTotalUnreadCountFlow(): Flow<Int>
 
-    @Query(
-        "UPDATE rss_feeds SET name = :name, url = :url, destinationSubdirectory = :destinationSubdirectory, " +
-                "createSubfolderByName = :createSubfolderByName, notifyOnCompletion = :notifyOnCompletion, " +
-                "fileSelectionMode = :fileSelectionMode, autoDownload = :autoDownload WHERE id = :id"
-    )
-    suspend fun updateFeedConfig(
-        id: String,
-        name: String,
-        url: String,
-        destinationSubdirectory: String?,
-        createSubfolderByName: Boolean,
-        notifyOnCompletion: Boolean,
-        fileSelectionMode: FileSelectionMode,
-        autoDownload: Boolean
-    )
+    @Update
+    suspend fun updateFeed(feed: RssFeedEntity)
 
     @Query("DELETE FROM rss_items WHERE feedId = :feedId")
     suspend fun deleteItemsForFeed(feedId: String)

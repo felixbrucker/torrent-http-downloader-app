@@ -16,6 +16,7 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.core.network.RssParser
 import com.felixbrucker.torrenthttpdownloader.core.network.TorrentUriResolver
+import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
 @HiltWorker
@@ -56,7 +57,7 @@ class RssSyncWorker @AssistedInject constructor(
     private suspend fun syncRssFeeds() {
         rssRepository.setAllFeedsSyncing(true)
         try {
-            rssRepository.rssFeeds.value.forEach { syncFeed(it) }
+            rssRepository.rssFeeds.first().forEach { syncFeed(it) }
         } finally {
             rssRepository.setAllFeedsSyncing(false)
         }

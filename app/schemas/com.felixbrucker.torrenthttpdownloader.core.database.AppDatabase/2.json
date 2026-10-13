@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 2,
-    "identityHash": "31e909890361925d511e2ac50fcc234f",
+    "identityHash": "eb7388b68c20213bbeaba39162f51f9b",
     "entities": [
       {
         "tableName": "download_tasks",
@@ -184,6 +184,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_download_files_taskId` ON `${TABLE_NAME}` (`taskId`)"
+          },
+          {
+            "name": "index_download_files_fileName",
+            "unique": false,
+            "columnNames": [
+              "fileName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_download_files_fileName` ON `${TABLE_NAME}` (`fileName`)"
           }
         ],
         "foreignKeys": [
@@ -273,6 +282,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_rss_feeds_url` ON `${TABLE_NAME}` (`url`)"
+          },
+          {
+            "name": "index_rss_feeds_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rss_feeds_name` ON `${TABLE_NAME}` (`name`)"
           }
         ]
       },
@@ -343,6 +361,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_rss_items_feedId` ON `${TABLE_NAME}` (`feedId`)"
+          },
+          {
+            "name": "index_rss_items_pubDate",
+            "unique": false,
+            "columnNames": [
+              "pubDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rss_items_pubDate` ON `${TABLE_NAME}` (`pubDate`)"
           }
         ],
         "foreignKeys": [
@@ -362,7 +389,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '31e909890361925d511e2ac50fcc234f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'eb7388b68c20213bbeaba39162f51f9b')"
     ]
   }
 }

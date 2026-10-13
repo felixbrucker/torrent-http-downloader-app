@@ -39,12 +39,12 @@ class RssRepositoryTest {
     }
 
     @Test
-    fun testRssFeedsFlowEmitsFromDao() {
+    fun testRssFeedsFlowEmitsFromDao() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
         feedsWithItemsFlow.value = listOf(RssFeedWithItems(feedEntity, emptyList()))
         val repository = createRepository()
 
-        val result = repository.rssFeeds.value
+        val result = repository.rssFeeds.first()
 
         assertEquals(1, result.size)
         assertEquals("feed-1", result[0].id)
@@ -67,7 +67,7 @@ class RssRepositoryTest {
 
         repository.addRssFeed(feed)
 
-        coVerify { rssDao.insertFeedWithItems(match { it.id == "feed-1" }, any()) }
+        coVerify { rssDao.insertFeed(match { it.id == "feed-1" }) }
     }
 
     @Test
@@ -157,28 +157,27 @@ class RssRepositoryTest {
     @Test
     fun testUpdateFeedConfigResetsWhenUrlChanged() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Old Feed", url = "http://example.com/old")
-        coEvery { rssDao.getFeedWithItems("feed-1") } returns RssFeedWithItems(feedEntity, emptyList())
+        coEvery { rssDao.getFeed("feed-1") } returns feedEntity
         val repository = createRepository()
         val newFeed = RssFeed(id = "feed-1", name = "New Feed", url = "http://example.com/new")
 
         repository.updateFeedConfig(newFeed)
 
         coVerify { rssDao.deleteItemsForFeed("feed-1") }
-        coVerify { rssDao.updateFeedConfig("feed-1", "New Feed", "http://example.com/new", null, true, true, any(), false) }
-        coVerify { rssDao.updateLastCheck("feed-1", 0) }
+        coVerify { rssDao.updateFeed(match { it.id == "feed-1" && it.name == "New Feed" && it.url == "http://example.com/new" }) }
     }
 
     @Test
     fun testUpdateFeedConfigSameUrlDoesNotReset() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Old Feed", url = "http://example.com/same")
-        coEvery { rssDao.getFeedWithItems("feed-1") } returns RssFeedWithItems(feedEntity, emptyList())
+        coEvery { rssDao.getFeed("feed-1") } returns feedEntity
         val repository = createRepository()
         val newFeed = RssFeed(id = "feed-1", name = "New Feed", url = "http://example.com/same")
 
         repository.updateFeedConfig(newFeed)
 
         coVerify(exactly = 0) { rssDao.deleteItemsForFeed("feed-1") }
-        coVerify { rssDao.updateFeedConfig("feed-1", "New Feed", "http://example.com/same", null, true, true, any(), false) }
+        coVerify { rssDao.updateFeed(match { it.id == "feed-1" && it.name == "New Feed" && it.url == "http://example.com/same" }) }
     }
 
     @Test

@@ -79,6 +79,8 @@ class LocalDownloadManager(
         }
 
         try {
+            // Support regenerating the link if the existing one expires
+            // TODO: how to detect expired links?
             if (file.unrestrictedLink == null) {
                 val taskEntity = downloadRepository.findTaskEntity(work.taskId) ?: return
                 onLinkExpired(taskEntity, file)
@@ -278,7 +280,10 @@ class LocalDownloadManager(
     }
 
     fun removeTaskFromQueues(taskId: String, files: List<DownloadFileEntity>) {
+        // Remove pending local downloads
         downloadQueue.removeIf { it.taskId == taskId }
+
+        // Cancel active downloads
         for (file in files) {
             activeDownloads[file.link]?.cancel()
             activeDownloads.remove(file.link)

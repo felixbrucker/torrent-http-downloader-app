@@ -104,7 +104,9 @@ fun DownloadsScreen(
         val targetItem = targetItemAbove ?: targetItemBelow
 
         if (targetItem != null) {
-            viewModel.moveTask(currentDraggedIndex, targetItem.index)
+            if (currentDraggedIndex != targetItem.index) {
+                viewModel.moveTask(currentDraggedIndex, targetItem.index)
+            }
             draggedItemIndex = targetItem.index
             draggingOffset += (draggedItem.offset - targetItem.offset).toFloat()
         }

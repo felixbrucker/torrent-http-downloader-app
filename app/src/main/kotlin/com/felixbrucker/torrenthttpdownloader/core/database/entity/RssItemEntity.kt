@@ -18,7 +18,8 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
         )
     ],
     indices = [
-        Index(value = ["feedId"])
+        Index(value = ["feedId"]),
+        Index(value = ["pubDate"]),
     ]
 )
 data class RssItemEntity(
