@@ -254,30 +254,32 @@ class LibTorrentProvider @Inject constructor(
         val totalPeers = torrentStatus.numComplete() + torrentStatus.numIncomplete()
         val fileProgress = torrentHandle.fileProgress(torrent_handle.piece_granularity)
         val priorities = torrentHandle.filePriorities()
-        val files = fileList.mapIndexed { index, (path, size) ->
-            val downloadedBytes = fileProgress.getOrElse(index) { 0L }
-            val priority = priorities.getOrElse(index) { Priority.IGNORE }
-            val progress: Float = if (size == 0L) {
-                100F
-            } else {
-                downloadedBytes / size.toFloat() * 100
-            }
-
-            ProviderTorrentFile(
-                id = index,
-                path = path,
-                size = size,
-                isSelected = priority !== Priority.IGNORE,
-                progress = progress,
-                downloadedBytes = downloadedBytes,
-                priority = when (priority) {
-                    Priority.IGNORE -> FilePriority.IGNORE
-                    Priority.LOW -> FilePriority.LOW
-                    Priority.TOP_PRIORITY -> FilePriority.HIGH
-                    else -> FilePriority.NORMAL
+        val files = fileList
+            .mapIndexed { index, (path, size) ->
+                val downloadedBytes = fileProgress.getOrElse(index) { 0L }
+                val priority = priorities.getOrElse(index) { Priority.IGNORE }
+                val progress: Float = if (size == 0L) {
+                    100F
+                } else {
+                    downloadedBytes / size.toFloat() * 100
                 }
-            )
-        }
+
+                ProviderTorrentFile(
+                    id = index,
+                    path = path,
+                    size = size,
+                    isSelected = priority !== Priority.IGNORE,
+                    progress = progress,
+                    downloadedBytes = downloadedBytes,
+                    priority = when (priority) {
+                        Priority.IGNORE -> FilePriority.IGNORE
+                        Priority.LOW -> FilePriority.LOW
+                        Priority.TOP_PRIORITY -> FilePriority.HIGH
+                        else -> FilePriority.NORMAL
+                    }
+                )
+            }
+            .sortedBy { it.name }
 
         return ProviderTorrentInfo(
             id = id,
