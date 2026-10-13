@@ -43,7 +43,6 @@ class RssSyncLauncher @Inject constructor(
 
     fun updateRssSyncSchedule(enabled: Boolean, intervalHours: Long) {
         if (!enabled) {
-            Timber.d("RSS sync disabled, canceling unique periodic work 'RssSyncRequest'")
             WorkManager.getInstance(context).cancelUniqueWork("RssSyncRequest")
             return
         }
