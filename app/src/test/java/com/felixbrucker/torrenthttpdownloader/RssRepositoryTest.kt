@@ -4,7 +4,6 @@ import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedWithItems
-import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import io.mockk.coEvery
@@ -182,9 +181,6 @@ class RssRepositoryTest {
 
     @Test
     fun testUpdateDiscoveredItemsDelegatesToDaoAndPrunes() = runTest(testDispatcher) {
-        val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        val existingItems = (1..30).map { RssItemEntity(feedId = "feed-1", id = "item-$it", title = "T$it", link = "l$it", pubDate = it.toLong()) }
-        coEvery { rssDao.getFeedWithItems("feed-1") } returns RssFeedWithItems(feedEntity, existingItems)
         val repository = createRepository()
         val newItem = RssItem(id = "new-item", title = "New", link = "http://example.com/item-new", pubDate = 1000L)
 
@@ -192,7 +188,7 @@ class RssRepositoryTest {
 
         coVerify { rssDao.insertItems(match { it.size == 1 && it[0].id == "new-item" }) }
         coVerify { rssDao.updateLastCheck("feed-1", 2000L) }
-        coVerify { rssDao.deleteItems("feed-1", any()) }
+        coVerify { rssDao.deleteOldItems("feed-1", 25) }
     }
 
     @Test

@@ -104,15 +104,7 @@ class RssRepository @Inject constructor(
         rssDao.updateLastCheck(feedId, lastCheck)
 
         val limit = max(totalNewItemsCount, 25)
-        val feedWithItems = rssDao.getFeedWithItems(feedId)
-        if (feedWithItems != null && feedWithItems.items.size > limit) {
-            val sortedItems = feedWithItems.items.sortedWith(compareByDescending { it.pubDate ?: 0L })
-            val keepItemIds = sortedItems.take(limit).map { it.id }.toSet()
-            val itemsToDelete = feedWithItems.items.filter { it.id !in keepItemIds }.map { it.id }
-            if (itemsToDelete.isNotEmpty()) {
-                rssDao.deleteItems(feedId, itemsToDelete)
-            }
-        }
+        rssDao.deleteOldItems(feedId, limit)
     }
 
     suspend fun updateLastCheck(feedId: String, lastCheck: Long = System.currentTimeMillis()) {

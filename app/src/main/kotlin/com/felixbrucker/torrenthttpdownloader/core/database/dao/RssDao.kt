@@ -67,6 +67,9 @@ interface RssDao {
     @Query("DELETE FROM rss_items WHERE feedId = :feedId AND id IN (:itemIds)")
     suspend fun deleteItems(feedId: String, itemIds: List<String>)
 
+    @Query("DELETE FROM rss_items WHERE feedId = :feedId AND id NOT IN (SELECT id FROM rss_items WHERE feedId = :feedId ORDER BY COALESCE(pubDate, 0) DESC LIMIT :limit)")
+    suspend fun deleteOldItems(feedId: String, limit: Int)
+
     @Query("UPDATE rss_feeds SET lastCheck = :lastCheck WHERE id = :feedId")
     suspend fun updateLastCheck(feedId: String, lastCheck: Long)
 }
