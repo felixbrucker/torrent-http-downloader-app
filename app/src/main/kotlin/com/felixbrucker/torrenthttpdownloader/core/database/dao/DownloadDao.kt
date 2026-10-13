@@ -7,7 +7,6 @@ import androidx.room.Query
 import androidx.room.Transaction
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
-import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskWithFiles
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import kotlinx.coroutines.flow.Flow
@@ -16,12 +15,24 @@ import kotlinx.coroutines.flow.Flow
 interface DownloadDao {
 
     @Transaction
-    @Query("SELECT * FROM download_tasks ORDER BY displayOrder ASC")
-    fun getTasksWithFilesFlow(): Flow<List<DownloadTaskWithFiles>>
+    @Query(
+        """
+        SELECT * FROM download_tasks
+        LEFT JOIN download_files ON download_tasks.id = download_files.taskId
+        ORDER BY download_tasks.displayOrder ASC, download_files.fileName ASC
+        """
+    )
+    fun getTasksWithFilesFlow(): Flow<Map<DownloadTaskEntity, List<DownloadFileEntity>>>
 
     @Transaction
-    @Query("SELECT * FROM download_tasks ORDER BY displayOrder ASC")
-    suspend fun getTasksWithFiles(): List<DownloadTaskWithFiles>
+    @Query(
+        """
+        SELECT * FROM download_tasks
+        LEFT JOIN download_files ON download_tasks.id = download_files.taskId
+        ORDER BY download_tasks.displayOrder ASC, download_files.fileName ASC
+        """
+    )
+    suspend fun getTasksWithFiles(): Map<DownloadTaskEntity, List<DownloadFileEntity>>
 
     @Query("SELECT id FROM download_tasks ORDER BY displayOrder ASC")
     suspend fun getTaskIds(): List<String>
@@ -43,8 +54,15 @@ interface DownloadDao {
     suspend fun hasTask(id: String): Boolean
 
     @Transaction
-    @Query("SELECT * FROM download_tasks WHERE id = :id")
-    suspend fun getTaskWithFiles(id: String): DownloadTaskWithFiles?
+    @Query(
+        """
+        SELECT * FROM download_tasks
+        LEFT JOIN download_files ON download_tasks.id = download_files.taskId
+        WHERE download_tasks.id = :id
+        ORDER BY download_files.fileName ASC
+        """
+    )
+    suspend fun getTaskWithFiles(id: String): Map<DownloadTaskEntity, List<DownloadFileEntity>>
 
     @Query("SELECT * FROM download_tasks WHERE id = :id")
     suspend fun getTask(id: String): DownloadTaskEntity?

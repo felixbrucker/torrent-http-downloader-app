@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedWithItems
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
@@ -25,13 +26,15 @@ class RssRepository @Inject constructor(
     private val rssDao: RssDao,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
-    val rssFeeds: StateFlow<List<RssFeed>> = rssDao.getFeedsWithItemsFlow().map { feedsWithItems ->
-        feedsWithItems.map { it.toRssFeed() }
-    }.stateIn(
-        scope = scope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList(),
-    )
+    val rssFeeds: StateFlow<List<RssFeed>> = rssDao.getFeedsWithItemsFlow()
+        .map { map ->
+            map.map { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+        }
+        .stateIn(
+            scope = scope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
 
     private val _syncingFeedIds = MutableStateFlow<Set<String>>(emptySet())
     val syncingFeedIds: StateFlow<Set<String>> = _syncingFeedIds.asStateFlow()
@@ -47,10 +50,15 @@ class RssRepository @Inject constructor(
         rssDao.insertFeed(entity)
     }
 
-    suspend fun findRssFeed(id: String): RssFeed? = rssDao.getFeedWithItems(id)?.toRssFeed()
+    suspend fun findRssFeed(id: String): RssFeed? {
+        val map = rssDao.getFeedWithItems(id)
+        return map.entries.firstOrNull()?.let { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+    }
 
     fun getFeedFlow(id: String): Flow<RssFeed?> {
-        return rssDao.getFeedWithItemsFlow(id).map { it?.toRssFeed() }
+        return rssDao.getFeedWithItemsFlow(id).map { map ->
+            map.entries.firstOrNull()?.let { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+        }
     }
 
     suspend fun removeRssFeed(id: String) {

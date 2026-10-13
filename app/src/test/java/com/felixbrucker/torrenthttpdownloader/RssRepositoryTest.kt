@@ -3,7 +3,7 @@ package com.felixbrucker.torrenthttpdownloader
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
-import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedWithItems
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import io.mockk.coEvery
@@ -25,7 +25,7 @@ class RssRepositoryTest {
     private val rssDao = mockk<RssDao>(relaxed = true)
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
-    private val feedsWithItemsFlow = MutableStateFlow<List<RssFeedWithItems>>(emptyList())
+    private val feedsWithItemsFlow = MutableStateFlow<Map<RssFeedEntity, List<RssItemEntity>>>(emptyMap())
     private val unreadCountFlow = MutableStateFlow(0)
 
     private fun createRepository(): RssRepository {
@@ -40,7 +40,7 @@ class RssRepositoryTest {
     @Test
     fun testRssFeedsFlowEmitsFromDao() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        feedsWithItemsFlow.value = listOf(RssFeedWithItems(feedEntity, emptyList()))
+        feedsWithItemsFlow.value = mapOf(feedEntity to emptyList())
         val repository = createRepository()
 
         val result = repository.rssFeeds.first()
@@ -72,7 +72,7 @@ class RssRepositoryTest {
     @Test
     fun testFindRssFeedReturnsFeedWhenFound() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        coEvery { rssDao.getFeedWithItems("feed-1") } returns RssFeedWithItems(feedEntity, emptyList())
+        coEvery { rssDao.getFeedWithItems("feed-1") } returns mapOf(feedEntity to emptyList())
         val repository = createRepository()
 
         val result = repository.findRssFeed("feed-1")
@@ -83,7 +83,7 @@ class RssRepositoryTest {
     @Test
     fun testGetFeedFlowEmitsFeed() = runTest(testDispatcher) {
         val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        coEvery { rssDao.getFeedWithItemsFlow("feed-1") } returns MutableStateFlow(RssFeedWithItems(feedEntity, emptyList()))
+        coEvery { rssDao.getFeedWithItemsFlow("feed-1") } returns MutableStateFlow(mapOf(feedEntity to emptyList()))
         val repository = createRepository()
 
         val emittedFeed = repository.getFeedFlow("feed-1").first()

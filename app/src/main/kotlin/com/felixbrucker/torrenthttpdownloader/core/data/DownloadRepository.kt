@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import timber.log.Timber
 
@@ -28,7 +29,9 @@ class DownloadRepository @Inject constructor(
 ) {
     @get:JvmName("getTasksFlow")
     val tasks: StateFlow<List<DownloadTask>> = combine(
-        downloadDao.getTasksWithFilesFlow(),
+        downloadDao.getTasksWithFilesFlow().map { map ->
+            map.map { (task, files) -> DownloadTaskWithFiles(task, files) }
+        },
         downloadProgressTracker.progressInfo,
     ) { tasksWithFiles, progressMap ->
         combineTasksWithProgressInfo(tasksWithFiles, progressMap)
@@ -56,7 +59,7 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun moveTask(fromIndex: Int, toIndex: Int) {
-        val currentTasks = downloadDao.getTasksWithFiles()
+        val currentTasks = getTasksWithFiles()
         if (fromIndex !in currentTasks.indices || toIndex !in currentTasks.indices) return
         val mutable = currentTasks.map { it.task }.toMutableList()
         val moved = mutable.removeAt(fromIndex)
@@ -71,7 +74,10 @@ class DownloadRepository @Inject constructor(
 
     suspend fun findTaskEntity(id: String): DownloadTaskEntity? = downloadDao.getTask(id)
 
-    suspend fun findTaskWithFiles(id: String): DownloadTaskWithFiles? = downloadDao.getTaskWithFiles(id)
+    suspend fun findTaskWithFiles(id: String): DownloadTaskWithFiles? {
+        val map = downloadDao.getTaskWithFiles(id)
+        return map.entries.firstOrNull()?.let { (task, files) -> DownloadTaskWithFiles(task, files) }
+    }
 
     suspend fun hasTask(id: String): Boolean = downloadDao.hasTask(id)
 
@@ -189,6 +195,11 @@ class DownloadRepository @Inject constructor(
     suspend fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         downloadDao.updateTaskNameIfDefault(taskId, torrentInfo.name)
         downloadProgressTracker.updateProviderTorrentInfo(taskId, torrentInfo)
+    }
+
+    private suspend fun getTasksWithFiles(): List<DownloadTaskWithFiles> {
+        val map = downloadDao.getTasksWithFiles()
+        return map.map { (task, files) -> DownloadTaskWithFiles(task, files) }
     }
 
     private companion object {

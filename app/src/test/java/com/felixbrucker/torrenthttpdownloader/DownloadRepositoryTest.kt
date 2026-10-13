@@ -5,7 +5,6 @@ import com.felixbrucker.torrenthttpdownloader.core.data.DownloadRepository
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.DownloadDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
-import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskWithFiles
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
@@ -31,7 +30,7 @@ class DownloadRepositoryTest {
     private val downloadProgressTracker = DownloadProgressTracker()
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
-    private val tasksWithFilesFlow = MutableStateFlow<List<DownloadTaskWithFiles>>(emptyList())
+    private val tasksWithFilesFlow = MutableStateFlow<Map<DownloadTaskEntity, List<DownloadFileEntity>>>(emptyMap())
 
     private fun createRepository(): DownloadRepository {
         coEvery { downloadDao.getTasksWithFilesFlow() } returns tasksWithFilesFlow
@@ -50,7 +49,7 @@ class DownloadRepositoryTest {
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri"),
         )
         val staticFile = DownloadFileEntity(taskId = "task-1", link = "http://example.com/file1")
-        tasksWithFilesFlow.value = listOf(DownloadTaskWithFiles(staticTask, listOf(staticFile)))
+        tasksWithFilesFlow.value = mapOf(staticTask to listOf(staticFile))
         val repository = createRepository()
 
         downloadProgressTracker.updateFileProgress("task-1", "http://example.com/file1", 80, 800L, 100L, 12345L, 700L)
@@ -68,7 +67,7 @@ class DownloadRepositoryTest {
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
         )
-        tasksWithFilesFlow.value = listOf(DownloadTaskWithFiles(staticTask, emptyList()))
+        tasksWithFilesFlow.value = mapOf(staticTask to emptyList())
         val repository = createRepository()
 
         val result = repository.getTasks()
@@ -126,9 +125,9 @@ class DownloadRepositoryTest {
     fun testMoveTaskDelegatesToDao() = runTest(testDispatcher) {
         val task1 = DownloadTaskEntity(id = "1", name = "1", torrent = TorrentDescriptor(TorrentType.MAGNET, "1"))
         val task2 = DownloadTaskEntity(id = "2", name = "2", torrent = TorrentDescriptor(TorrentType.MAGNET, "2"))
-        coEvery { downloadDao.getTasksWithFiles() } returns listOf(
-            DownloadTaskWithFiles(task1, emptyList()),
-            DownloadTaskWithFiles(task2, emptyList())
+        coEvery { downloadDao.getTasksWithFiles() } returns mapOf(
+            task1 to emptyList(),
+            task2 to emptyList()
         )
         val repository = createRepository()
 
@@ -144,7 +143,7 @@ class DownloadRepositoryTest {
             name = "Test Task",
             torrent = TorrentDescriptor(TorrentType.MAGNET, "uri")
         )
-        tasksWithFilesFlow.value = listOf(DownloadTaskWithFiles(staticTask, emptyList()))
+        tasksWithFilesFlow.value = mapOf(staticTask to emptyList())
         val repository = createRepository()
 
         val result = repository.findTask("task-1")
