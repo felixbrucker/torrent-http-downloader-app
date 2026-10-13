@@ -46,8 +46,8 @@ class DownloadRepository @Inject constructor(
 
     suspend fun addTask(task: DownloadTaskEntity) {
         Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
-        val maxOrder = downloadDao.getMaxDisplayOrder() ?: -1
-        val taskWithOrder = task.copy(displayOrder = maxOrder + 1)
+        val maxOrder = downloadDao.getMaxDisplayOrder() ?: 0.0
+        val taskWithOrder = task.copy(displayOrder = maxOrder + 10.0)
         downloadDao.insertTask(taskWithOrder)
     }
 
@@ -61,8 +61,10 @@ class DownloadRepository @Inject constructor(
         val mutable = currentTasks.map { it.task }.toMutableList()
         val moved = mutable.removeAt(fromIndex)
         mutable.add(toIndex, moved)
-        val orders = mutable.mapIndexed { index, task -> task.id to index }
-        downloadDao.updateTaskDisplayOrders(orders)
+        val prevOrder = if (toIndex > 0) mutable[toIndex - 1].displayOrder else 0.0
+        val nextOrder = if (toIndex < mutable.size - 1) mutable[toIndex + 1].displayOrder else prevOrder + 20.0
+        val newOrder = (prevOrder + nextOrder) / 2.0
+        downloadDao.updateTaskDisplayOrder(moved.id, newOrder)
     }
 
     fun findTask(id: String): DownloadTask? = tasks.value.find { it.id == id }

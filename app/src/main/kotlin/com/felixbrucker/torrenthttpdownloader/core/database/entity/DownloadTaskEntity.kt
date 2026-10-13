@@ -21,7 +21,7 @@ import com.felixbrucker.torrenthttpdownloader.extensions.deleteIfExists
         Index(value = ["providerId"]),
         Index(value = ["state"]),
         Index(value = ["displayOrder"]),
-    ]
+    ],
 )
 data class DownloadTaskEntity(
     @PrimaryKey val id: String,
@@ -35,7 +35,7 @@ data class DownloadTaskEntity(
     val notifyOnCompletion: Boolean = false,
     val fileSelectionMode: FileSelectionMode = FileSelectionMode.ALL,
     val onCompletionIntentUri: String? = null,
-    val displayOrder: Int = 0,
+    val displayOrder: Double = 10.0,
 ) {
     fun toDownloadTask(
         providerTorrentInfo: ProviderTorrentInfo? = null,

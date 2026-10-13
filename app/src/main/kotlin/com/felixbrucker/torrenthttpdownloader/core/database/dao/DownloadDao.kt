@@ -27,7 +27,7 @@ interface DownloadDao {
     suspend fun getTaskIds(): List<String>
 
     @Query("SELECT MAX(displayOrder) FROM download_tasks")
-    suspend fun getMaxDisplayOrder(): Int?
+    suspend fun getMaxDisplayOrder(): Double?
 
     @Query(
         "SELECT EXISTS(SELECT 1 FROM download_tasks WHERE state != :downloadingLocallyState) OR " +
@@ -70,14 +70,7 @@ interface DownloadDao {
     }
 
     @Query("UPDATE download_tasks SET displayOrder = :displayOrder WHERE id = :taskId")
-    suspend fun updateTaskDisplayOrder(taskId: String, displayOrder: Int)
-
-    @Transaction
-    suspend fun updateTaskDisplayOrders(orders: List<Pair<String, Int>>) {
-        for ((taskId, order) in orders) {
-            updateTaskDisplayOrder(taskId, order)
-        }
-    }
+    suspend fun updateTaskDisplayOrder(taskId: String, displayOrder: Double)
 
     @Query("DELETE FROM download_tasks WHERE id = :id")
     suspend fun deleteTask(id: String)

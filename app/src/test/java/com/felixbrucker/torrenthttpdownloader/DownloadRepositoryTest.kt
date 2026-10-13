@@ -134,7 +134,7 @@ class DownloadRepositoryTest {
 
         repository.moveTask(0, 1)
 
-        coVerify { downloadDao.updateTaskDisplayOrders(any()) }
+        coVerify { downloadDao.updateTaskDisplayOrder(any(), any()) }
     }
 
     @Test
