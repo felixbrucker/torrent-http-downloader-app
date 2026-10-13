@@ -19,7 +19,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderFeatur
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.datastore.AppSettingsRepository
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.NotificationConfig
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
@@ -330,16 +330,16 @@ class DownloadService : Service() {
                     deleteTorrentFile = intent.getBooleanExtra(EXTRA_DELETE_TORRENT_FILE, true)
                 )
             }
-            ACTION_PAUSE_LOCAL_FILE_DOWNLOAD -> pauseLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
-            ACTION_RESUME_LOCAL_FILE_DOWNLOAD -> resumeLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK))
-            ACTION_PAUSE_TASK_LOCAL_DOWNLOADS -> pauseTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_PAUSE_LOCAL_FILE_DOWNLOAD -> serviceScope.launch { pauseLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK)) }
+            ACTION_RESUME_LOCAL_FILE_DOWNLOAD -> serviceScope.launch { resumeLocalFileDownload(intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_FILE_LINK)) }
+            ACTION_PAUSE_TASK_LOCAL_DOWNLOADS -> serviceScope.launch { pauseTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_PAUSE_TASK_ON_PROVIDER -> serviceScope.launch { pauseTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_RESUME_TASK_LOCAL_DOWNLOADS -> resumeTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_RESUME_TASK_LOCAL_DOWNLOADS -> serviceScope.launch { resumeTaskLocalDownloads(intent.getStringExtra(EXTRA_TASK_ID)) }
             ACTION_RESUME_TASK_ON_PROVIDER -> serviceScope.launch { resumeTaskOnProvider(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_RESTART_TASK -> serviceScope.launch(Dispatchers.IO) { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
-            ACTION_PAUSE_ALL_LOCAL_DOWNLOADS -> pauseAllLocalDownloads()
+            ACTION_RESTART_TASK -> serviceScope.launch { restartTask(intent.getStringExtra(EXTRA_TASK_ID)) }
+            ACTION_PAUSE_ALL_LOCAL_DOWNLOADS -> serviceScope.launch { pauseAllLocalDownloads() }
             ACTION_PAUSE_ALL_ON_PROVIDER -> serviceScope.launch { pauseAllOnProvider() }
-            ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> resumeAllLocalDownloads()
+            ACTION_RESUME_ALL_LOCAL_DOWNLOADS -> serviceScope.launch { resumeAllLocalDownloads() }
             ACTION_RESUME_ALL_ON_PROVIDER -> serviceScope.launch { resumeAllOnProvider() }
             ACTION_ADD_TASK -> addTaskFromIntent(intent)
             ACTION_SET_PROVIDER_FILE_PRIORITY -> serviceScope.launch {
@@ -371,36 +371,38 @@ class DownloadService : Service() {
     }
 
     private fun stopSelfIfIdle() {
-        if (!downloadRepository.hasTasksWhichNeedProcessing()) {
-            stopSelf()
+        serviceScope.launch {
+            if (!downloadRepository.hasTasksWhichNeedProcessing()) {
+                stopSelf()
+            }
         }
     }
 
-    private fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
+    private suspend fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.pauseFile(taskId, fileLink)
     }
 
-    private fun resumeLocalFileDownload(taskId: String?, fileLink: String?) {
+    private suspend fun resumeLocalFileDownload(taskId: String?, fileLink: String?) {
         if (taskId == null || fileLink == null) return
         localDownloadManager.resumeFile(taskId, fileLink)
     }
 
-    private fun pauseTaskLocalDownloads(taskId: String?) {
+    private suspend fun pauseTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.pauseTask(taskId)
     }
 
-    private fun resumeTaskLocalDownloads(taskId: String?) {
+    private suspend fun resumeTaskLocalDownloads(taskId: String?) {
         if (taskId == null) return
         localDownloadManager.resumeTask(taskId)
     }
 
-    private fun pauseAllLocalDownloads() {
+    private suspend fun pauseAllLocalDownloads() {
         localDownloadManager.pauseAll()
     }
 
-    private fun resumeAllLocalDownloads() {
+    private suspend fun resumeAllLocalDownloads() {
         localDownloadManager.resumeAll()
     }
 
@@ -458,31 +460,33 @@ class DownloadService : Service() {
         val onCompletionIntentUri = intent.getStringExtra(EXTRA_ON_COMPLETION_INTENT_URI)
         val torrentName = intent.getStringExtra(EXTRA_TORRENT_NAME)
 
-        if (downloadRepository.hasTask(id)) {
-            postNotification(
-                title = "Torrent already added",
-                message = "Torrent $torrentName was not added as it is already in the list of active torrents",
-                icon = R.drawable.error_24px,
+        serviceScope.launch {
+            if (downloadRepository.hasTask(id)) {
+                postNotification(
+                    title = "Torrent already added",
+                    message = "Torrent $torrentName was not added as it is already in the list of active torrents",
+                    icon = R.drawable.error_24px,
+                )
+
+                return@launch
+            }
+
+            val task = DownloadTaskEntity(
+                id = id,
+                name = torrentName ?: uri,
+                torrent = TorrentDescriptor(type, uri),
+                destinationSubdirectory = destinationSubdirectory,
+                createSubfolderByName = createSubfolderByName,
+                notifyOnCompletion = notifyOnCompletion,
+                fileSelectionMode = fileSelectionMode,
+                onCompletionIntentUri = onCompletionIntentUri,
+                state = TorrentState.ADDING_TO_PROVIDER
             )
-
-            return
+            addTask(task)
         }
-
-        val task = DownloadTaskEntity(
-            id = id,
-            name = torrentName ?: uri,
-            torrent = TorrentDescriptor(type, uri),
-            destinationSubdirectory = destinationSubdirectory,
-            createSubfolderByName = createSubfolderByName,
-            notifyOnCompletion = notifyOnCompletion,
-            fileSelectionMode = fileSelectionMode,
-            onCompletionIntentUri = onCompletionIntentUri,
-            state = TorrentState.ADDING_TO_PROVIDER
-        )
-        addTask(task)
     }
 
-    private fun addTask(task: DownloadTaskEntity) {
+    private suspend fun addTask(task: DownloadTaskEntity) {
         torrentStateMachine.addTask(task)
     }
 
@@ -543,6 +547,7 @@ class DownloadService : Service() {
         private const val SERVICE_NOTIFICATION_ID = 1
         private const val SERVICE_NOTIFICATION_CHANNEL_ID = "download_service"
         private const val GENERAL_NOTIFICATION_CHANNEL_ID = "general"
+        @Suppress("unused")
         const val ACTION_BIND_AIDL = "com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService"
         const val ACTION_REMOVE_TASK = "ACTION_REMOVE_TASK"
         const val ACTION_PAUSE_LOCAL_FILE_DOWNLOAD = "ACTION_PAUSE_LOCAL_FILE_DOWNLOAD"

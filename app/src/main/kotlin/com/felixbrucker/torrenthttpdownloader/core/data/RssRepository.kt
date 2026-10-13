@@ -1,117 +1,121 @@
 package com.felixbrucker.torrenthttpdownloader.core.data
 
+import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedWithItems
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
-import timber.log.Timber
+import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import timber.log.Timber
 
 @Singleton
 class RssRepository @Inject constructor(
-    private val downloadTracker: DownloadTracker,
+    private val rssDao: RssDao,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
-    val rssFeeds: StateFlow<List<RssFeed>>
-        get() = downloadTracker.rssFeeds
+    val rssFeeds: StateFlow<List<RssFeed>> = rssDao.getFeedsWithItemsFlow()
+        .map { map ->
+            map.map { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+        }
+        .stateIn(
+            scope = scope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
 
-    val syncingFeedIds: StateFlow<Set<String>>
-        get() = downloadTracker.syncingFeedIds
+    private val _syncingFeedIds = MutableStateFlow<Set<String>>(emptySet())
+    val syncingFeedIds: StateFlow<Set<String>> = _syncingFeedIds.asStateFlow()
 
-    val isSyncingAll: StateFlow<Boolean>
-        get() = downloadTracker.isSyncingAll
+    private val _isSyncingAll = MutableStateFlow(false)
+    val isSyncingAll: StateFlow<Boolean> = _isSyncingAll.asStateFlow()
 
-    val totalUnreadRssCount: Flow<Int>
-        get() = downloadTracker.totalUnreadRssCount
+    val totalUnreadRssCount: Flow<Int> = rssDao.getTotalUnreadCountFlow()
 
-    fun addRssFeed(feed: RssFeed) {
+    suspend fun addRssFeed(feed: RssFeed) {
         Timber.i("Adding RSS feed name=%s, url=%s", feed.name, feed.url)
-        downloadTracker.addRssFeed(feed)
+        val entity = RssFeedEntity.fromDomain(feed)
+        rssDao.insertFeed(entity)
     }
 
-    fun findRssFeed(id: String): RssFeed? = downloadTracker.rssFeeds.value.find { it.id == id }
+    suspend fun findRssFeed(id: String): RssFeed? {
+        val map = rssDao.getFeedWithItems(id)
+        return map.entries.firstOrNull()?.let { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+    }
 
     fun getFeedFlow(id: String): Flow<RssFeed?> {
-        return downloadTracker.rssFeeds.map { feeds -> feeds.find { it.id == id } }
+        return rssDao.getFeedWithItemsFlow(id).map { map ->
+            map.entries.firstOrNull()?.let { (feed, items) -> RssFeedWithItems(feed, items).toRssFeed() }
+        }
     }
 
-    fun removeRssFeed(id: String) {
+    suspend fun removeRssFeed(id: String) {
         Timber.i("Removing RSS feed id=%s", id)
-        downloadTracker.removeRssFeed(id)
+        rssDao.deleteFeed(id)
     }
 
     fun setFeedSyncing(feedId: String, syncing: Boolean) {
-        downloadTracker.setFeedSyncing(feedId, syncing)
+        _syncingFeedIds.update { if (syncing) it + feedId else it - feedId }
     }
 
     fun setAllFeedsSyncing(syncing: Boolean) {
-        downloadTracker.setAllFeedsSyncing(syncing)
+        _isSyncingAll.value = syncing
     }
 
-    fun markAllItemsAsRead(feedId: String) {
-        downloadTracker.updateRssFeed(feedId) { feed ->
-            feed.copy(items = feed.items.map { it.copy(isRead = true) })
+    suspend fun markAllItemsAsRead(feedId: String) {
+        rssDao.markAllItemsAsRead(feedId)
+    }
+
+    suspend fun markItemAsRead(feedId: String, itemId: String) {
+        rssDao.markItemAsRead(feedId, itemId)
+    }
+
+    suspend fun markItemAsDownloaded(feedId: String, itemId: String) {
+        rssDao.markItemAsDownloaded(feedId, itemId)
+    }
+
+    suspend fun markItemAsDownloadedAndRead(feedId: String, itemId: String) {
+        rssDao.markItemAsDownloadedAndRead(feedId, itemId)
+    }
+
+    suspend fun updateFeedConfig(newFeed: RssFeed) {
+        val currentFeed = rssDao.getFeed(newFeed.id) ?: return
+        val isResetState = currentFeed.url != newFeed.url
+        if (isResetState) {
+            rssDao.deleteItemsForFeed(newFeed.id)
         }
+        val updatedFeed = currentFeed.updatedWith(RssFeedEntity.fromDomain(newFeed))
+        rssDao.updateFeed(updatedFeed)
     }
 
-    fun markItemAsRead(feedId: String, itemId: String) {
-        downloadTracker.updateRssFeed(feedId) { feed ->
-            feed.copy(items = feed.items.map {
-                if (it.id == itemId) it.copy(isRead = true) else it
-            })
-        }
-    }
-
-    fun markItemAsDownloaded(feedId: String, itemId: String) {
-        downloadTracker.updateRssFeed(feedId) { feed ->
-            feed.copy(items = feed.items.map {
-                if (it.id == itemId) it.copy(isDownloaded = true) else it
-            })
-        }
-    }
-
-    fun markItemAsDownloadedAndRead(feedId: String, itemId: String) {
-        downloadTracker.updateRssFeed(feedId) { feed ->
-            feed.copy(items = feed.items.map {
-                if (it.id == itemId) it.copy(isDownloaded = true, isRead = true) else it
-            })
-        }
-    }
-
-    fun updateFeedConfig(newFeed: RssFeed) {
-        downloadTracker.updateRssFeed(newFeed.id) { feed ->
-            val isResetState = feed.url != newFeed.url
-
-            newFeed.copy(
-                lastCheck = if (isResetState) 0 else newFeed.lastCheck,
-                items = if (isResetState) emptyList() else newFeed.items,
-            )
-        }
-    }
-
-    fun updateDiscoveredItems(
+    suspend fun updateDiscoveredItems(
         feedId: String,
         newlyDiscoveredItems: List<RssItem>,
         totalNewItemsCount: Int,
         lastCheck: Long = System.currentTimeMillis(),
     ) {
         Timber.i("Updated RSS feed id=%s with %d newly discovered items", feedId, newlyDiscoveredItems.size)
-        downloadTracker.updateRssFeed(feedId) { currentFeed ->
-            val updatedItems = (newlyDiscoveredItems + currentFeed.items)
-                .distinctBy { it.id }
-                .take(max(totalNewItemsCount, 25))
-            currentFeed.copy(
-                items = updatedItems,
-                lastCheck = lastCheck,
-            )
-        }
+        val itemEntities = newlyDiscoveredItems.map { RssItemEntity.fromDomain(feedId, it) }
+        rssDao.insertItems(itemEntities)
+        rssDao.updateLastCheck(feedId, lastCheck)
+
+        val limit = max(totalNewItemsCount, 25)
+        rssDao.deleteOldItems(feedId, limit)
     }
 
-    fun updateLastCheck(feedId: String, lastCheck: Long = System.currentTimeMillis()) {
-        downloadTracker.updateRssFeed(feedId) { feed ->
-            feed.copy(lastCheck = lastCheck)
-        }
+    suspend fun updateLastCheck(feedId: String, lastCheck: Long = System.currentTimeMillis()) {
+        rssDao.updateLastCheck(feedId, lastCheck)
     }
 }

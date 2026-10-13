@@ -1,6 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader.feature.downloads
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +31,9 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun moveTask(fromIndex: Int, toIndex: Int) {
-        downloadRepository.moveTask(fromIndex, toIndex)
+        viewModelScope.launch {
+            downloadRepository.moveTask(fromIndex, toIndex)
+        }
     }
 
     fun removeTask(taskId: String, deleteFiles: Boolean, deleteTorrentFile: Boolean) {

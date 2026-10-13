@@ -138,7 +138,9 @@ class AddTorrentViewModel @Inject constructor(
         serviceLauncher.addTask(updatedConfig)
 
         if (config.feedId != null && config.feedItemId != null) {
-            rssRepository.markItemAsDownloaded(config.feedId, config.feedItemId)
+            viewModelScope.launch {
+                rssRepository.markItemAsDownloaded(config.feedId, config.feedItemId)
+            }
         }
 
         clearResolvedConfig()

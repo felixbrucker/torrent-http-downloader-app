@@ -3,7 +3,7 @@ package com.felixbrucker.torrenthttpdownloader.core.data
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.FilePriority
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow

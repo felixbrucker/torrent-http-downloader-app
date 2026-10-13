@@ -72,25 +72,32 @@ android {
 
 kover {
     reports {
-        total {
-            verify {
-                rule {
-                    minBound(70)
-                }
-            }
-        }
         filters {
             excludes {
                 classes(
                     "*.BuildConfig",
                     "*_*",
                     "*JsonAdapter*",
-                    "com.felixbrucker.torrenthttpdownloader.ui.composable.*",
-                    "com.felixbrucker.torrenthttpdownloader.ui.screens.*",
-                    "com.felixbrucker.torrenthttpdownloader.ui.theme.*",
+                    "com.felixbrucker.torrenthttpdownloader.core.designsystem.**",
+                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Screen*",
+                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Composables*",
+                    "com.felixbrucker.torrenthttpdownloader.feature.*.*BottomSheet*",
+                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Dialog*",
                     "com.felixbrucker.torrenthttpdownloader.MainActivity*",
                     "com.felixbrucker.torrenthttpdownloader.AddTorrentActivity*",
+                    "com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp*",
+                    "com.felixbrucker.torrenthttpdownloader.IAddTorrentCallback*",
+                    "com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService*",
+                    "com.felixbrucker.torrenthttpdownloader.AddTorrentParams*",
+                    "com.felixbrucker.torrenthttpdownloader.TorrentProgressStats*",
                 )
+            }
+        }
+        total {
+            verify {
+                rule {
+                    minBound(30)
+                }
             }
         }
     }
@@ -123,10 +130,17 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

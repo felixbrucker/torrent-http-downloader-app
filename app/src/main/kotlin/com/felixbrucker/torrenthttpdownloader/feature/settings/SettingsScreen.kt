@@ -39,6 +39,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -294,6 +296,8 @@ private fun RssSyncConfigCard(
     rssSyncIntervalHours: Int,
     onRssSyncIntervalHoursChange: (Int) -> Unit
 ) {
+    var lastRssSyncIntervalHours by remember { mutableIntStateOf(rssSyncIntervalHours) }
+
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -330,7 +334,13 @@ private fun RssSyncConfigCard(
                 )
                 Slider(
                     value = rssSyncIntervalHours.toFloat(),
-                    onValueChange = { onRssSyncIntervalHoursChange(it.roundToInt()) },
+                    onValueChange = {
+                        val newValue = it.roundToInt()
+                        if (newValue != lastRssSyncIntervalHours) {
+                            lastRssSyncIntervalHours = newValue
+                            onRssSyncIntervalHoursChange(newValue)
+                        }
+                    },
                     valueRange = 1f..24f,
                     steps = 22,
                     enabled = rssSyncEnabled

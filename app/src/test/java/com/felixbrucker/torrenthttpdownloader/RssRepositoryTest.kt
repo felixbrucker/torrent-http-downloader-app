@@ -1,227 +1,202 @@
 package com.felixbrucker.torrenthttpdownloader
 
-import com.felixbrucker.torrenthttpdownloader.core.data.DownloadTracker
 import com.felixbrucker.torrenthttpdownloader.core.data.RssRepository
+import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RssRepositoryTest {
-    private val downloadTracker = mockk<DownloadTracker>(relaxed = true)
-    private val repository = RssRepository(downloadTracker)
+    private val rssDao = mockk<RssDao>(relaxed = true)
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testScope = TestScope(testDispatcher)
+    private val feedsWithItemsFlow = MutableStateFlow<Map<RssFeedEntity, List<RssItemEntity>>>(emptyMap())
+    private val unreadCountFlow = MutableStateFlow(0)
 
-    @Test
-    fun testRssFeedsFlowDelegatesToTracker() {
-        val flow = MutableStateFlow<List<RssFeed>>(emptyList())
-        every { downloadTracker.rssFeeds } returns flow
-
-        val result = repository.rssFeeds
-
-        assertEquals(flow, result)
-        verify { downloadTracker.rssFeeds }
+    private fun createRepository(): RssRepository {
+        coEvery { rssDao.getFeedsWithItemsFlow() } returns feedsWithItemsFlow
+        coEvery { rssDao.getTotalUnreadCountFlow() } returns unreadCountFlow
+        return RssRepository(
+            rssDao = rssDao,
+            scope = testScope,
+        )
     }
 
     @Test
-    fun testSyncingFeedIdsFlowDelegatesToTracker() {
-        val flow = MutableStateFlow<Set<String>>(emptySet())
-        every { downloadTracker.syncingFeedIds } returns flow
+    fun testRssFeedsFlowEmitsFromDao() = runTest(testDispatcher) {
+        val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        feedsWithItemsFlow.value = mapOf(feedEntity to emptyList())
+        val repository = createRepository()
 
-        val result = repository.syncingFeedIds
+        val result = repository.rssFeeds.first()
 
-        assertEquals(flow, result)
-        verify { downloadTracker.syncingFeedIds }
+        assertEquals(1, result.size)
+        assertEquals("feed-1", result[0].id)
     }
 
     @Test
-    fun testIsSyncingAllFlowDelegatesToTracker() {
-        val flow = MutableStateFlow(false)
-        every { downloadTracker.isSyncingAll } returns flow
-
-        val result = repository.isSyncingAll
-
-        assertEquals(flow, result)
-        verify { downloadTracker.isSyncingAll }
-    }
-
-    @Test
-    fun testTotalUnreadRssCountFlowDelegatesToTracker() {
-        val flow = MutableStateFlow(0)
-        every { downloadTracker.totalUnreadRssCount } returns flow
+    fun testTotalUnreadRssCountFlowDelegatesToDao() {
+        unreadCountFlow.value = 5
+        val repository = createRepository()
 
         val result = repository.totalUnreadRssCount
 
-        assertEquals(flow, result)
-        verify { downloadTracker.totalUnreadRssCount }
+        assertEquals(unreadCountFlow, result)
     }
 
     @Test
-    fun testAddRssFeedDelegatesToTracker() {
+    fun testAddRssFeedDelegatesToDao() = runTest(testDispatcher) {
         val feed = RssFeed(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        every { downloadTracker.addRssFeed(feed) } returns Unit
+        val repository = createRepository()
 
         repository.addRssFeed(feed)
 
-        verify { downloadTracker.addRssFeed(feed) }
+        coVerify { rssDao.insertFeed(match { it.id == "feed-1" }) }
     }
 
     @Test
-    fun testFindRssFeedReturnsFeedWhenFound() {
-        val feed = RssFeed(id = "feed-1", name = "Feed 1", url = "http://example.com")
-        every { downloadTracker.rssFeeds } returns MutableStateFlow(listOf(feed))
+    fun testFindRssFeedReturnsFeedWhenFound() = runTest(testDispatcher) {
+        val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        coEvery { rssDao.getFeedWithItems("feed-1") } returns mapOf(feedEntity to emptyList())
+        val repository = createRepository()
 
         val result = repository.findRssFeed("feed-1")
 
-        assertEquals(feed, result)
+        assertEquals("feed-1", result?.id)
     }
 
     @Test
-    fun testRemoveRssFeedDelegatesToTracker() {
-        every { downloadTracker.removeRssFeed("feed-1") } returns Unit
+    fun testGetFeedFlowEmitsFeed() = runTest(testDispatcher) {
+        val feedEntity = RssFeedEntity(id = "feed-1", name = "Feed 1", url = "http://example.com")
+        coEvery { rssDao.getFeedWithItemsFlow("feed-1") } returns MutableStateFlow(mapOf(feedEntity to emptyList()))
+        val repository = createRepository()
+
+        val emittedFeed = repository.getFeedFlow("feed-1").first()
+
+        assertEquals("feed-1", emittedFeed?.id)
+    }
+
+    @Test
+    fun testRemoveRssFeedDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
 
         repository.removeRssFeed("feed-1")
 
-        verify { downloadTracker.removeRssFeed("feed-1") }
+        coVerify { rssDao.deleteFeed("feed-1") }
     }
 
     @Test
-    fun testSetFeedSyncingDelegatesToTracker() {
-        every { downloadTracker.setFeedSyncing("feed-1", true) } returns Unit
+    fun testSyncStateFlags() {
+        val repository = createRepository()
 
         repository.setFeedSyncing("feed-1", true)
-
-        verify { downloadTracker.setFeedSyncing("feed-1", true) }
-    }
-
-    @Test
-    fun testSetAllFeedsSyncingDelegatesToTracker() {
-        every { downloadTracker.setAllFeedsSyncing(true) } returns Unit
-
         repository.setAllFeedsSyncing(true)
 
-        verify { downloadTracker.setAllFeedsSyncing(true) }
+        assertTrue(repository.syncingFeedIds.value.contains("feed-1"))
+        assertTrue(repository.isSyncingAll.value)
+
+        repository.setFeedSyncing("feed-1", false)
+        repository.setAllFeedsSyncing(false)
+
+        assertFalse(repository.syncingFeedIds.value.contains("feed-1"))
+        assertFalse(repository.isSyncingAll.value)
     }
 
     @Test
-    fun testMarkAllItemsAsReadSuccess() {
-        val feedId = "feed-1"
-        val feedSlot = slot<(RssFeed) -> RssFeed>()
-        every { downloadTracker.updateRssFeed(feedId, capture(feedSlot)) } returns Unit
+    fun testMarkAllItemsAsReadDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
 
-        repository.markAllItemsAsRead(feedId)
+        repository.markAllItemsAsRead("feed-1")
 
-        verify { downloadTracker.updateRssFeed(feedId, any()) }
-        val initialFeed = RssFeed(
-            id = feedId,
-            name = "Test Feed",
-            url = "http://example.com/rss",
-            items = listOf(
-                RssItem(id = "item-1", title = "Item 1", link = "link1", isRead = false),
-                RssItem(id = "item-2", title = "Item 2", link = "link2", isRead = false)
-            )
-        )
-        val updatedFeed = feedSlot.captured(initialFeed)
-        assertTrue(updatedFeed.items.all { it.isRead })
+        coVerify { rssDao.markAllItemsAsRead("feed-1") }
     }
 
     @Test
-    fun testMarkItemAsReadSuccess() {
-        val feedId = "feed-1"
-        val feedSlot = slot<(RssFeed) -> RssFeed>()
-        every { downloadTracker.updateRssFeed(feedId, capture(feedSlot)) } returns Unit
+    fun testMarkItemAsReadDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
 
-        repository.markItemAsRead(feedId, "item-1")
+        repository.markItemAsRead("feed-1", "item-1")
 
-        verify { downloadTracker.updateRssFeed(feedId, any()) }
-        val initialFeed = RssFeed(
-            id = feedId,
-            name = "Test Feed",
-            url = "http://example.com/rss",
-            items = listOf(
-                RssItem(id = "item-1", title = "Item 1", link = "link1", isRead = false),
-                RssItem(id = "item-2", title = "Item 2", link = "link2", isRead = false)
-            )
-        )
-        val updatedFeed = feedSlot.captured(initialFeed)
-        assertTrue(updatedFeed.items.find { it.id == "item-1" }?.isRead == true)
-        assertTrue(updatedFeed.items.find { it.id == "item-2" }?.isRead == false)
+        coVerify { rssDao.markItemAsRead("feed-1", "item-1") }
     }
 
     @Test
-    fun testMarkItemAsDownloadedSuccess() {
-        val feedId = "feed-1"
-        val feedSlot = slot<(RssFeed) -> RssFeed>()
-        every { downloadTracker.updateRssFeed(feedId, capture(feedSlot)) } returns Unit
+    fun testMarkItemAsDownloadedDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
 
-        repository.markItemAsDownloaded(feedId, "item-1")
+        repository.markItemAsDownloaded("feed-1", "item-1")
 
-        verify { downloadTracker.updateRssFeed(feedId, any()) }
-        val initialFeed = RssFeed(
-            id = feedId,
-            name = "Test Feed",
-            url = "http://example.com/rss",
-            items = listOf(
-                RssItem(id = "item-1", title = "Item 1", link = "link1", isDownloaded = false)
-            )
-        )
-        val updatedFeed = feedSlot.captured(initialFeed)
-        assertTrue(updatedFeed.items.first().isDownloaded)
+        coVerify { rssDao.markItemAsDownloaded("feed-1", "item-1") }
     }
 
     @Test
-    fun testUpdateFeedConfigResetsWhenUrlChanged() {
-        val feedId = "feed-1"
-        val feedSlot = slot<(RssFeed) -> RssFeed>()
-        every { downloadTracker.updateRssFeed(feedId, capture(feedSlot)) } returns Unit
-        val newFeedConfig = RssFeed(
-            id = feedId,
-            name = "Test Feed Updated",
-            url = "http://example.com/new-rss",
-            lastCheck = 1000L,
-            items = listOf(RssItem(id = "old-item", title = "Old", link = "link"))
-        )
+    fun testMarkItemAsDownloadedAndReadDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
 
-        repository.updateFeedConfig(newFeedConfig)
+        repository.markItemAsDownloadedAndRead("feed-1", "item-1")
 
-        verify { downloadTracker.updateRssFeed(feedId, any()) }
-        val existingFeed = RssFeed(
-            id = feedId,
-            name = "Test Feed",
-            url = "http://example.com/old-rss",
-            lastCheck = 500L,
-            items = listOf(RssItem(id = "old-item", title = "Old", link = "link"))
-        )
-        val updatedFeed = feedSlot.captured(existingFeed)
-        assertEquals(0L, updatedFeed.lastCheck)
-        assertTrue(updatedFeed.items.isEmpty())
+        coVerify { rssDao.markItemAsDownloadedAndRead("feed-1", "item-1") }
     }
 
     @Test
-    fun testUpdateDiscoveredItemsSuccess() {
-        val feedId = "feed-1"
-        val feedSlot = slot<(RssFeed) -> RssFeed>()
-        every { downloadTracker.updateRssFeed(feedId, capture(feedSlot)) } returns Unit
-        val newItem = RssItem(id = "new-item", title = "New", link = "new-link")
+    fun testUpdateFeedConfigResetsWhenUrlChanged() = runTest(testDispatcher) {
+        val feedEntity = RssFeedEntity(id = "feed-1", name = "Old Feed", url = "http://example.com/old")
+        coEvery { rssDao.getFeed("feed-1") } returns feedEntity
+        val repository = createRepository()
+        val newFeed = RssFeed(id = "feed-1", name = "New Feed", url = "http://example.com/new")
 
-        repository.updateDiscoveredItems(feedId, listOf(newItem), 1, 2000L)
+        repository.updateFeedConfig(newFeed)
 
-        verify { downloadTracker.updateRssFeed(feedId, any()) }
-        val existingFeed = RssFeed(
-            id = feedId,
-            name = "Test Feed",
-            url = "http://example.com/rss",
-            lastCheck = 1000L,
-            items = listOf(RssItem(id = "old-item", title = "Old", link = "old-link"))
-        )
-        val updatedFeed = feedSlot.captured(existingFeed)
-        assertEquals(2000L, updatedFeed.lastCheck)
-        assertEquals(2, updatedFeed.items.size)
-        assertEquals("new-item", updatedFeed.items.first().id)
+        coVerify { rssDao.deleteItemsForFeed("feed-1") }
+        coVerify { rssDao.updateFeed(match { it.id == "feed-1" && it.name == "New Feed" && it.url == "http://example.com/new" }) }
+    }
+
+    @Test
+    fun testUpdateFeedConfigSameUrlDoesNotReset() = runTest(testDispatcher) {
+        val feedEntity = RssFeedEntity(id = "feed-1", name = "Old Feed", url = "http://example.com/same")
+        coEvery { rssDao.getFeed("feed-1") } returns feedEntity
+        val repository = createRepository()
+        val newFeed = RssFeed(id = "feed-1", name = "New Feed", url = "http://example.com/same")
+
+        repository.updateFeedConfig(newFeed)
+
+        coVerify(exactly = 0) { rssDao.deleteItemsForFeed("feed-1") }
+        coVerify { rssDao.updateFeed(match { it.id == "feed-1" && it.name == "New Feed" && it.url == "http://example.com/same" }) }
+    }
+
+    @Test
+    fun testUpdateDiscoveredItemsDelegatesToDaoAndPrunes() = runTest(testDispatcher) {
+        val repository = createRepository()
+        val newItem = RssItem(id = "new-item", title = "New", link = "http://example.com/item-new", pubDate = 1000L)
+
+        repository.updateDiscoveredItems("feed-1", listOf(newItem), 1, 2000L)
+
+        coVerify { rssDao.insertItems(match { it.size == 1 && it[0].id == "new-item" }) }
+        coVerify { rssDao.updateLastCheck("feed-1", 2000L) }
+        coVerify { rssDao.deleteOldItems("feed-1", 25) }
+    }
+
+    @Test
+    fun testUpdateLastCheckDelegatesToDao() = runTest(testDispatcher) {
+        val repository = createRepository()
+
+        repository.updateLastCheck("feed-1", 5000L)
+
+        coVerify { rssDao.updateLastCheck("feed-1", 5000L) }
     }
 }

@@ -86,16 +86,18 @@ class RealDebridProvider @Inject constructor(
             peers = null,
             totalPeers = null,
             links = info.links,
-            files = info.files.map {
-                ProviderTorrentFile(
-                    id = it.id,
-                    path = it.path,
-                    size = it.bytes,
-                    isSelected = it.selected == 1,
-                    progress = null,
-                    downloadedBytes = null,
-                )
-            }
+            files = info.files
+                .map {
+                    ProviderTorrentFile(
+                        id = it.id,
+                        path = it.path,
+                        size = it.bytes,
+                        isSelected = it.selected == 1,
+                        progress = null,
+                        downloadedBytes = null,
+                    )
+                }
+                .sortedBy { it.name }
         )
     }
 

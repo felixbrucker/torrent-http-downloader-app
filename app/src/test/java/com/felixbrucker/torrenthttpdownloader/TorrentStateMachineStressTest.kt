@@ -7,7 +7,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.TorrentStateMachine
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
-import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTaskEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentDescriptor
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
@@ -72,7 +72,7 @@ class TorrentStateMachineStressTest {
             state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
             providerId = "provider-id"
         )
-        every { downloadRepository.findTaskEntity(taskId) } returns task
+        coEvery { downloadRepository.findTaskEntity(taskId) } returns task
         every { provider.isLocalProvider } returns false
         val callCount = AtomicInteger(0)
         coEvery { provider.getTorrentInfo(any()) } coAnswers {
@@ -125,8 +125,8 @@ class TorrentStateMachineStressTest {
             state = TorrentState.WAITING_FOR_PROVIDER_DOWNLOAD,
             providerId = "provider-id-2"
         )
-        every { downloadRepository.findTaskEntity(taskId1) } returns task1
-        every { downloadRepository.findTaskEntity(taskId2) } returns task2
+        coEvery { downloadRepository.findTaskEntity(taskId1) } returns task1
+        coEvery { downloadRepository.findTaskEntity(taskId2) } returns task2
         every { provider.isLocalProvider } returns false
         val callCount = AtomicInteger(0)
         coEvery { provider.getTorrentInfo(any()) } coAnswers {
