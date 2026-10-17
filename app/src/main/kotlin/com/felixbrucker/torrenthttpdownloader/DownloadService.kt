@@ -34,14 +34,18 @@ import javax.inject.Inject
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -105,6 +109,7 @@ class DownloadService : Service() {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
         Timber.d("DownloadService created")
@@ -139,7 +144,6 @@ class DownloadService : Service() {
                         Timber.e(e, "Error sending completion intent for task id=%s", task.id)
                     }
                 }
-                stopSelfIfIdle()
             },
             onPostNotification = ::postNotification,
         )
@@ -154,6 +158,21 @@ class DownloadService : Service() {
         serviceScope.launch {
             localDownloadManager.start()
             torrentStateMachine.start()
+
+            // Stop self if there are no tasks to process for at least 1 sec
+            downloadRepository
+                .hasTasksWhichNeedProcessingFlow()
+                .distinctUntilChanged()
+                .transformLatest { hasTasks ->
+                    if (!hasTasks) {
+                        delay(1.seconds)
+                    }
+                    emit(hasTasks)
+                }
+                .distinctUntilChanged()
+                .filter { !it }
+                .take(1)
+                .collect { shutdown() }
         }
     }
 
@@ -367,18 +386,10 @@ class DownloadService : Service() {
             ACTION_CONFIRM_FILE_SELECTION -> serviceScope.launch {
                 confirmFileSelection(intent.getStringExtra(EXTRA_TASK_ID))
             }
-            ACTION_STOP_SERVICE -> stopSelf()
+            ACTION_STOP_SERVICE -> shutdown()
         }
 
         return START_STICKY
-    }
-
-    private fun stopSelfIfIdle() {
-        serviceScope.launch {
-            if (!downloadRepository.hasTasksWhichNeedProcessing()) {
-                stopSelf()
-            }
-        }
     }
 
     private suspend fun pauseLocalFileDownload(taskId: String?, fileLink: String?) {
@@ -504,8 +515,6 @@ class DownloadService : Service() {
             deleteFiles = deleteFiles,
             deleteTorrentFile = deleteTorrentFile
         )
-
-        stopSelfIfIdle()
     }
 
     private fun postNotification(
@@ -531,6 +540,11 @@ class DownloadService : Service() {
         }
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
+    }
+
+    private fun shutdown() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder {

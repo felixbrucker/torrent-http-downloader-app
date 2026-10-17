@@ -15,6 +15,7 @@ import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -47,6 +48,7 @@ class DownloadRepository @Inject constructor(
     suspend fun getTaskIds(): List<String> = downloadDao.getTaskIds()
 
     suspend fun hasTasksWhichNeedProcessing(): Boolean = downloadDao.hasTasksWhichNeedProcessing()
+    fun hasTasksWhichNeedProcessingFlow(): Flow<Boolean> = downloadDao.hasTasksWhichNeedProcessingFlow()
 
     suspend fun addTask(task: DownloadTaskEntity) {
         Timber.i("Adding download task id=%s, name=%s", task.id, task.name)

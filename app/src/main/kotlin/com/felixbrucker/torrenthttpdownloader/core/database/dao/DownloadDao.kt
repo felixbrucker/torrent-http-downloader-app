@@ -42,14 +42,14 @@ interface DownloadDao {
     suspend fun getMaxDisplayOrder(): Double?
 
     @Query(
-        "SELECT EXISTS(SELECT 1 FROM download_tasks WHERE state != :downloadingLocallyState) OR " +
-                "EXISTS(SELECT 1 FROM download_files WHERE state IN (:pendingState, :downloadingState))"
+        "SELECT EXISTS(SELECT 1 FROM download_tasks WHERE state != 'ERROR' LIMIT 1)"
     )
-    suspend fun hasTasksWhichNeedProcessing(
-        downloadingLocallyState: TorrentState = TorrentState.DOWNLOADING_LOCALLY,
-        pendingState: LocalDownloadState = LocalDownloadState.PENDING,
-        downloadingState: LocalDownloadState = LocalDownloadState.DOWNLOADING
-    ): Boolean
+    suspend fun hasTasksWhichNeedProcessing(): Boolean
+
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM download_tasks WHERE state != 'ERROR' LIMIT 1)"
+    )
+    fun hasTasksWhichNeedProcessingFlow(): Flow<Boolean>
 
     @Query("SELECT EXISTS(SELECT 1 FROM download_tasks WHERE id = :id)")
     suspend fun hasTask(id: String): Boolean

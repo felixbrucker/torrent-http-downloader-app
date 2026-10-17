@@ -482,9 +482,9 @@ class TorrentStateMachine(
                         )
                     }
                     val finalFilePaths = downloadRepository.getFinalFilesForTask(task.id)
-                    downloadRepository.removeTask(taskId)
-
                     onTaskCompleted(task, finalFilePaths)
+
+                    downloadRepository.removeTask(taskId)
                 }
                 else -> { /* No action needed */ }
             }
