@@ -339,16 +339,7 @@ class LibTorrentProvider @Inject constructor(
     }
 
     override suspend fun unrestrictLink(id: String, link: String): UnrestrictedLink {
-        val filePath = link
-        val torrentHandle = sessionManager.find(id.sha1Hash()) ?: throw Exception("Torrent not found")
-        val torrentFileInfo = torrentHandle.torrentFile() ?: throw Exception("Torrent file not found")
-        val filesStorage = torrentFileInfo.files()
-
-        return UnrestrictedLink(
-            filename = filePath.substringAfterLast("/"),
-            downloadUrl = "",
-            size = getFileSize(filesStorage, filePath)
-        )
+        throw Exception("Unsupported operation: unrestrictLink")
     }
 
     override suspend fun pause(id: String) {

@@ -132,12 +132,6 @@ interface DownloadDao {
     @Query("UPDATE download_tasks SET providerId = :providerId, state = :state WHERE id = :taskId")
     suspend fun updateTaskProviderIdAndState(taskId: String, providerId: String, state: TorrentState)
 
-    @Query("UPDATE download_files SET state = :state, unrestrictedLink = NULL WHERE taskId = :taskId")
-    suspend fun markAllTaskFilesCompletedLocally(
-        taskId: String,
-        state: LocalDownloadState = LocalDownloadState.COMPLETED
-    )
-
     @Query("DELETE FROM download_files WHERE taskId = :taskId")
     suspend fun deleteFilesForTask(taskId: String)
 

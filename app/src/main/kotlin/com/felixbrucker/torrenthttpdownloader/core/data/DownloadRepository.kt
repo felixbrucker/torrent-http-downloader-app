@@ -182,7 +182,6 @@ class DownloadRepository @Inject constructor(
 
     suspend fun markAllTaskFilesCompletedLocally(taskId: String) {
         val taskFiles = downloadDao.getFilesForTask(taskId)
-        downloadDao.markAllTaskFilesCompletedLocally(taskId, LocalDownloadState.COMPLETED)
         downloadProgressTracker.markAllTaskFilesCompletedLocally(taskId, taskFiles)
     }
 

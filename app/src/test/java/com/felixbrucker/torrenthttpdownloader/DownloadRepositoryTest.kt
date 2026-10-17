@@ -265,15 +265,6 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun testMarkAllTaskFilesCompletedLocallySuccess() = runTest(testDispatcher) {
-        val repository = createRepository()
-
-        repository.markAllTaskFilesCompletedLocally("task-1")
-
-        coVerify { downloadDao.markAllTaskFilesCompletedLocally("task-1", LocalDownloadState.COMPLETED) }
-    }
-
-    @Test
     fun testResetTaskForRetrySuccess() = runTest(testDispatcher) {
         val repository = createRepository()
 

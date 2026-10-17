@@ -183,8 +183,12 @@ class TorrentStateMachine(
         }
 
         // If the task is on Provider, delete it there
-        if (task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal && task.providerId != null) {
-            provider.deleteTorrent(task.providerId, deleteFiles = deleteFiles)
+        val isInStateBeforeDeletingOnProvider = task.state.ordinal < TorrentState.DELETING_FROM_PROVIDER.ordinal
+        val isErrorState = task.state == TorrentState.ERROR
+        if ((isInStateBeforeDeletingOnProvider || isErrorState) && task.providerId != null) {
+            try {
+                provider.deleteTorrent(task.providerId, deleteFiles = deleteFiles)
+            } catch (_: Exception) {}
         }
 
         downloadRepository.removeTask(taskId)
@@ -340,7 +344,7 @@ class TorrentStateMachine(
                     }
 
                     if (torrentInfo.state == ProviderTorrentState.COMPLETED) {
-                        val files = torrentInfo.links.map { DownloadFileEntity(taskId = task.id, link = it) }
+                        val files = torrentInfo.links.map { makeDownloadedFileEntityFromPath(task, it) }
                         downloadRepository.addTaskFiles(files)
                         downloadRepository.updateTaskState(
                             taskId = task.id,
@@ -517,5 +521,27 @@ class TorrentStateMachine(
 
     private suspend fun updateTaskWithTorrentInfo(taskId: String, torrentInfo: ProviderTorrentInfo) {
         downloadRepository.updateTaskWithTorrentInfo(taskId, torrentInfo)
+    }
+
+    private fun makeDownloadedFileEntityFromPath(
+        task: DownloadTaskEntity,
+        path: String
+    ): DownloadFileEntity {
+        val fileReference = File(
+            pathFactory.getScopedTemporaryDirectory(task.name).absolutePath,
+            path
+        )
+        val filePath = fileReference.absolutePath
+        val fileName = fileReference.name
+
+        return DownloadFileEntity(
+            taskId = task.id,
+            link = path,
+            unrestrictedLink = "",
+            state = LocalDownloadState.COMPLETED,
+            filePath = filePath,
+            fileName = fileName,
+            totalBytes = fileReference.length()
+        )
     }
 }
