@@ -52,7 +52,7 @@ class TorrentStateMachineStressTest {
             contentResolver = contentResolver,
             downloadRepository = downloadRepository,
             pathFactory = pathFactory,
-            onTaskCompleted = {},
+            onTaskCompleted = { _, _ -> },
             onPostNotification = { _, _, _, _ -> }
         )
     }

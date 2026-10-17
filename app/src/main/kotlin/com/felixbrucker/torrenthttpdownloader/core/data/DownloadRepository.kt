@@ -5,6 +5,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorren
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.DownloadDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFinalFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskWithFiles
 import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
@@ -56,6 +57,14 @@ class DownloadRepository @Inject constructor(
 
     suspend fun addTaskFiles(files: List<DownloadFileEntity>) {
         downloadDao.insertFiles(files)
+    }
+
+    suspend fun addFinalFiles(files: List<DownloadFinalFileEntity>) {
+        downloadDao.insertFinalFiles(files)
+    }
+
+    suspend fun getFinalFilesForTask(taskId: String): List<String> {
+        return downloadDao.getFinalFilesForTask(taskId)
     }
 
     suspend fun moveTask(fromIndex: Int, toIndex: Int) {

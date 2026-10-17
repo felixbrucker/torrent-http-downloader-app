@@ -127,10 +127,13 @@ class DownloadService : Service() {
             contentResolver = contentResolver,
             downloadRepository = downloadRepository,
             pathFactory = pathFactory,
-            onTaskCompleted = { task ->
+            onTaskCompleted = { task, finalFilePaths ->
                 task.onCompletionIntentUri?.let { uri ->
                     try {
                         val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                        if (finalFilePaths.isNotEmpty()) {
+                            intent.putStringArrayListExtra(EXTRA_FILE_PATHS, ArrayList(finalFilePaths))
+                        }
                         sendBroadcast(intent)
                     } catch (e: Exception) {
                         Timber.e(e, "Error sending completion intent for task id=%s", task.id)
@@ -583,5 +586,6 @@ class DownloadService : Service() {
         const val EXTRA_TORRENT_NAME = "EXTRA_TORRENT_NAME"
         const val EXTRA_DELETE_FILES = "EXTRA_DELETE_FILES"
         const val EXTRA_DELETE_TORRENT_FILE = "EXTRA_DELETE_TORRENT_FILE"
+        const val EXTRA_FILE_PATHS = "EXTRA_FILE_PATHS"
     }
 }

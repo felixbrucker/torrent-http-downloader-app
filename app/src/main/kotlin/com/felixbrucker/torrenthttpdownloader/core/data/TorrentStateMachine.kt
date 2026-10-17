@@ -19,6 +19,7 @@ import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorren
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.TorrentProvider
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFinalFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
@@ -44,7 +45,7 @@ class TorrentStateMachine(
     private val contentResolver: ContentResolver,
     private val downloadRepository: DownloadRepository,
     private val pathFactory: PathFactory,
-    private val onTaskCompleted: (DownloadTaskEntity) -> Unit,
+    private val onTaskCompleted: (DownloadTaskEntity, List<String>) -> Unit,
     private val onPostNotification: (String, String, Intent?, Int?) -> Unit,
 ) {
     private val processingTasks = ConcurrentHashMap.newKeySet<String>()
@@ -441,6 +442,21 @@ class TorrentStateMachine(
                     val destination = pathFactory.getScopedDestinationDirectory(task)
                     destination.parentFile?.createDirectoryRecursivelyIfNotExists()
 
+                    val finalFilePaths = mutableListOf<String>()
+                    if (source.exists()) {
+                        source.walkTopDown().forEach { file ->
+                            if (file.isDirectory) {
+                                return@forEach
+                            }
+                            val relativePath = file.toRelativeString(source)
+                            val destFile = File(destination, relativePath)
+                            finalFilePaths.add(destFile.absolutePath)
+                        }
+                    }
+                    downloadRepository.addFinalFiles(finalFilePaths.map {
+                        DownloadFinalFileEntity(taskId = task.id, filePath = it)
+                    })
+
                     if (destination.exists()) {
                         // Directory merge, move files individually
                         source.mergeIntoDirectory(destination)
@@ -465,9 +481,10 @@ class TorrentStateMachine(
                             R.drawable.check_24px,
                         )
                     }
+                    val finalFilePaths = downloadRepository.getFinalFilesForTask(task.id)
                     downloadRepository.removeTask(taskId)
 
-                    onTaskCompleted(task)
+                    onTaskCompleted(task, finalFilePaths)
                 }
                 else -> { /* No action needed */ }
             }

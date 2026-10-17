@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.core.database
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
@@ -9,6 +10,7 @@ import com.felixbrucker.torrenthttpdownloader.core.database.converter.Converters
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.DownloadDao
 import com.felixbrucker.torrenthttpdownloader.core.database.dao.RssDao
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFinalFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssFeedEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
@@ -17,10 +19,14 @@ import com.felixbrucker.torrenthttpdownloader.core.database.entity.RssItemEntity
     entities = [
         DownloadTaskEntity::class,
         DownloadFileEntity::class,
+        DownloadFinalFileEntity::class,
         RssFeedEntity::class,
         RssItemEntity::class,
     ],
-    version = 2,
+    version = 3,
+    autoMigrations = [
+        AutoMigration(from = 2, to = 3)
+    ],
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFileEntity
+import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadFinalFileEntity
 import com.felixbrucker.torrenthttpdownloader.core.database.entity.DownloadTaskEntity
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentState
@@ -72,6 +73,12 @@ interface DownloadDao {
 
     @Query("SELECT * FROM download_files WHERE taskId = :taskId")
     suspend fun getFilesForTask(taskId: String): List<DownloadFileEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFinalFiles(files: List<DownloadFinalFileEntity>)
+
+    @Query("SELECT filePath FROM download_final_files WHERE taskId = :taskId")
+    suspend fun getFinalFilesForTask(taskId: String): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTask(task: DownloadTaskEntity)
