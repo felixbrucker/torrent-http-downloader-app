@@ -244,7 +244,11 @@ fun LogViewerScreen(
                         .fillMaxSize()
                         .testTag("log_entries_list")
                 ) {
-                    items(filteredLogs) { entry ->
+                    // Provide stable UUID item key to avoid unnecessary recomposition when log items change or scroll
+                    items(
+                        items = filteredLogs,
+                        key = { entry -> entry.id }
+                    ) { entry ->
                         LogEntryCard(entry = entry)
                     }
                 }
