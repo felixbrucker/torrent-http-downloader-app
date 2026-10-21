@@ -68,6 +68,15 @@ android {
         buildConfig = true
         aidl = true
     }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            //noinspection ChromeOsAbiSupport
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
+    }
 }
 
 kover {
