@@ -31,7 +31,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class TorrentStateMachineStressTest {
     private val provider = mockk<TorrentProvider>()
     private val localDownloadManager = mockk<LocalDownloadManager>(relaxed = true)

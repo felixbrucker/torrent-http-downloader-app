@@ -364,16 +364,6 @@ class LibTorrentProvider @Inject constructor(
         return files
     }
 
-    private fun getFileSize(storage: FileStorage, filePath: String): Long {
-        for (i in 0..<storage.numFiles()) {
-            if (storage.filePath(i) == filePath) {
-                return storage.fileSize(i)
-            }
-        }
-
-        return 0
-    }
-
     private fun mapTorrentStateToProviderTorrentState(status: String): ProviderTorrentState {
         return when (status) {
             "checking_files" -> ProviderTorrentState.PROCESSING

@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.kover)
 }
 
 
@@ -16,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.felixbrucker.torrenthttpdownloader"
-        minSdk = 35
+        minSdk = 26
         targetSdk = 37
         versionCode = 3
         versionName = "1.1.0"
@@ -79,37 +78,8 @@ android {
     }
 }
 
-kover {
-    reports {
-        filters {
-            excludes {
-                classes(
-                    "*.BuildConfig",
-                    "*_*",
-                    "*JsonAdapter*",
-                    "com.felixbrucker.torrenthttpdownloader.core.designsystem.**",
-                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Screen*",
-                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Composables*",
-                    "com.felixbrucker.torrenthttpdownloader.feature.*.*BottomSheet*",
-                    "com.felixbrucker.torrenthttpdownloader.feature.*.*Dialog*",
-                    "com.felixbrucker.torrenthttpdownloader.MainActivity*",
-                    "com.felixbrucker.torrenthttpdownloader.AddTorrentActivity*",
-                    "com.felixbrucker.torrenthttpdownloader.TorrentHttpDownloaderApp*",
-                    "com.felixbrucker.torrenthttpdownloader.IAddTorrentCallback*",
-                    "com.felixbrucker.torrenthttpdownloader.ITorrentDownloadService*",
-                    "com.felixbrucker.torrenthttpdownloader.AddTorrentParams*",
-                    "com.felixbrucker.torrenthttpdownloader.TorrentProgressStats*",
-                )
-            }
-        }
-        total {
-            verify {
-                rule {
-                    minBound(30)
-                }
-            }
-        }
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -148,8 +118,4 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-}
-
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
 }

@@ -41,7 +41,7 @@ For the best experience, we recommend using **[Obtainium](https://github.com/Imr
 
 ### Prerequisites
 - Android Studio Ladybug (or newer)
-- JDK 17+
+- Java 11+
 - A Real-Debrid API Key (required when using real-debrid provider)
 
 ## ⚖️ License

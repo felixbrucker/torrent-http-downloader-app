@@ -4,9 +4,6 @@ import java.util.UUID
 import kotlin.math.max
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
-import com.felixbrucker.torrenthttpdownloader.core.util.PathFactory
-import com.felixbrucker.torrenthttpdownloader.extensions.asFile
-import com.felixbrucker.torrenthttpdownloader.extensions.deleteIfExists
 
 enum class TorrentState {
     ADDING_TO_PROVIDER,
