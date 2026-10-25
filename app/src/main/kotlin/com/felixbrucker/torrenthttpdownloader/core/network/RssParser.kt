@@ -1,8 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.core.network
 
 import java.io.StringReader
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -13,11 +14,11 @@ import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import timber.log.Timber
 
 class RssParser(private val client: OkHttpClient) {
-    private val dateFormats = listOf(
-        SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US),
-        SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US),
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    private val dateFormatters = listOf(
+        DateTimeFormatter.RFC_1123_DATE_TIME,
+        DateTimeFormatter.ISO_OFFSET_DATE_TIME,
+        DateTimeFormatter.ISO_INSTANT,
+        DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.US)
     )
 
     suspend fun fetchAndParse(url: String): List<RssItem> {
@@ -100,9 +101,9 @@ class RssParser(private val client: OkHttpClient) {
     }
 
     private fun parseDate(dateString: String): Long? {
-        for (format in dateFormats) {
+        for (formatter in dateFormatters) {
             try {
-                return format.parse(dateString)?.time
+                return ZonedDateTime.parse(dateString, formatter).toInstant().toEpochMilli()
             } catch (e: Exception) {
                 // Ignore and try next format
             }
