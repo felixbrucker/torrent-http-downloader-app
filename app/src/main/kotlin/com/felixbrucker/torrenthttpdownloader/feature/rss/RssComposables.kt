@@ -29,14 +29,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import com.felixbrucker.torrenthttpdownloader.R
 import com.felixbrucker.torrenthttpdownloader.core.model.FileSelectionMode
 import com.felixbrucker.torrenthttpdownloader.core.model.RssFeed
 import com.felixbrucker.torrenthttpdownloader.core.model.RssItem
 import com.felixbrucker.torrenthttpdownloader.extensions.cleanedForUseAsPath
 import com.felixbrucker.torrenthttpdownloader.feature.addtorrent.AddTorrentConfigFields
+
+private val rssDateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM dd, HH:mm")
+    .withZone(ZoneId.systemDefault())
 
 @Composable
 fun RssFeedItem(
@@ -63,7 +67,7 @@ fun RssFeedItem(
                     DateUtils.MINUTE_IN_MILLIS,
                 ).toString()
             } else {
-                SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(feed.lastCheck))
+                rssDateTimeFormatter.format(Instant.ofEpochMilli(feed.lastCheck))
             }
             resources.getString(R.string.last_synced, timeText)
         }
@@ -225,7 +229,7 @@ fun RssItemsList(feed: RssFeed, onItemClick: (RssItem) -> Unit) {
 @Composable
 fun RssItemRow(item: RssItem, onClick: () -> Unit) {
     val formattedDate = remember(item.pubDate) {
-        item.pubDate?.let { SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(it)) }
+        item.pubDate?.let { rssDateTimeFormatter.format(Instant.ofEpochMilli(it)) }
     }
     val contentAlpha = if (item.isRead) 0.6f else 1f
 
