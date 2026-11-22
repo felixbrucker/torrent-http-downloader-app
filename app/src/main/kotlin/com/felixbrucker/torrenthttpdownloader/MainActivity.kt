@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
@@ -115,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
                 val isResolvingTorrent by addTorrentViewModel.isResolvingTorrent.collectAsState()
 
-                val entryProvider = entryProvider {
+                val entryProvider = entryProvider<NavKey> {
                     entry<NavRoute.Downloads> {
                         DownloadsScreen(
                             navigator = navigator
@@ -186,7 +185,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 NavDisplay(
-                    entries = navigationState.toEntries { entryProvider(it as NavRoute) as NavEntry<NavKey> },
+                    entries = navigationState.toEntries { entryProvider(it) },
                     onBack = { navigator.goBack() },
                     transitionSpec = {
                         slideInFromRight togetherWith slideOutToLeft
