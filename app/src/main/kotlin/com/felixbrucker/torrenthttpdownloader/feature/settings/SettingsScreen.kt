@@ -18,12 +18,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -34,15 +36,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.rememberSliderState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +54,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material3.OutlinedSecureTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -204,45 +211,19 @@ private fun ProviderConfigCard(
             )
 
             if (selectedProvider == RealDebridProvider.NAME) {
-                OutlinedTextField(
-                    value = realDebridApiToken,
-                    onValueChange = onRealDebridApiTokenChange,
-                    label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = localParallelDownloads,
-                    onValueChange = onLocalParallelDownloadsChange,
-                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                RealDebridSettings(
+                    realDebridApiToken = realDebridApiToken,
+                    onRealDebridApiTokenChange = onRealDebridApiTokenChange,
+                    localParallelDownloads = localParallelDownloads,
+                    onLocalParallelDownloadsChange = onLocalParallelDownloadsChange
                 )
             } else if (selectedProvider == LibTorrentProvider.NAME) {
-                OutlinedTextField(
-                    value = libTorrentParallelDownloads,
-                    onValueChange = onLibTorrentParallelDownloadsChange,
-                    label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                LibTorrentSettings(
+                    libTorrentParallelDownloads = libTorrentParallelDownloads,
+                    onLibTorrentParallelDownloadsChange = onLibTorrentParallelDownloadsChange,
+                    libTorrentRequireVpnConnection = libTorrentRequireVpnConnection,
+                    onLibTorrentRequireVpnChange = onLibTorrentRequireVpnChange
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onLibTorrentRequireVpnChange(!libTorrentRequireVpnConnection) }
-                ) {
-                    Checkbox(
-                        checked = libTorrentRequireVpnConnection,
-                        onCheckedChange = onLibTorrentRequireVpnChange
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = stringResource(id = R.string.require_vpn_connection))
-                }
             }
         }
     }
@@ -294,7 +275,17 @@ private fun RssSyncConfigCard(
     rssSyncIntervalHours: Int,
     onRssSyncIntervalHoursChange: (Int) -> Unit
 ) {
-    var lastRssSyncIntervalHours by remember { mutableIntStateOf(rssSyncIntervalHours) }
+    val sliderState = rememberSliderState(
+        value = rssSyncIntervalHours.toFloat(),
+        steps = 22,
+        trackRange = 1f..24f
+    )
+
+    LaunchedEffect(rssSyncIntervalHours) {
+        if (sliderState.value != rssSyncIntervalHours.toFloat()) {
+            sliderState.value = rssSyncIntervalHours.toFloat()
+        }
+    }
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -326,24 +317,125 @@ private fun RssSyncConfigCard(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = stringResource(id = R.string.rss_sync_interval_hours, rssSyncIntervalHours),
+                    text = stringResource(id = R.string.rss_sync_interval_hours, sliderState.value.roundToInt()),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (rssSyncEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
                 Slider(
-                    value = rssSyncIntervalHours.toFloat(),
-                    onValueChange = {
-                        val newValue = it.roundToInt()
-                        if (newValue != lastRssSyncIntervalHours) {
-                            lastRssSyncIntervalHours = newValue
-                            onRssSyncIntervalHoursChange(newValue)
-                        }
+                    state = sliderState,
+                    onValueChange = { newValue ->
+                        sliderState.value = newValue
                     },
-                    valueRange = 1f..24f,
-                    steps = 22,
+                    onValueChangeFinished = {
+                        onRssSyncIntervalHoursChange(sliderState.value.roundToInt())
+                    },
                     enabled = rssSyncEnabled
                 )
             }
         }
     }
 }
+
+@Composable
+private fun RealDebridSettings(
+    realDebridApiToken: String,
+    onRealDebridApiTokenChange: (String) -> Unit,
+    localParallelDownloads: String,
+    onLocalParallelDownloadsChange: (String) -> Unit
+) {
+    RealDebridApiTokenField(
+        realDebridApiToken = realDebridApiToken,
+        onRealDebridApiTokenChange = onRealDebridApiTokenChange
+    )
+    ParallelDownloadsField(
+        parallelDownloads = localParallelDownloads,
+        onParallelDownloadsChange = onLocalParallelDownloadsChange
+    )
+}
+
+@Composable
+private fun LibTorrentSettings(
+    libTorrentParallelDownloads: String,
+    onLibTorrentParallelDownloadsChange: (String) -> Unit,
+    libTorrentRequireVpnConnection: Boolean,
+    onLibTorrentRequireVpnChange: (Boolean) -> Unit
+) {
+    ParallelDownloadsField(
+        parallelDownloads = libTorrentParallelDownloads,
+        onParallelDownloadsChange = onLibTorrentParallelDownloadsChange
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onLibTorrentRequireVpnChange(!libTorrentRequireVpnConnection) }
+    ) {
+        Checkbox(
+            checked = libTorrentRequireVpnConnection,
+            onCheckedChange = onLibTorrentRequireVpnChange
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = stringResource(id = R.string.require_vpn_connection))
+    }
+}
+
+@Composable
+private fun RealDebridApiTokenField(
+    realDebridApiToken: String,
+    onRealDebridApiTokenChange: (String) -> Unit
+) {
+    val apiTokenState = rememberTextFieldState(realDebridApiToken)
+    var passwordVisible by remember { mutableStateOf(false) }
+    val currentOnTokenChange by rememberUpdatedState(onRealDebridApiTokenChange)
+    val currentToken by rememberUpdatedState(realDebridApiToken)
+
+    LaunchedEffect(apiTokenState) {
+        snapshotFlow { apiTokenState.text.toString() }
+            .collect { token ->
+                if (token != currentToken) {
+                    currentOnTokenChange(token)
+                }
+            }
+    }
+    OutlinedSecureTextField(
+        state = apiTokenState,
+        label = { Text(stringResource(id = R.string.real_debrid_api_token)) },
+        textObfuscationMode = if (passwordVisible) TextObfuscationMode.Visible else TextObfuscationMode.Hidden,
+        trailingIcon = {
+            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                    imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun ParallelDownloadsField(
+    parallelDownloads: String,
+    onParallelDownloadsChange: (String) -> Unit
+) {
+    val state = rememberTextFieldState(parallelDownloads)
+    val currentChange by rememberUpdatedState(onParallelDownloadsChange)
+    val currentLimit by rememberUpdatedState(parallelDownloads)
+
+    LaunchedEffect(state) {
+        snapshotFlow { state.text.toString() }
+            .collect { limit ->
+                if (limit != currentLimit) {
+                    currentChange(limit)
+                }
+            }
+    }
+    OutlinedTextField(
+        state = state,
+        label = { Text(stringResource(id = R.string.parallel_downloads_limit)) },
+        lineLimits = TextFieldLineLimits.SingleLine,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+

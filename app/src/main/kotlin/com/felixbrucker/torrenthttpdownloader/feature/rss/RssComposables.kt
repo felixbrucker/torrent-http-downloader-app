@@ -88,7 +88,6 @@ fun RssFeedItem(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         ListItem(
-            headlineContent = { Text(feed.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
             supportingContent = {
                 RssFeedSupportingContent(url = feed.url, lastSyncedText = lastSyncedText)
             },
@@ -105,7 +104,9 @@ fun RssFeedItem(
                 )
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-        )
+        ) {
+            Text(feed.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -267,16 +268,6 @@ fun RssItemRow(item: RssItem, onClick: () -> Unit) {
             )
 
             ListItem(
-                headlineContent = {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (item.isRead) FontWeight.Normal else FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
                 supportingContent = {
                     RssItemSupportingContent(
                         description = item.description,
@@ -291,7 +282,16 @@ fun RssItemRow(item: RssItem, onClick: () -> Unit) {
                     )
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-            )
+            ) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (item.isRead) FontWeight.Normal else FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
