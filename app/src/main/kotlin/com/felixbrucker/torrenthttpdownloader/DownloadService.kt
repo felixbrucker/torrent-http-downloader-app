@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -112,7 +113,7 @@ class DownloadService : Service() {
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
-        Timber.d("DownloadService created")
+        Timber.tag(TAG).d("DownloadService created")
         provider = providerFactory.getProvider()
 
         localDownloadManager = LocalDownloadManager(
@@ -141,7 +142,7 @@ class DownloadService : Service() {
                         }
                         sendBroadcast(intent)
                     } catch (e: Exception) {
-                        Timber.e(e, "Error sending completion intent for task id=%s", task.id)
+                        Timber.tag(TAG).e(e, "Error sending completion intent for task id=%s", task.id)
                     }
                 }
             },
@@ -315,11 +316,18 @@ class DownloadService : Service() {
         val initialConfig = downloadRepository.getTasks().toNotificationConfig(
             providerSupportsPauseResume = provider.supports(ProviderFeature.PauseResume)
         )
-        startForeground(
-            SERVICE_NOTIFICATION_ID,
-            getNotification(initialConfig),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                SERVICE_NOTIFICATION_ID,
+                getNotification(initialConfig),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(
+                SERVICE_NOTIFICATION_ID,
+                getNotification(initialConfig),
+            )
+        }
     }
 
     private fun startNotificationUpdates() {
@@ -343,7 +351,7 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Timber.d("DownloadService onStartCommand action=%s", intent?.action)
+        Timber.tag(TAG).d("DownloadService onStartCommand action=%s", intent?.action)
         when (intent?.action) {
             ACTION_REMOVE_TASK -> serviceScope.launch(Dispatchers.IO) {
                 removeTask(
@@ -553,7 +561,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Timber.d("DownloadService destroyed")
+        Timber.tag(TAG).d("DownloadService destroyed")
         torrentStateMachine.stop()
         localDownloadManager.stop()
         provider.stop()
@@ -561,6 +569,7 @@ class DownloadService : Service() {
     }
 
     companion object {
+        private const val TAG = "DownloadService"
         private const val SERVICE_NOTIFICATION_ID = 1
         private const val SERVICE_NOTIFICATION_CHANNEL_ID = "download_service"
         private const val GENERAL_NOTIFICATION_CHANNEL_ID = "general"

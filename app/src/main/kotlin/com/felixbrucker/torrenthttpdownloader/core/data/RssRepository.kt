@@ -45,7 +45,7 @@ class RssRepository @Inject constructor(
     val totalUnreadRssCount: Flow<Int> = rssDao.getTotalUnreadCountFlow()
 
     suspend fun addRssFeed(feed: RssFeed) {
-        Timber.i("Adding RSS feed name=%s, url=%s", feed.name, feed.url)
+        Timber.tag(TAG).i("Adding RSS feed name=%s, url=%s", feed.name, feed.url)
         val entity = RssFeedEntity.fromDomain(feed)
         rssDao.insertFeed(entity)
     }
@@ -62,7 +62,7 @@ class RssRepository @Inject constructor(
     }
 
     suspend fun removeRssFeed(id: String) {
-        Timber.i("Removing RSS feed id=%s", id)
+        Timber.tag(TAG).i("Removing RSS feed id=%s", id)
         rssDao.deleteFeed(id)
     }
 
@@ -106,7 +106,7 @@ class RssRepository @Inject constructor(
         totalNewItemsCount: Int,
         lastCheck: Long = System.currentTimeMillis(),
     ) {
-        Timber.i("Updated RSS feed id=%s with %d newly discovered items", feedId, newlyDiscoveredItems.size)
+        Timber.tag(TAG).i("Updated RSS feed id=%s with %d newly discovered items", feedId, newlyDiscoveredItems.size)
         val itemEntities = newlyDiscoveredItems.map { RssItemEntity.fromDomain(feedId, it) }
         rssDao.insertItems(itemEntities)
         rssDao.updateLastCheck(feedId, lastCheck)
@@ -117,5 +117,9 @@ class RssRepository @Inject constructor(
 
     suspend fun updateLastCheck(feedId: String, lastCheck: Long = System.currentTimeMillis()) {
         rssDao.updateLastCheck(feedId, lastCheck)
+    }
+
+    companion object {
+        private const val TAG = "RssRepository"
     }
 }

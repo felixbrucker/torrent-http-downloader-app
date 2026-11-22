@@ -55,14 +55,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateSelectedProvider(provider: String) {
-        Timber.d("Settings saved: selectedProvider=%s", provider)
+        Timber.tag(TAG).d("Settings saved: selectedProvider=%s", provider)
         viewModelScope.launch {
             appSettingsRepository.updateSelectedProvider(provider)
         }
     }
 
     fun updateRealDebridApiToken(token: String) {
-        Timber.d("Settings saved: realDebridApiToken=%s", if (token.isBlank()) "<empty>" else "***")
+        Timber.tag(TAG).d("Settings saved: realDebridApiToken=%s", if (token.isBlank()) "<empty>" else "***")
         viewModelScope.launch {
             appSettingsRepository.updateRealDebridApiToken(token)
         }
@@ -71,7 +71,7 @@ class SettingsViewModel @Inject constructor(
     fun updateLocalParallelDownloads(limit: String) {
         val filtered = limit.filter { it.isDigit() }
         val value = filtered.toIntOrNull() ?: 2
-        Timber.d("Settings saved: localParallelDownloads=%d", value)
+        Timber.tag(TAG).d("Settings saved: localParallelDownloads=%d", value)
         viewModelScope.launch {
             appSettingsRepository.updateLocalParallelDownloads(value)
         }
@@ -80,30 +80,34 @@ class SettingsViewModel @Inject constructor(
     fun updateLibTorrentParallelDownloads(limit: String) {
         val filtered = limit.filter { it.isDigit() }
         val value = filtered.toIntOrNull() ?: 3
-        Timber.d("Settings saved: libTorrentParallelDownloads=%d", value)
+        Timber.tag(TAG).d("Settings saved: libTorrentParallelDownloads=%d", value)
         viewModelScope.launch {
             appSettingsRepository.updateLibTorrentParallelDownloads(value)
         }
     }
 
     fun updateLibTorrentRequireVpnConnection(requireVpn: Boolean) {
-        Timber.d("Settings saved: libTorrentRequireVpnConnection=%b", requireVpn)
+        Timber.tag(TAG).d("Settings saved: libTorrentRequireVpnConnection=%b", requireVpn)
         viewModelScope.launch {
             appSettingsRepository.updateLibTorrentRequireVpnConnection(requireVpn)
         }
     }
 
     fun updateRssSyncEnabled(enabled: Boolean) {
-        Timber.d("Settings saved: rssSyncEnabled=%b", enabled)
+        Timber.tag(TAG).d("Settings saved: rssSyncEnabled=%b", enabled)
         viewModelScope.launch {
             appSettingsRepository.updateRssSyncEnabled(enabled)
         }
     }
 
     fun updateRssSyncIntervalHours(hours: Int) {
-        Timber.d("Settings saved: rssSyncIntervalHours=%d", hours)
+        Timber.tag(TAG).d("Settings saved: rssSyncIntervalHours=%d", hours)
         viewModelScope.launch {
             appSettingsRepository.updateRssSyncIntervalHours(hours)
         }
+    }
+
+    companion object {
+        private const val TAG = "SettingsViewModel"
     }
 }

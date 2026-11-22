@@ -22,7 +22,7 @@ class RssParser(private val client: OkHttpClient) {
     )
 
     suspend fun fetchAndParse(url: String): List<RssItem> {
-        Timber.d("Fetching RSS feed from url=%s", url)
+        Timber.tag(TAG).d("Fetching RSS feed from url=%s", url)
         val request = Request.Builder().url(url).build()
 
         return withContext(Dispatchers.IO) {
@@ -92,10 +92,10 @@ class RssParser(private val client: OkHttpClient) {
                 }
                 eventType = try { parser.next() } catch (e: Exception) { XmlPullParser.END_DOCUMENT }
             }
-            Timber.i("Parsed %d items from RSS feed", items.size)
+            Timber.tag(TAG).i("Parsed %d items from RSS feed", items.size)
             return items
         } catch (e: Exception) {
-            Timber.e(e, "XML Parsing failed")
+            Timber.tag(TAG).e(e, "XML Parsing failed")
             throw RuntimeException("XML Parsing failed: ${e.message}", e)
         }
     }
@@ -116,6 +116,7 @@ class RssParser(private val client: OkHttpClient) {
     }
 
     companion object {
+        private const val TAG = "RssParser"
         // Cache compiled regex pattern to avoid re-compiling for every HTML description
         private val HTML_REGEX = Regex("<[^>]*>")
     }

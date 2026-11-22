@@ -18,9 +18,13 @@ class MainViewModel @Inject constructor(
     fun checkAndStartDownloadService(context: Context) {
         viewModelScope.launch {
             if (downloadRepository.hasTasksWhichNeedProcessing()) {
-                Timber.tag("MainViewModel").i("Starting DownloadService for tasks needing processing")
+                Timber.tag(TAG).i("Starting DownloadService for tasks needing processing")
                 context.startService(Intent(context, DownloadService::class.java))
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "MainViewModel"
     }
 }

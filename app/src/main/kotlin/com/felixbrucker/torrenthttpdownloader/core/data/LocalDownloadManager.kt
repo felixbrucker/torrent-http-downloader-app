@@ -112,7 +112,7 @@ class LocalDownloadManager(
         val taskId = work.taskId
         val downloadFile = work.file
         val filePath = downloadFile.filePath ?: return
-        Timber.i("Starting local download file=%s to path=%s", downloadFile.fileName, filePath)
+        Timber.tag(TAG).i("Starting local download file=%s to path=%s", downloadFile.fileName, filePath)
         val destFile = File(filePath)
 
         // Ensure we can create the file
@@ -192,7 +192,7 @@ class LocalDownloadManager(
                             }
                         }
                     }
-                    Timber.i("Completed local download file=%s", downloadFile.fileName)
+                    Timber.tag(TAG).i("Completed local download file=%s", downloadFile.fileName)
                     updateFileState(taskId, downloadFile.link, LocalDownloadState.COMPLETED)
                 }
             }
@@ -205,7 +205,7 @@ class LocalDownloadManager(
 
     private suspend fun handleFailedLocalDownload(work: DownloadWork, errorMessage: String) {
         val downloadFile = work.file
-        Timber.e("Local download failed task=%s file=%s error=%s", work.taskId, downloadFile.fileName, errorMessage)
+        Timber.tag(TAG).e("Local download failed task=%s file=%s error=%s", work.taskId, downloadFile.fileName, errorMessage)
         updateFileState(work.taskId, downloadFile.link, LocalDownloadState.ERROR, "Download failed: $errorMessage")
         onPostNotification(
             "Torrent download encountered an error",
@@ -225,7 +225,7 @@ class LocalDownloadManager(
 
     suspend fun enqueueDownload(work: DownloadWork) {
         if (!isWorkEnqueued(work.taskId, work.file.link)) {
-            Timber.d("Enqueuing download task=%s file=%s", work.taskId, work.file.fileName)
+            Timber.tag(TAG).d("Enqueuing download task=%s file=%s", work.taskId, work.file.fileName)
             updateFileState(work.taskId, work.file.link, LocalDownloadState.PENDING)
             downloadQueue.add(work)
         }
@@ -237,7 +237,7 @@ class LocalDownloadManager(
     }
 
     suspend fun pauseFile(taskId: String, fileLink: String) {
-        Timber.d("Pausing file task=%s fileLink=%s", taskId, fileLink)
+        Timber.tag(TAG).d("Pausing file task=%s fileLink=%s", taskId, fileLink)
         activeDownloads[fileLink]?.cancel()
         activeDownloads.remove(fileLink)
         downloadQueue.removeIf { it.taskId == taskId && it.file.link == fileLink }
@@ -295,5 +295,9 @@ class LocalDownloadManager(
         activeDownloads.values.forEach { it.cancel() }
         activeDownloads.clear()
         inProgressWork.clear()
+    }
+
+    companion object {
+        private const val TAG = "LocalDownloadManager"
     }
 }

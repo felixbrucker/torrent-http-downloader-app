@@ -37,7 +37,7 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun removeTask(taskId: String, deleteFiles: Boolean, deleteTorrentFile: Boolean) {
-        Timber.i("Removing task id=%s (deleteFiles=%b, deleteTorrentFile=%b)", taskId, deleteFiles, deleteTorrentFile)
+        Timber.tag(TAG).i("Removing task id=%s (deleteFiles=%b, deleteTorrentFile=%b)", taskId, deleteFiles, deleteTorrentFile)
         serviceLauncher.removeTask(taskId, deleteFiles, deleteTorrentFile)
     }
 
@@ -82,7 +82,7 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun restartTask(taskId: String) {
-        Timber.i("Restarting task id=%s", taskId)
+        Timber.tag(TAG).i("Restarting task id=%s", taskId)
         serviceLauncher.restartTask(taskId)
     }
 
@@ -100,5 +100,9 @@ class DownloadsViewModel @Inject constructor(
 
     fun setProviderFilePriority(taskId: String, fileId: Int, priority: FilePriority) {
         serviceLauncher.setProviderFilePriority(taskId, fileId, priority)
+    }
+
+    companion object {
+        private const val TAG = "DownloadsViewModel"
     }
 }

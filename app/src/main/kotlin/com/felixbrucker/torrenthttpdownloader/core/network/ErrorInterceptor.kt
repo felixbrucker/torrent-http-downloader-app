@@ -10,7 +10,7 @@ class ErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         if (!response.isSuccessful) {
-            Timber.w("HTTP error code=%d for url=%s", response.code, response.request.url)
+            Timber.tag(TAG).w("HTTP error code=%d for url=%s", response.code, response.request.url)
             if (response.code == 429) {
                 throw RateLimitExceededException()
             }
@@ -36,6 +36,10 @@ class ErrorInterceptor : Interceptor {
             }
         }
         return response
+    }
+
+    companion object {
+        private const val TAG = "ErrorInterceptor"
     }
 }
 

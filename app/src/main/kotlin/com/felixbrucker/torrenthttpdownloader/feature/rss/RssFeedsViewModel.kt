@@ -21,7 +21,7 @@ class RssFeedsViewModel @Inject constructor(
     val syncingFeedIds: StateFlow<Set<String>> = rssRepository.syncingFeedIds
 
     fun addRssFeed(feed: RssFeed) {
-        Timber.i("Adding RSS feed name=%s", feed.name)
+        Timber.tag(TAG).i("Adding RSS feed name=%s", feed.name)
         viewModelScope.launch {
             rssRepository.addRssFeed(feed)
             syncFeed(feed)
@@ -29,12 +29,12 @@ class RssFeedsViewModel @Inject constructor(
     }
 
     fun removeRssFeed(feedId: String) {
-        Timber.i("Removing RSS feed id=%s", feedId)
+        Timber.tag(TAG).i("Removing RSS feed id=%s", feedId)
         viewModelScope.launch { rssRepository.removeRssFeed(feedId) }
     }
 
     fun updateFeedConfig(feed: RssFeed) {
-        Timber.i("Updating RSS feed config id=%s", feed.id)
+        Timber.tag(TAG).i("Updating RSS feed config id=%s", feed.id)
         viewModelScope.launch {
             rssRepository.updateFeedConfig(feed)
             syncFeed(feed)
@@ -42,12 +42,16 @@ class RssFeedsViewModel @Inject constructor(
     }
 
     fun syncFeed(feed: RssFeed) {
-        Timber.d("Syncing RSS feed id=%s", feed.id)
+        Timber.tag(TAG).d("Syncing RSS feed id=%s", feed.id)
         rssSyncLauncher.runRssSyncOnce(feed.id)
     }
 
     fun syncFeeds() {
-        Timber.d("Syncing all RSS feeds")
+        Timber.tag(TAG).d("Syncing all RSS feeds")
         rssSyncLauncher.runRssSyncOnce()
+    }
+
+    companion object {
+        private const val TAG = "RssFeedsViewModel"
     }
 }

@@ -36,7 +36,7 @@ class TorrentUriResolver @Inject constructor(
         .build()
 
     suspend fun resolve(uri: Uri): ResolvedTorrent {
-        Timber.d("Resolving torrent URI=%s", uri)
+        Timber.tag(TAG).d("Resolving torrent URI=%s", uri)
         var newUri: Uri = uri
         if (uri.scheme == "http" || uri.scheme == "https") {
             // Fetch torrent file
@@ -72,7 +72,7 @@ class TorrentUriResolver @Inject constructor(
             id = id,
             name = name,
         )
-        Timber.i("Resolved torrent id=%s, type=%s, name=%s", resolved.id, resolved.type, resolved.name)
+        Timber.tag(TAG).i("Resolved torrent id=%s, type=%s, name=%s", resolved.id, resolved.type, resolved.name)
         return resolved
     }
     private fun tryToGetNameFromUri(contentResolver: ContentResolver, uriString: String, type: TorrentType): String? {
@@ -115,5 +115,9 @@ class TorrentUriResolver @Inject constructor(
         } catch (_: Exception) {
             null
         }
+    }
+
+    companion object {
+        private const val TAG = "TorrentUriResolver"
     }
 }

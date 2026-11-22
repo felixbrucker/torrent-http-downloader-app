@@ -47,7 +47,7 @@ class RssSyncLauncher @Inject constructor(
             return
         }
         val safeInterval = maxOf(1L, intervalHours)
-        Timber.d("RSS sync enabled, scheduling 'RssSyncRequest' with intervalHours=%d", safeInterval)
+        Timber.tag(TAG).d("RSS sync enabled, scheduling 'RssSyncRequest' with intervalHours=%d", safeInterval)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -70,5 +70,9 @@ class RssSyncLauncher @Inject constructor(
             .setInputData(workDataOf("feedId" to feedId))
             .build()
         WorkManager.getInstance(context).enqueue(rssSyncRequest)
+    }
+
+    companion object {
+        private const val TAG = "RssSyncLauncher"
     }
 }

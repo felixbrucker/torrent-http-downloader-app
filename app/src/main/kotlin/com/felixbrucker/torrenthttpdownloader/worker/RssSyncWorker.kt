@@ -34,7 +34,7 @@ class RssSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val feedId = inputData.getString("feedId")
-        Timber.i("Starting RSS sync worker feedId=%s", feedId)
+        Timber.tag(TAG).i("Starting RSS sync worker feedId=%s", feedId)
         try {
             if (feedId == null) {
                 syncRssFeeds()
@@ -45,12 +45,12 @@ class RssSyncWorker @AssistedInject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error in RssSyncWorker feedId=%s", feedId)
+            Timber.tag(TAG).e(e, "Error in RssSyncWorker feedId=%s", feedId)
 
             return Result.retry()
         }
 
-        Timber.i("Completed RSS sync worker feedId=%s", feedId)
+        Timber.tag(TAG).i("Completed RSS sync worker feedId=%s", feedId)
         return Result.success()
     }
 
@@ -87,7 +87,7 @@ class RssSyncWorker @AssistedInject constructor(
                 rssRepository.updateLastCheck(feed.id)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to sync RSS feed id=%s", feed.id)
+            Timber.tag(TAG).e(e, "Failed to sync RSS feed id=%s", feed.id)
         } finally {
             rssRepository.setFeedSyncing(feed.id, false)
         }
@@ -109,5 +109,9 @@ class RssSyncWorker @AssistedInject constructor(
         applicationContext.startService(intent)
 
         rssRepository.markItemAsDownloadedAndRead(feed.id, item.id)
+    }
+
+    companion object {
+        private const val TAG = "RssSyncWorker"
     }
 }

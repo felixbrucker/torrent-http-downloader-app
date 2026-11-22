@@ -51,7 +51,7 @@ class DownloadRepository @Inject constructor(
     fun hasTasksWhichNeedProcessingFlow(): Flow<Boolean> = downloadDao.hasTasksWhichNeedProcessingFlow()
 
     suspend fun addTask(task: DownloadTaskEntity) {
-        Timber.i("Adding download task id=%s, name=%s", task.id, task.name)
+        Timber.tag(TAG).i("Adding download task id=%s, name=%s", task.id, task.name)
         val maxOrder = downloadDao.getMaxDisplayOrder() ?: 0.0
         val taskWithOrder = task.copy(displayOrder = maxOrder + 10.0)
         downloadDao.insertTask(taskWithOrder)
@@ -101,7 +101,7 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun removeTask(id: String) {
-        Timber.i("Removing download task id=%s", id)
+        Timber.tag(TAG).i("Removing download task id=%s", id)
         downloadDao.deleteTask(id)
         downloadProgressTracker.clearTask(id)
     }
@@ -163,12 +163,12 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun updateTaskState(taskId: String, state: TorrentState) {
-        Timber.d("Updating task id=%s state to %s", taskId, state)
+        Timber.tag(TAG).d("Updating task id=%s state to %s", taskId, state)
         downloadDao.updateTaskState(taskId, state)
     }
 
     suspend fun updateTaskError(taskId: String, errorMessage: String?) {
-        Timber.e("Task id=%s error: %s", taskId, errorMessage)
+        Timber.tag(TAG).e("Task id=%s error: %s", taskId, errorMessage)
         downloadDao.updateTaskError(taskId, errorMessage, TorrentState.ERROR)
     }
 
@@ -197,7 +197,7 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun resetTaskForRetry(taskId: String) {
-        Timber.i("Resetting task id=%s for retry", taskId)
+        Timber.tag(TAG).i("Resetting task id=%s for retry", taskId)
         downloadDao.resetTaskForRetry(taskId, TorrentState.ADDING_TO_PROVIDER)
         downloadProgressTracker.clearTask(taskId)
     }
@@ -212,7 +212,9 @@ class DownloadRepository @Inject constructor(
         return map.map { (task, files) -> DownloadTaskWithFiles(task, files) }
     }
 
-    private companion object {
+    companion object {
+        private const val TAG = "DownloadRepository"
+
         fun combineTasksWithProgressInfo(
             tasksWithFiles: List<DownloadTaskWithFiles>,
             progressMap: Map<String, TaskProgressInfo>,

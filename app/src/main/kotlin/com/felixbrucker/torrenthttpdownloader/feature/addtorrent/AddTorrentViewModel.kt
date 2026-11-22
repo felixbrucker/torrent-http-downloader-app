@@ -105,7 +105,7 @@ class AddTorrentViewModel @Inject constructor(
                 )
                 setResolvedConfig(config)
             } catch (e: Exception) {
-                Timber.e(e, "Failed to resolve torrent URI=%s", uri)
+                Timber.tag(TAG).e(e, "Failed to resolve torrent URI=%s", uri)
                 onFailure()
             } finally {
                 _isResolvingTorrent.value = false
@@ -122,7 +122,7 @@ class AddTorrentViewModel @Inject constructor(
             notifyOnCompletion = _notifyOnCompletionState.value,
             fileSelectionMode = _fileSelectionModeState.value
         )
-        Timber.i("Confirming add torrent id=%s, name=%s", updatedConfig.id, updatedConfig.name)
+        Timber.tag(TAG).i("Confirming add torrent id=%s, name=%s", updatedConfig.id, updatedConfig.name)
 
         if (config.feedId == null) {
             viewModelScope.launch {
@@ -153,5 +153,9 @@ class AddTorrentViewModel @Inject constructor(
 
     fun clearResolvedConfig() {
         _resolvedConfig.value = null
+    }
+
+    companion object {
+        private const val TAG = "AddTorrentViewModel"
     }
 }
