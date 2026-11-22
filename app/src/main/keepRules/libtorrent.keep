@@ -1,0 +1,2 @@
+-keep class org.libtorrent4j.** { *; }
+-keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
