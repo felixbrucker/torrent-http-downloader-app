@@ -1,8 +1,8 @@
 package com.felixbrucker.torrenthttpdownloader.di
 
-import com.google.gson.FieldNamingPolicy
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
+import com.felixbrucker.torrenthttpdownloader.core.network.ErrorInterceptor
+import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
+import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,9 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import com.felixbrucker.torrenthttpdownloader.core.network.ErrorInterceptor
-import com.felixbrucker.torrenthttpdownloader.core.network.RealDebridApiService
+import retrofit2.converter.moshi.MoshiConverterFactory
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -30,19 +28,17 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGson(): Gson {
-        return GsonBuilder()
-            .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-            .create()
+    fun provideMoshi(): Moshi {
+        return Moshi.Builder().build()
     }
 
     @Provides
     @Singleton
-    fun provideRealDebridApiService(okHttpClient: OkHttpClient, gson: Gson): RealDebridApiService {
+    fun provideRealDebridApiService(okHttpClient: OkHttpClient, moshi: Moshi): RealDebridApiService {
         return Retrofit.Builder()
             .baseUrl(REAL_DEBRID_BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create(gson))
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(RealDebridApiService::class.java)
     }

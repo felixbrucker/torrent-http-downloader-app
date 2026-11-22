@@ -1,6 +1,7 @@
 package com.felixbrucker.torrenthttpdownloader.core.logging
 
 import android.content.Context
+import com.squareup.moshi.Moshi
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +23,7 @@ class LogRepositoryTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private val context: Context = mockk()
+    private val moshi = Moshi.Builder().build()
 
     @Before
     fun setUp() {
@@ -35,7 +37,7 @@ class LogRepositoryTest {
         val now = System.currentTimeMillis()
         file.writeText("{\"timestamp\":$now,\"priority\":3,\"tag\":\"Test\",\"message\":\"Msg 1\"}\n")
 
-        val repository = LogRepository(context, scope = this)
+        val repository = LogRepository(context, scope = this, moshi = moshi)
         testScheduler.advanceUntilIdle()
         val logs = repository.logsFlow.value
 
@@ -45,7 +47,7 @@ class LogRepositoryTest {
 
     @Test
     fun testAddLogAppendsEntryAndUpdatesFlow() = runTest(testDispatcher) {
-        val repository = LogRepository(context, scope = this)
+        val repository = LogRepository(context, scope = this, moshi = moshi)
         val entry = LogEntry(timestamp = System.currentTimeMillis(), message = "Test Log")
 
         repository.addLog(entry)
@@ -58,7 +60,7 @@ class LogRepositoryTest {
 
     @Test
     fun testClearLogsEmptiesFlowAndFile() = runTest(testDispatcher) {
-        val repository = LogRepository(context, scope = this)
+        val repository = LogRepository(context, scope = this, moshi = moshi)
         repository.addLog(LogEntry(message = "Log to clear"))
         testScheduler.advanceUntilIdle()
 
@@ -71,7 +73,7 @@ class LogRepositoryTest {
 
     @Test
     fun testPruneEntriesFiltersByAgeAndMaxEntries() = runTest(testDispatcher) {
-        val repository = LogRepository(context, scope = this)
+        val repository = LogRepository(context, scope = this, moshi = moshi)
         val now = 100000L
         val oldEntry = LogEntry(timestamp = 1000L, message = "Old")
         val newEntry1 = LogEntry(timestamp = 90000L, message = "New 1")

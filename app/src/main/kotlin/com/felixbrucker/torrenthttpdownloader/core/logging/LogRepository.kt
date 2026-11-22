@@ -2,7 +2,7 @@ package com.felixbrucker.torrenthttpdownloader.core.logging
 
 import android.content.Context
 import com.felixbrucker.torrenthttpdownloader.di.ApplicationScope
-import com.google.gson.Gson
+import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,13 +18,14 @@ import javax.inject.Singleton
 @Singleton
 class LogRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    @param:ApplicationScope private val scope: CoroutineScope
+    @param:ApplicationScope private val scope: CoroutineScope,
+    moshi: Moshi
 ) {
     private val maxEntries = 3000
     private val pruneThreshold = 3500
     private val maxAgeMs = 7L * 24 * 60 * 60 * 1000 // 7 days
 
-    private val gson = Gson()
+    private val logEntryAdapter = moshi.adapter(LogEntry::class.java)
 
     private val mutex = Mutex()
     private val _logsFlow = MutableStateFlow<List<LogEntry>>(emptyList())
@@ -56,7 +57,7 @@ class LogRepository @Inject constructor(
                     for (line in lines) {
                         if (line.isNotBlank()) {
                             try {
-                                val entry = gson.fromJson(line, LogEntry::class.java)
+                                val entry = logEntryAdapter.fromJson(line)
                                 if (entry != null) {
                                     loadedLogs.add(entry)
                                 }
@@ -84,7 +85,7 @@ class LogRepository @Inject constructor(
                 val file = logFile
                 if (file != null) {
                     try {
-                        val jsonLine = gson.toJson(entry)
+                        val jsonLine = logEntryAdapter.toJson(entry)
                         file.appendText(jsonLine + "\n")
                     } catch (_: Exception) {
                     }
@@ -137,7 +138,7 @@ class LogRepository @Inject constructor(
         try {
             file.bufferedWriter().use { writer ->
                 for (entry in entries) {
-                    writer.write(gson.toJson(entry))
+                    writer.write(logEntryAdapter.toJson(entry))
                     writer.newLine()
                 }
             }

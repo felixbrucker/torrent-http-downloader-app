@@ -1,9 +1,9 @@
 package com.felixbrucker.torrenthttpdownloader.core.model
 
-import java.util.UUID
-import kotlin.math.max
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentInfo
 import com.felixbrucker.torrenthttpdownloader.core.data.providers.ProviderTorrentState
+import java.util.UUID
+import kotlin.math.max
 
 enum class TorrentState {
     ADDING_TO_PROVIDER,

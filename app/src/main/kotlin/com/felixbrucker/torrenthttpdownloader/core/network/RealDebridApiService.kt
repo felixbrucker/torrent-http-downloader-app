@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.core.network
 
+import com.squareup.moshi.JsonClass
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -54,11 +55,13 @@ interface RealDebridApiService {
     ): UnrestrictLinkResponse
 }
 
+@JsonClass(generateAdapter = true)
 data class AddMagnetResponse(
     val id: String,
     val uri: String
 )
 
+@JsonClass(generateAdapter = true)
 data class TorrentFile(
     val id: Int,
     val path: String,
@@ -66,6 +69,7 @@ data class TorrentFile(
     val selected: Int
 )
 
+@JsonClass(generateAdapter = true)
 data class TorrentInfo(
     val id: String,
     val filename: String,
@@ -78,6 +82,7 @@ data class TorrentInfo(
     val seeders: Int?,
 )
 
+@JsonClass(generateAdapter = true)
 data class UnrestrictLinkResponse(
     val id: String,
     val filename: String,

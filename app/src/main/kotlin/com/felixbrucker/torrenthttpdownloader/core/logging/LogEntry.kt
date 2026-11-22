@@ -1,8 +1,10 @@
 package com.felixbrucker.torrenthttpdownloader.core.logging
 
 import android.util.Log
+import com.squareup.moshi.JsonClass
 import java.util.UUID
 
+@JsonClass(generateAdapter = true)
 data class LogEntry(
     val timestamp: Long = System.currentTimeMillis(),
     val priority: Int = Log.DEBUG,
