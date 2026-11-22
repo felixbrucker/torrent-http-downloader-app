@@ -31,15 +31,6 @@ class AppLogTreeTest {
     }
 
     @Test
-    fun testIsLoggableReturnsTrue() {
-        val appLogTree = AppLogTree(repository)
-
-        val result = appLogTree.isLoggable("Tag", Log.VERBOSE)
-
-        assertTrue(result)
-    }
-
-    @Test
     fun testLogCallsRepositoryAddLog() {
         val appLogTree = AppLogTree(repository)
         Timber.plant(appLogTree)

@@ -11,6 +11,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
@@ -147,9 +154,46 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val slideInFromRight = remember {
+                    slideInHorizontally(
+                        initialOffsetX = { fullWidth -> fullWidth / 6 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                }
+
+                val slideOutToLeft = remember {
+                    slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> -fullWidth / 6 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                }
+
+                val slideInFromLeft = remember {
+                    slideInHorizontally(
+                        initialOffsetX = { fullWidth -> -fullWidth / 6 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                }
+
+                val slideOutToRight = remember {
+                    slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> fullWidth / 6 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                }
+
                 NavDisplay(
                     entries = navigationState.toEntries { entryProvider(it as NavRoute) as NavEntry<NavKey> },
-                    onBack = { navigator.goBack() }
+                    onBack = { navigator.goBack() },
+                    transitionSpec = {
+                        slideInFromRight togetherWith slideOutToLeft
+                    },
+                    popTransitionSpec = {
+                        slideInFromLeft togetherWith slideOutToRight
+                    },
+                    predictivePopTransitionSpec = {
+                        slideInFromLeft togetherWith slideOutToRight
+                    }
                 )
 
                 AddTorrentContent(
