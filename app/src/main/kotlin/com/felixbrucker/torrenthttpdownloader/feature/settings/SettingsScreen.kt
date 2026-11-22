@@ -159,7 +159,6 @@ private fun LogsConfigCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsTopBar(onBack: () -> Unit) {
     TopAppBar(
@@ -249,7 +248,6 @@ private fun ProviderConfigCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProviderDropdown(
     providers: List<String>,

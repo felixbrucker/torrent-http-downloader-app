@@ -270,7 +270,6 @@ fun LogViewerScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogViewerTopBar(
     onNavigateBack: () -> Unit,

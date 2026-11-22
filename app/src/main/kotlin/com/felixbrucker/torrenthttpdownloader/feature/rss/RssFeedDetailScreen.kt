@@ -79,7 +79,6 @@ fun RssFeedDetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RssFeedDetailTopBar(
     feedName: String,

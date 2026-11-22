@@ -1,5 +1,6 @@
 package com.felixbrucker.torrenthttpdownloader.core.data
 
+import android.annotation.SuppressLint
 import android.app.BackgroundServiceStartNotAllowedException
 import android.content.ContentResolver
 import android.content.Intent
@@ -490,7 +491,7 @@ class TorrentStateMachine(
             }
         } catch (e: CancellationException) {
             throw e // Do not update task state for this exception
-        } catch (e: BackgroundServiceStartNotAllowedException) {
+        } catch (@SuppressLint("NewApi") e: BackgroundServiceStartNotAllowedException) {
             throw e // Do not update task state for this exception
         } catch (e: RateLimitExceededException) {
             e.printStackTrace()

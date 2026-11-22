@@ -135,7 +135,6 @@ private fun RssFeedsList(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RssFeedsTopBar(
     isSyncingAll: Boolean,

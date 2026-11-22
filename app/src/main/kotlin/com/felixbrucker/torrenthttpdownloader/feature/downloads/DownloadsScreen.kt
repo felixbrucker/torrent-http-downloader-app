@@ -59,7 +59,6 @@ import com.felixbrucker.torrenthttpdownloader.core.model.DownloadTask
 import com.felixbrucker.torrenthttpdownloader.core.model.LocalDownloadState
 import com.felixbrucker.torrenthttpdownloader.core.model.TorrentType
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     navigator: Navigator,
