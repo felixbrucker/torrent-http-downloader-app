@@ -2,6 +2,7 @@ package com.felixbrucker.torrenthttpdownloader
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -84,7 +85,12 @@ class AddTorrentActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                    }
                 }
             }
             else -> null

@@ -3,6 +3,7 @@ package com.felixbrucker.torrenthttpdownloader
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
@@ -68,7 +69,7 @@ class MainActivity : ComponentActivity() {
                 val context = LocalContext.current
                 var hasNotificationPermission by remember {
                     mutableStateOf(
-                        ContextCompat.checkSelfPermission(
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.POST_NOTIFICATIONS
                         ) == PackageManager.PERMISSION_GRANTED
@@ -76,7 +77,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 var hasAllFilesPermission by remember {
-                    mutableStateOf(Environment.isExternalStorageManager())
+                    mutableStateOf(
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+                    )
                 }
 
                 val permissionLauncher = rememberLauncherForActivityResult(
@@ -89,14 +92,14 @@ class MainActivity : ComponentActivity() {
                 val allFilesPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.StartActivityForResult(),
                     onResult = {
-                        hasAllFilesPermission = Environment.isExternalStorageManager()
+                        hasAllFilesPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
                     }
                 )
 
                 LaunchedEffect(hasNotificationPermission, hasAllFilesPermission) {
-                    if (!hasNotificationPermission) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else if (!hasAllFilesPermission) {
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !hasAllFilesPermission) {
                         val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                             data = "package:${context.packageName}".toUri()
                         }
